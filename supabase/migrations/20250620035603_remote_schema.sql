@@ -449,5 +449,3 @@ drop type "public"."activity_level";
 drop type "public"."goal_type";
 
 drop type "public"."meal_type";
-
-

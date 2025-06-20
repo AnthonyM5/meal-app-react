@@ -1,8 +1,5 @@
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { LogOut } from "lucide-react"
-import { signOut } from "@/lib/actions"
 
 export default async function Home() {
   // If Supabase is not configured, show setup message directly
@@ -25,17 +22,5 @@ export default async function Home() {
     redirect("/auth/login")
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#161616]">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4 text-white">Hello {user.email}</h1>
-        <form action={signOut}>
-          <Button type="submit" className="bg-[#2b725e] hover:bg-[#235e4c] text-white">
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
-        </form>
-      </div>
-    </div>
-  )
+  return redirect("/dashboard")
 }
