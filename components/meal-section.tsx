@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { FoodSearch } from "./food-search"
+import { UnifiedFoodSearch } from "./unified-food-search"
 
 interface MealSectionProps {
   mealType: string
@@ -15,7 +15,7 @@ export function MealSection({ mealType, meal, onUpdate }: MealSectionProps) {
   return (
     <div>
       <h3>{mealType}</h3>
-      <FoodSearch
+      <UnifiedFoodSearch
         mealType={mealType}
         onFoodAdded={() => {
           setIsSearchOpen(false)
