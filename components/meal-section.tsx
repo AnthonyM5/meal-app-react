@@ -1,18 +1,27 @@
-import type React from "react"
-import { EnhancedFoodSearch } from "@/components/enhanced-food-search"
+"use client"
+
+import React from "react"
+import { FoodSearch } from "./food-search"
 
 interface MealSectionProps {
   mealType: string
-  onRefresh: () => void
+  meal: any // TODO: Define meal type
+  onUpdate: () => void
 }
 
-const MealSection: React.FC<MealSectionProps> = ({ mealType, onRefresh }) => {
+export function MealSection({ mealType, meal, onUpdate }: MealSectionProps) {
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false)
+
   return (
     <div>
       <h3>{mealType}</h3>
-      <EnhancedFoodSearch mealType={mealType} onFoodAdded={onRefresh} />
+      <FoodSearch
+        mealType={mealType}
+        onFoodAdded={() => {
+          setIsSearchOpen(false)
+          onUpdate()
+        }}
+      />
     </div>
   )
 }
-
-export default MealSection
