@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "dev",
+      "group": "build",
+      "label": "npm: dev",
+      "detail": "next dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "source": "ts",
+        "applyTo": "closedDocuments",
+        "fileLocation": ["relative", "${workspaceRoot}"],
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "compiled client and server successfully"
+          }
+        }
+      }
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "label": "npm: build",
+      "detail": "next build"
+    },
+    {
+      "type": "npm",
+      "script": "lint",
+      "group": "test",
+      "label": "npm: lint",
+      "detail": "next lint"
+    },
+    {
+      "label": "Supabase: Start Local",
+      "type": "shell",
+      "command": "supabase start",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Supabase: Stop Local",
+      "type": "shell",
+      "command": "supabase stop",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    }
+  ]
+}
