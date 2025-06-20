@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import type { Food, MealType } from "@/lib/types"
+import type { Food, Meal, MealType } from "@/lib/types"
 
 export async function searchFoods(query: string): Promise<Food[]> {
   if (!query || query.length < 2) return []
@@ -25,99 +25,15 @@ export async function searchFoods(query: string): Promise<Food[]> {
   return data || []
 }
 
-export async function addFoodToMeal(
-  foodId: string,
-  mealType: MealType,
-  quantity = 1,
-  date: string = new Date().toISOString().split("T")[0],
-) {
-  const supabase = createClient()
+export async function getTodaysMeals(): Promise<Meal[]> {
+  const supabase = await createClient()
 
-  // Get the current user
   const {
     data: { user },
-    error: userError,
   } = await supabase.auth.getUser()
-  if (userError || !user) {
-    throw new Error("User not authenticated")
-  }
+  if (!user) throw new Error("Not authenticated")
 
-  // Get the food details
-  const { data: food, error: foodError } = await supabase.from("foods").select("*").eq("id", foodId).single()
-
-  if (foodError || !food) {
-    throw new Error("Food not found")
-  }
-
-  // Find or create a meal for this date and meal type
-  let { data: meal, error: mealError } = await supabase
-    .from("meals")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("meal_type", mealType)
-    .eq("date", date)
-    .single()
-
-  if (mealError && mealError.code === "PGRST116") {
-    // Meal doesn't exist, create it
-    const { data: newMeal, error: createError } = await supabase
-      .from("meals")
-      .insert({
-        user_id: user.id,
-        meal_type: mealType,
-        date: date,
-        name: mealType.charAt(0).toUpperCase() + mealType.slice(1),
-      })
-      .select()
-      .single()
-
-    if (createError) {
-      throw new Error("Failed to create meal")
-    }
-    meal = newMeal
-  } else if (mealError) {
-    throw new Error("Failed to find meal")
-  }
-
-  // Calculate nutrition values based on quantity
-  const calories = food.calories_per_serving * quantity
-  const protein = food.protein_g * quantity
-  const carbs = food.carbs_g * quantity
-  const fat = food.fat_g * quantity
-  const fiber = food.fiber_g * quantity
-
-  // Add the food to the meal
-  const { error: insertError } = await supabase.from("meal_items").insert({
-    meal_id: meal.id,
-    food_id: foodId,
-    quantity: quantity,
-    unit: "serving",
-    calories: calories,
-    protein_g: protein,
-    carbs_g: carbs,
-    fat_g: fat,
-    fiber_g: fiber,
-  })
-
-  if (insertError) {
-    throw new Error("Failed to add food to meal")
-  }
-
-  revalidatePath("/dashboard")
-  return { success: true }
-}
-
-export async function getTodaysMeals() {
-  const supabase = createClient()
   const today = new Date().toISOString().split("T")[0]
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-  if (userError || !user) {
-    return []
-  }
 
   const { data: meals, error } = await supabase
     .from("meals")
@@ -130,25 +46,151 @@ export async function getTodaysMeals() {
     `)
     .eq("user_id", user.id)
     .eq("date", today)
-    .order("meal_type")
+    .order("created_at", { ascending: true })
 
-  if (error) {
-    console.error("Error fetching meals:", error)
-    return []
-  }
-
+  if (error) throw error
   return meals || []
 }
 
-export async function removeMealItem(mealItemId: string) {
-  const supabase = createClient()
+export async function addFoodToMeal(foodId: string, mealType: MealType, quantity = 1) {
+  const supabase = await createClient()
 
-  const { error } = await supabase.from("meal_items").delete().eq("id", mealItemId)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error("Not authenticated")
 
-  if (error) {
-    throw new Error("Failed to remove item")
+  const today = new Date().toISOString().split("T")[0]
+
+  // Get the food details
+  const { data: food, error: foodError } = await supabase.from("foods").select("*").eq("id", foodId).single()
+
+  if (foodError) throw foodError
+
+  // Find or create meal for today
+  let { data: meal, error: mealError } = await supabase
+    .from("meals")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("meal_type", mealType)
+    .eq("date", today)
+    .single()
+
+  if (mealError && mealError.code === "PGRST116") {
+    // Meal doesn't exist, create it
+    const { data: newMeal, error: createError } = await supabase
+      .from("meals")
+      .insert({
+        user_id: user.id,
+        meal_type: mealType,
+        date: today,
+        name: mealType.charAt(0).toUpperCase() + mealType.slice(1),
+      })
+      .select()
+      .single()
+
+    if (createError) throw createError
+    meal = newMeal
+  } else if (mealError) {
+    throw mealError
   }
 
+  // Calculate nutrition values based on quantity
+  const calories = food.calories_per_serving * quantity
+  const protein_g = food.protein_g * quantity
+  const carbs_g = food.carbs_g * quantity
+  const fat_g = food.fat_g * quantity
+  const fiber_g = food.fiber_g * quantity
+
+  // Add meal item
+  const { error: itemError } = await supabase.from("meal_items").insert({
+    meal_id: meal.id,
+    food_id: foodId,
+    quantity,
+    unit: food.serving_unit,
+    calories,
+    protein_g,
+    carbs_g,
+    fat_g,
+    fiber_g,
+  })
+
+  if (itemError) throw itemError
+
   revalidatePath("/dashboard")
-  return { success: true }
+}
+
+export async function updateMealItem(itemId: string, newQuantity: number) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error("Not authenticated")
+
+  // Get the meal item with food details
+  const { data: item, error: itemError } = await supabase
+    .from("meal_items")
+    .select(`
+      *,
+      food:foods (*),
+      meal:meals (user_id)
+    `)
+    .eq("id", itemId)
+    .single()
+
+  if (itemError) throw itemError
+  if (item.meal.user_id !== user.id) throw new Error("Unauthorized")
+
+  // Recalculate nutrition values
+  const calories = item.food.calories_per_serving * newQuantity
+  const protein_g = item.food.protein_g * newQuantity
+  const carbs_g = item.food.carbs_g * newQuantity
+  const fat_g = item.food.fat_g * newQuantity
+  const fiber_g = item.food.fiber_g * newQuantity
+
+  // Update the meal item
+  const { error: updateError } = await supabase
+    .from("meal_items")
+    .update({
+      quantity: newQuantity,
+      calories,
+      protein_g,
+      carbs_g,
+      fat_g,
+      fiber_g,
+    })
+    .eq("id", itemId)
+
+  if (updateError) throw updateError
+
+  revalidatePath("/dashboard")
+}
+
+export async function deleteMealItem(itemId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error("Not authenticated")
+
+  // Verify ownership
+  const { data: item, error: itemError } = await supabase
+    .from("meal_items")
+    .select(`
+      meal:meals (user_id)
+    `)
+    .eq("id", itemId)
+    .single()
+
+  if (itemError) throw itemError
+  if (item.meal.user_id !== user.id) throw new Error("Unauthorized")
+
+  // Delete the meal item
+  const { error: deleteError } = await supabase.from("meal_items").delete().eq("id", itemId)
+
+  if (deleteError) throw deleteError
+
+  revalidatePath("/dashboard")
 }
