@@ -1,6 +1,3 @@
--- Enable Row Level Security
-ALTER DATABASE postgres SET "app.jwt_secret" TO 'your-jwt-secret';
-
 -- Create custom types
 CREATE TYPE meal_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
 CREATE TYPE activity_level AS ENUM ('sedentary', 'lightly_active', 'moderately_active', 'very_active', 'extremely_active');
