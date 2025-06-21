@@ -73,7 +73,7 @@ export function ExploreFoodsSection() {
                   href={`/food-details/${food.id}`}
                   className="block"
                 >
-                  <Card className="hover:shadow-md transition-shadow hover:bg-[#1c1c1c]">
+                  <Card className="hover:shadow-md transition-shadow hover:bg-accent">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium flex items-center gap-1">
@@ -100,7 +100,7 @@ export function ExploreFoodsSection() {
                         {food.serving_unit}
                       </div>
                       <div className="grid grid-cols-4 gap-2 mt-2">
-                        <div className="text-center p-2 bg-[#161616] rounded">
+                        <div className="text-center p-2 bg-muted/50 rounded">
                           <div className="font-semibold">
                             {Math.round(food.protein_g)}g
                           </div>
@@ -108,7 +108,7 @@ export function ExploreFoodsSection() {
                             Protein
                           </div>
                         </div>
-                        <div className="text-center p-2 bg-[#161616] rounded">
+                        <div className="text-center p-2 bg-muted/50 rounded">
                           <div className="font-semibold">
                             {Math.round(food.carbs_g)}g
                           </div>
@@ -116,7 +116,7 @@ export function ExploreFoodsSection() {
                             Carbs
                           </div>
                         </div>
-                        <div className="text-center p-2 bg-[#161616] rounded">
+                        <div className="text-center p-2 bg-muted/50 rounded">
                           <div className="font-semibold">
                             {Math.round(food.fat_g)}g
                           </div>
@@ -124,7 +124,7 @@ export function ExploreFoodsSection() {
                             Fat
                           </div>
                         </div>
-                        <div className="text-center p-2 bg-[#161616] rounded">
+                        <div className="text-center p-2 bg-muted/50 rounded">
                           <div className="font-semibold">
                             {Math.round(food.fiber_g)}g
                           </div>
