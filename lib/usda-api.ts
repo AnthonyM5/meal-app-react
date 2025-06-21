@@ -1,6 +1,6 @@
-"use server"
+'use server'
 
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from '@/lib/supabase/server'
 
 // USDA FoodData Central API types
 interface USDAFood {
@@ -35,8 +35,8 @@ interface USDASearchResult {
 }
 
 // USDA API configuration
-const USDA_API_KEY = process.env.USDA_API_KEY || "DEMO_KEY"
-const USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1"
+const USDA_API_KEY = process.env.USDA_API_KEY || 'DEMO_KEY'
+const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
 
 // Nutrient ID mappings for USDA API
 const NUTRIENT_IDS = {
@@ -54,15 +54,20 @@ const NUTRIENT_IDS = {
   IRON: 1089, // Iron, Fe
 }
 
-export async function searchUSDAFoods(query: string, pageSize = 25): Promise<USDAFood[]> {
+export async function searchUSDAFoods(
+  query: string,
+  pageSize = 25
+): Promise<USDAFood[]> {
   if (!query || query.length < 2) return []
 
   try {
-    const url = `${USDA_BASE_URL}/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=${pageSize}&dataType=Branded,Foundation,SR%20Legacy`
+    const url = `${USDA_BASE_URL}/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(
+      query
+    )}&pageSize=${pageSize}&dataType=Branded,Foundation,SR%20Legacy`
 
     const response = await fetch(url, {
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     })
 
@@ -73,17 +78,20 @@ export async function searchUSDAFoods(query: string, pageSize = 25): Promise<USD
     const data: USDASearchResult = await response.json()
     return data.foods || []
   } catch (error) {
-    console.error("USDA API search error:", error)
+    console.error('USDA API search error:', error)
     return []
   }
 }
 
 export async function importUSDAFood(fdcId: number) {
-  const supabase = createClient()
+  const supabase =
+    createClient() as import('@supabase/supabase-js').SupabaseClient
 
   try {
     // Get detailed food information from USDA
-    const url = `${USDA_BASE_URL}/food/${fdcId}?api_key=${USDA_API_KEY}&nutrients=${Object.values(NUTRIENT_IDS).join(",")}`
+    const url = `${USDA_BASE_URL}/food/${fdcId}?api_key=${USDA_API_KEY}&nutrients=${Object.values(
+      NUTRIENT_IDS
+    ).join(',')}`
 
     const response = await fetch(url)
     if (!response.ok) {
@@ -97,7 +105,7 @@ export async function importUSDAFood(fdcId: number) {
 
     // Determine serving size (default to 100g if not specified)
     let servingSize = 100
-    let servingUnit = "g"
+    let servingUnit = 'g'
 
     if (usdaFood.servingSize && usdaFood.servingSizeUnit) {
       servingSize = usdaFood.servingSize
@@ -106,22 +114,22 @@ export async function importUSDAFood(fdcId: number) {
       servingUnit = usdaFood.householdServingFullText
     }
 
-    // Check if food already exists
+    // Check if food already exists by fdc_id
     const { data: existingFood } = await supabase
-      .from("foods")
-      .select("id")
-      .eq("name", usdaFood.description)
-      .eq("brand", usdaFood.brandOwner || usdaFood.brandName || "USDA")
+      .from('foods')
+      .select('id')
+      .eq('fdc_id', usdaFood.fdcId)
       .single()
 
     if (existingFood) {
-      return { success: true, message: "Food already exists in database" }
+      return { success: true, message: 'Food already exists in database' }
     }
 
     // Insert the food into our database
-    const { error } = await supabase.from("foods").insert({
+    const { error } = await supabase.from('foods').insert({
+      fdc_id: usdaFood.fdcId,
       name: usdaFood.description,
-      brand: usdaFood.brandOwner || usdaFood.brandName || "USDA",
+      brand: usdaFood.brandOwner || usdaFood.brandName || 'USDA',
       serving_size: servingSize,
       serving_unit: servingUnit,
       calories_per_serving: nutrients.calories,
@@ -143,10 +151,10 @@ export async function importUSDAFood(fdcId: number) {
       throw new Error(`Database error: ${error.message}`)
     }
 
-    return { success: true, message: "Food imported successfully" }
+    return { success: true, message: 'Food imported successfully' }
   } catch (error) {
-    console.error("Import error:", error)
-    throw new Error("Failed to import food from USDA database")
+    console.error('Import error:', error)
+    throw new Error('Failed to import food from USDA database')
   }
 }
 
@@ -166,7 +174,7 @@ function extractNutrients(foodNutrients: USDANutrient[]) {
     iron: 0,
   }
 
-  foodNutrients.forEach((nutrient) => {
+  foodNutrients.forEach(nutrient => {
     switch (nutrient.nutrientId) {
       case NUTRIENT_IDS.ENERGY:
         nutrients.calories = nutrient.value
@@ -212,31 +220,31 @@ function extractNutrients(foodNutrients: USDANutrient[]) {
 
 export async function bulkImportPopularFoods() {
   const popularFoods = [
-    "banana",
-    "apple",
-    "chicken breast",
-    "salmon",
-    "broccoli",
-    "spinach",
-    "brown rice",
-    "quinoa",
-    "oatmeal",
-    "greek yogurt",
-    "almonds",
-    "avocado",
-    "sweet potato",
-    "eggs",
-    "milk",
-    "bread",
-    "pasta",
-    "ground beef",
-    "tuna",
-    "carrots",
-    "tomato",
-    "onion",
-    "garlic",
-    "olive oil",
-    "cheese",
+    'banana',
+    'apple',
+    'chicken breast',
+    'salmon',
+    'broccoli',
+    'spinach',
+    'brown rice',
+    'quinoa',
+    'oatmeal',
+    'greek yogurt',
+    'almonds',
+    'avocado',
+    'sweet potato',
+    'eggs',
+    'milk',
+    'bread',
+    'pasta',
+    'ground beef',
+    'tuna',
+    'carrots',
+    'tomato',
+    'onion',
+    'garlic',
+    'olive oil',
+    'cheese',
   ]
 
   const results = []
@@ -252,13 +260,13 @@ export async function bulkImportPopularFoods() {
           results.push({ food: usdaFood.description, ...result })
 
           // Add delay to avoid rate limiting
-          await new Promise((resolve) => setTimeout(resolve, 100))
+          await new Promise(resolve => setTimeout(resolve, 100))
         } catch (error) {
           console.error(`Failed to import ${usdaFood.description}:`, error)
           results.push({
             food: usdaFood.description,
             success: false,
-            message: error instanceof Error ? error.message : "Unknown error",
+            message: error instanceof Error ? error.message : 'Unknown error',
           })
         }
       }

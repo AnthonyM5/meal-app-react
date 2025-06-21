@@ -1,24 +1,35 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MealSection } from "@/components/meal-section"
-import { getTodaysMeals } from "@/lib/food-actions"
-import type { Meal } from "@/lib/types"
-import { Loader2 } from "lucide-react"
+import { MealSection } from '@/components/meal-section'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getTodaysMeals } from '@/lib/food-actions'
+import type { Meal } from '@/lib/types'
+import { Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 export default function DashboardPage() {
   const [meals, setMeals] = useState<Meal[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [usdaResult, setUsdaResult] = useState<any>(null)
 
   const loadMeals = async () => {
     try {
       const todaysMeals = await getTodaysMeals()
       setMeals(todaysMeals)
     } catch (error) {
-      console.error("Error loading meals:", error)
+      console.error('Error loading meals:', error)
     } finally {
       setIsLoading(false)
+    }
+
+    try {
+      const response = await fetch('/api/usda-search?q=banana')
+      const result = await response.json()
+      console.log('USDA Search Result:', JSON.stringify(result, null, 2))
+      setUsdaResult(result)
+    } catch (error) {
+      console.error('Error fetching from USDA proxy:', error)
+      setUsdaResult({ error: 'Failed to fetch' })
     }
   }
 
@@ -26,25 +37,39 @@ export default function DashboardPage() {
     loadMeals()
   }, [])
 
-  const getMealByType = (type: "breakfast" | "lunch" | "dinner" | "snack") => {
-    return meals.find((meal) => meal.meal_type === type)
+  const getMealByType = (type: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
+    return meals.find(meal => meal.meal_type === type)
   }
 
   const totalCalories = meals.reduce(
-    (sum, meal) => sum + (meal.meal_items?.reduce((mealSum, item) => mealSum + item.calories, 0) || 0),
-    0,
+    (sum, meal) =>
+      sum +
+      (meal.meal_items?.reduce((mealSum, item) => mealSum + item.calories, 0) ||
+        0),
+    0
   )
   const totalProtein = meals.reduce(
-    (sum, meal) => sum + (meal.meal_items?.reduce((mealSum, item) => mealSum + item.protein_g, 0) || 0),
-    0,
+    (sum, meal) =>
+      sum +
+      (meal.meal_items?.reduce(
+        (mealSum, item) => mealSum + item.protein_g,
+        0
+      ) || 0),
+    0
   )
   const totalCarbs = meals.reduce(
-    (sum, meal) => sum + (meal.meal_items?.reduce((mealSum, item) => mealSum + item.carbs_g, 0) || 0),
-    0,
+    (sum, meal) =>
+      sum +
+      (meal.meal_items?.reduce((mealSum, item) => mealSum + item.carbs_g, 0) ||
+        0),
+    0
   )
   const totalFat = meals.reduce(
-    (sum, meal) => sum + (meal.meal_items?.reduce((mealSum, item) => mealSum + item.fat_g, 0) || 0),
-    0,
+    (sum, meal) =>
+      sum +
+      (meal.meal_items?.reduce((mealSum, item) => mealSum + item.fat_g, 0) ||
+        0),
+    0
   )
 
   if (isLoading) {
@@ -60,11 +85,11 @@ export default function DashboardPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Food Diary</h1>
         <p className="text-muted-foreground">
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
+          {new Date().toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
           })}
         </p>
       </div>
@@ -77,19 +102,27 @@ export default function DashboardPage() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-primary">{Math.round(totalCalories)}</div>
+              <div className="text-2xl font-bold text-primary">
+                {Math.round(totalCalories)}
+              </div>
               <div className="text-sm text-muted-foreground">Calories</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{Math.round(totalProtein)}g</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {Math.round(totalProtein)}g
+              </div>
               <div className="text-sm text-muted-foreground">Protein</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{Math.round(totalCarbs)}g</div>
+              <div className="text-2xl font-bold text-green-600">
+                {Math.round(totalCarbs)}g
+              </div>
               <div className="text-sm text-muted-foreground">Carbs</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">{Math.round(totalFat)}g</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {Math.round(totalFat)}g
+              </div>
               <div className="text-sm text-muted-foreground">Fat</div>
             </div>
           </div>
@@ -98,11 +131,41 @@ export default function DashboardPage() {
 
       {/* Meals */}
       <div className="space-y-4">
-        <MealSection mealType="breakfast" meal={getMealByType("breakfast")} onUpdate={loadMeals} />
-        <MealSection mealType="lunch" meal={getMealByType("lunch")} onUpdate={loadMeals} />
-        <MealSection mealType="dinner" meal={getMealByType("dinner")} onUpdate={loadMeals} />
-        <MealSection mealType="snack" meal={getMealByType("snack")} onUpdate={loadMeals} />
+        <MealSection
+          mealType="breakfast"
+          meal={getMealByType('breakfast')}
+          onUpdate={loadMeals}
+        />
+        <MealSection
+          mealType="lunch"
+          meal={getMealByType('lunch')}
+          onUpdate={loadMeals}
+        />
+        <MealSection
+          mealType="dinner"
+          meal={getMealByType('dinner')}
+          onUpdate={loadMeals}
+        />
+        <MealSection
+          mealType="snack"
+          meal={getMealByType('snack')}
+          onUpdate={loadMeals}
+        />
       </div>
+
+      {/* USDA Debug Output */}
+      {usdaResult && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>USDA API Debug</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="p-4 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto">
+              {JSON.stringify(usdaResult, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
