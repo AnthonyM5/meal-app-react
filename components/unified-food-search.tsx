@@ -1,22 +1,26 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Search, Plus, Loader2, Download } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { addFoodToMeal } from "@/lib/food-actions"
-import type { Food, MealType } from "@/lib/types"
-import { toast } from "sonner"
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { addFoodToMeal } from '@/lib/food-actions'
+import type { Food, MealType } from '@/lib/types'
+import { Download, ExternalLink, Loader2, Plus, Search } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 interface UnifiedFoodSearchProps {
   mealType: MealType
   onFoodAdded?: () => void
 }
 
-export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchProps) {
-  const [query, setQuery] = useState("")
+export function UnifiedFoodSearch({
+  mealType,
+  onFoodAdded,
+}: UnifiedFoodSearchProps) {
+  const [query, setQuery] = useState('')
   const [foods, setFoods] = useState<Food[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [addingFoodId, setAddingFoodId] = useState<string | null>(null)
@@ -28,12 +32,14 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
       if (query.length >= 2) {
         setIsSearching(true)
         try {
-          const response = await fetch(`/api/foods/unified-search?q=${encodeURIComponent(query)}`)
+          const response = await fetch(
+            `/api/foods/unified-search?q=${encodeURIComponent(query)}`
+          )
           const data = await response.json()
           setFoods(data.foods || [])
         } catch (error) {
-          console.error("Search error:", error)
-          toast.error("Failed to search foods")
+          console.error('Search error:', error)
+          toast.error('Failed to search foods')
         } finally {
           setIsSearching(false)
         }
@@ -51,11 +57,11 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
       await addFoodToMeal(food.id, mealType)
       toast.success(`Added ${food.name} to ${mealType}`)
       onFoodAdded?.()
-      setQuery("")
+      setQuery('')
       setFoods([])
     } catch (error) {
-      console.error("Add food error:", error)
-      toast.error("Failed to add food")
+      console.error('Add food error:', error)
+      toast.error('Failed to add food')
     } finally {
       setAddingFoodId(null)
     }
@@ -66,33 +72,39 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
 
     setIsImporting(true)
     try {
-      const response = await fetch("/api/foods/import-external", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/foods/import-external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query }),
       })
 
       const data = await response.json()
       if (data.imported > 0) {
-        toast.success(`Imported ${data.imported} new foods! Search again to see them.`)
+        toast.success(
+          `Imported ${data.imported} new foods! Search again to see them.`
+        )
         // Refresh search results
-        const searchResponse = await fetch(`/api/foods/unified-search?q=${encodeURIComponent(query)}`)
+        const searchResponse = await fetch(
+          `/api/foods/unified-search?q=${encodeURIComponent(query)}`
+        )
         const searchData = await searchResponse.json()
         setFoods(searchData.foods || [])
       } else {
-        toast.info("No new foods found to import")
+        toast.info('No new foods found to import')
       }
     } catch (error) {
-      console.error("Import error:", error)
-      toast.error("Failed to import foods")
+      console.error('Import error:', error)
+      toast.error('Failed to import foods')
     } finally {
       setIsImporting(false)
     }
   }
 
   const getSourceBadge = (food: Food) => {
-    if (food.brand === "USDA") return { label: "USDA", variant: "default" as const }
-    if (food.is_verified) return { label: "Verified", variant: "secondary" as const }
+    if (food.brand === 'USDA')
+      return { label: 'USDA', variant: 'default' as const }
+    if (food.is_verified)
+      return { label: 'Verified', variant: 'secondary' as const }
     return null
   }
 
@@ -103,7 +115,7 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
         <Input
           placeholder="Search foods from all sources..."
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={e => setQuery(e.target.value)}
           className="pl-10"
         />
         {isSearching && (
@@ -113,7 +125,7 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
 
       {foods.length > 0 && (
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {foods.map((food) => {
+          {foods.map(food => {
             const sourceBadge = getSourceBadge(food)
             return (
               <Card key={food.id} className="hover:shadow-md transition-shadow">
@@ -121,25 +133,38 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium">{food.name}</h3>
-                        {food.brand && food.brand !== "USDA" && (
+                        <Link
+                          href={`/food-details/${food.id}`}
+                          className="font-medium hover:underline flex items-center gap-1"
+                        >
+                          {food.name}
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                        {food.brand && food.brand !== 'USDA' && (
                           <Badge variant="outline" className="text-xs">
                             {food.brand}
                           </Badge>
                         )}
                         {sourceBadge && (
-                          <Badge variant={sourceBadge.variant} className="text-xs">
+                          <Badge
+                            variant={sourceBadge.variant}
+                            className="text-xs"
+                          >
                             {sourceBadge.label}
                           </Badge>
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {Math.round(food.calories_per_serving)} cal per {food.serving_size}
+                        {Math.round(food.calories_per_serving)} cal per{' '}
+                        {food.serving_size}
                         {food.serving_unit}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        P: {Math.round(food.protein_g)}g • C: {Math.round(food.carbs_g)}g • F: {Math.round(food.fat_g)}g
-                        {food.fiber_g > 0 && ` • Fiber: ${Math.round(food.fiber_g)}g`}
+                        P: {Math.round(food.protein_g)}g • C:{' '}
+                        {Math.round(food.carbs_g)}g • F:{' '}
+                        {Math.round(food.fat_g)}g
+                        {food.fiber_g > 0 &&
+                          ` • Fiber: ${Math.round(food.fiber_g)}g`}
                       </div>
                     </div>
                     <Button
@@ -164,14 +189,20 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
 
       {query.length >= 2 && foods.length === 0 && !isSearching && (
         <div className="text-center py-8 space-y-4">
-          <div className="text-muted-foreground">No foods found for "{query}"</div>
+          <div className="text-muted-foreground">
+            No foods found for "{query}"
+          </div>
           <Button
             variant="outline"
             onClick={handleImportMoreFoods}
             disabled={isImporting}
             className="flex items-center gap-2"
           >
-            {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {isImporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
             Import from external databases
           </Button>
         </div>
@@ -186,7 +217,11 @@ export function UnifiedFoodSearch({ mealType, onFoodAdded }: UnifiedFoodSearchPr
             disabled={isImporting}
             className="flex items-center gap-2 text-xs"
           >
-            {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+            {isImporting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
             Import more foods
           </Button>
         </div>

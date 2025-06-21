@@ -1,5 +1,6 @@
 'use client'
 
+import { ExploreFoodsSection } from '@/components/explore-foods-section'
 import { MealSection } from '@/components/meal-section'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getTodaysMeals } from '@/lib/food-actions'
@@ -10,7 +11,6 @@ import { useEffect, useState } from 'react'
 export default function DashboardPage() {
   const [meals, setMeals] = useState<Meal[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [usdaResult, setUsdaResult] = useState<any>(null)
 
   const loadMeals = async () => {
     try {
@@ -22,15 +22,7 @@ export default function DashboardPage() {
       setIsLoading(false)
     }
 
-    try {
-      const response = await fetch('/api/usda-search?q=banana')
-      const result = await response.json()
-      console.log('USDA Search Result:', JSON.stringify(result, null, 2))
-      setUsdaResult(result)
-    } catch (error) {
-      console.error('Error fetching from USDA proxy:', error)
-      setUsdaResult({ error: 'Failed to fetch' })
-    }
+    // Removed USDA debug code
   }
 
   useEffect(() => {
@@ -130,42 +122,38 @@ export default function DashboardPage() {
       </Card>
 
       {/* Meals */}
-      <div className="space-y-4">
-        <MealSection
-          mealType="breakfast"
-          meal={getMealByType('breakfast')}
-          onUpdate={loadMeals}
-        />
-        <MealSection
-          mealType="lunch"
-          meal={getMealByType('lunch')}
-          onUpdate={loadMeals}
-        />
-        <MealSection
-          mealType="dinner"
-          meal={getMealByType('dinner')}
-          onUpdate={loadMeals}
-        />
-        <MealSection
-          mealType="snack"
-          meal={getMealByType('snack')}
-          onUpdate={loadMeals}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Meals Column */}
+        <div className="space-y-4">
+          <MealSection
+            mealType="breakfast"
+            meal={getMealByType('breakfast')}
+            onUpdate={loadMeals}
+          />
+          <MealSection
+            mealType="lunch"
+            meal={getMealByType('lunch')}
+            onUpdate={loadMeals}
+          />
+          <MealSection
+            mealType="dinner"
+            meal={getMealByType('dinner')}
+            onUpdate={loadMeals}
+          />
+          <MealSection
+            mealType="snack"
+            meal={getMealByType('snack')}
+            onUpdate={loadMeals}
+          />
+        </div>
+
+        {/* Explore Foods Column */}
+        <div className="space-y-4">
+          <ExploreFoodsSection />
+        </div>
       </div>
 
-      {/* USDA Debug Output */}
-      {usdaResult && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>USDA API Debug</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="p-4 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto">
-              {JSON.stringify(usdaResult, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+      {/* No debug output needed */}
     </div>
   )
 }

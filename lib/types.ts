@@ -11,6 +11,19 @@ export interface Food {
   fiber_g: number
   sugar_g?: number
   sodium_mg?: number
+  cholesterol_mg?: number
+  vitamin_a_mcg?: number
+  vitamin_c_mg?: number
+  vitamin_d_mcg?: number
+  vitamin_e_mg?: number
+  vitamin_b12_mcg?: number
+  calcium_mg?: number
+  iron_mg?: number
+  magnesium_mg?: number
+  potassium_mg?: number
+  zinc_mg?: number
+  selenium_mcg?: number
+  folate_mcg?: number
   is_verified: boolean
 }
 
@@ -18,7 +31,7 @@ export interface Meal {
   id: string
   user_id: string
   name?: string
-  meal_type: "breakfast" | "lunch" | "dinner" | "snack"
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
   date: string
   notes?: string
   created_at: string
@@ -39,4 +52,4 @@ export interface MealItem {
   food: Food
 }
 
-export type MealType = "breakfast" | "lunch" | "dinner" | "snack"
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
