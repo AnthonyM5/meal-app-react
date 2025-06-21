@@ -1,9 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from '@supabase/supabase-js'
+import { type NextRequest, NextResponse } from 'next/server'
 
 // USDA API configuration
-const USDA_API_KEY = process.env.USDA_API_KEY || "DEMO_KEY"
-const USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1"
+const USDA_API_KEY = process.env.USDA_API_KEY || 'DEMO_KEY'
+const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const NUTRIENT_IDS = {
   ENERGY: 1008, // Energy (calories)
@@ -25,10 +30,9 @@ export async function POST(request: NextRequest) {
     const { query } = await request.json()
 
     if (!query || query.length < 2) {
-      return NextResponse.json({ imported: 0, message: "Query too short" })
+      return NextResponse.json({ imported: 0, message: 'Query too short' })
     }
 
-    const supabase = createClient()
     let importedCount = 0
 
     // Search USDA database
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
         if (imported) importedCount++
 
         // Small delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise(resolve => setTimeout(resolve, 50))
       } catch (error) {
         console.error(`Failed to import ${usdaFood.description}:`, error)
       }
@@ -54,14 +58,19 @@ export async function POST(request: NextRequest) {
       message: `Imported ${importedCount} new foods`,
     })
   } catch (error) {
-    console.error("Import external foods error:", error)
-    return NextResponse.json({ imported: 0, error: "Failed to import foods" }, { status: 500 })
+    console.error('Import external foods error:', error)
+    return NextResponse.json(
+      { imported: 0, error: 'Failed to import foods' },
+      { status: 500 }
+    )
   }
 }
 
 async function searchUSDAFoods(query: string) {
   try {
-    const url = `${USDA_BASE_URL}/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=15&dataType=Branded,Foundation,SR%20Legacy`
+    const url = `${USDA_BASE_URL}/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(
+      query
+    )}&pageSize=15&dataType=Branded,Foundation,SR%20Legacy`
 
     const response = await fetch(url)
     if (!response.ok) return []
@@ -69,7 +78,7 @@ async function searchUSDAFoods(query: string) {
     const data = await response.json()
     return data.foods || []
   } catch (error) {
-    console.error("USDA search error:", error)
+    console.error('USDA search error:', error)
     return []
   }
 }
@@ -78,10 +87,10 @@ async function importUSDAFoodToDatabase(usdaFood: any, supabase: any) {
   try {
     // Check if food already exists
     const { data: existingFood } = await supabase
-      .from("foods")
-      .select("id")
-      .eq("name", usdaFood.description)
-      .eq("brand", usdaFood.brandOwner || usdaFood.brandName || "USDA")
+      .from('foods')
+      .select('id')
+      .eq('name', usdaFood.description)
+      .eq('brand', usdaFood.brandOwner || usdaFood.brandName || 'USDA')
       .single()
 
     if (existingFood) {
@@ -90,7 +99,11 @@ async function importUSDAFoodToDatabase(usdaFood: any, supabase: any) {
 
     // Get detailed nutrition info
     const detailResponse = await fetch(
-      `${USDA_BASE_URL}/food/${usdaFood.fdcId}?api_key=${USDA_API_KEY}&nutrients=${Object.values(NUTRIENT_IDS).join(",")}`,
+      `${USDA_BASE_URL}/food/${
+        usdaFood.fdcId
+      }?api_key=${USDA_API_KEY}&nutrients=${Object.values(NUTRIENT_IDS).join(
+        ','
+      )}`
     )
 
     if (!detailResponse.ok) return false
@@ -100,7 +113,7 @@ async function importUSDAFoodToDatabase(usdaFood: any, supabase: any) {
 
     // Determine serving size
     let servingSize = 100
-    let servingUnit = "g"
+    let servingUnit = 'g'
 
     if (detailData.servingSize && detailData.servingSizeUnit) {
       servingSize = detailData.servingSize
@@ -108,9 +121,9 @@ async function importUSDAFoodToDatabase(usdaFood: any, supabase: any) {
     }
 
     // Insert into database
-    const { error } = await supabase.from("foods").insert({
+    const { error } = await supabase.from('foods').insert({
       name: usdaFood.description,
-      brand: usdaFood.brandOwner || usdaFood.brandName || "USDA",
+      brand: usdaFood.brandOwner || usdaFood.brandName || 'USDA',
       serving_size: servingSize,
       serving_unit: servingUnit,
       calories_per_serving: nutrients.calories,
@@ -130,7 +143,7 @@ async function importUSDAFoodToDatabase(usdaFood: any, supabase: any) {
 
     return !error
   } catch (error) {
-    console.error("Import food error:", error)
+    console.error('Import food error:', error)
     return false
   }
 }
@@ -151,7 +164,7 @@ function extractNutrients(foodNutrients: any[]) {
     iron: 0,
   }
 
-  foodNutrients.forEach((nutrient) => {
+  foodNutrients.forEach(nutrient => {
     switch (nutrient.nutrientId) {
       case NUTRIENT_IDS.ENERGY:
         nutrients.calories = nutrient.value || 0

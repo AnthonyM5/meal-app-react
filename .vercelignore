@@ -11,19 +11,11 @@ test-_.ts
 
 # Development configuration
 
-# Development configuration
-
-.env*.local
+.env\*.local
 .env.development
-*.config.json
 direct-schema-check.ts
 
-# Local Supabase
-
-\*\*/migrations/
-config.toml
-
-# Test and debug files
+# Test files
 
 _.test.ts
 _.test.tsx
@@ -37,23 +29,7 @@ playwright/
 .idea/
 \*.log
 
-# Documentation and misc
+# Documentation
 
 CHANGELOG.md
 LICENSE
-\*.md
-!README.md # Keep the main READMEnd database setup scripts
-
-scripts/
-supabase/
-test-endpoints.js
-
-# Local development config
-
-.env\*.local
-.env.development
-
-# Test files
-
-_.test.ts
-_.test.tsx

@@ -1,6 +1,12 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import type { Database } from '@/lib/types'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 // USDA FoodData Central API types
 interface USDAFood {
