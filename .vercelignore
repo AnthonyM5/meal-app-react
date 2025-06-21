@@ -9,15 +9,7 @@ analyze-_.ts
 import-_.ts
 test-_.ts
 
-# Development configurationnt and database setup
-
-scripts/
-supabase/
-_.sql
-test-endpoints.js
-analyze-_.ts
-import-_.ts
-test-_.ts
+# Development configuration
 
 # Development configuration
 
