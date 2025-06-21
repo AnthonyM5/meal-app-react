@@ -13,10 +13,24 @@ dotenv.config({ path: '.env.local' })
 
 // Environment setup
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY // Use service role key to bypass RLS
 const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY!
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
+if (!serviceRoleKey) {
+  console.error('❌ Missing SUPABASE_SERVICE_ROLE_KEY')
+  console.log('Please add your service role key to .env.local')
+  console.log(
+    'You can find it in your Supabase dashboard under Project Settings > API'
+  )
+  process.exit(1)
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
 
 // Rate limiting configuration
 const MAX_REQUESTS_PER_HOUR = 1000
