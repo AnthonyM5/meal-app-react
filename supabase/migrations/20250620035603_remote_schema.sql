@@ -372,10 +372,16 @@ alter table "public"."water_intake" drop constraint "water_intake_user_id_fkey";
 
 alter table "public"."weight_logs" drop constraint "weight_logs_user_id_fkey";
 
+-- First drop the trigger that depends on handle_new_user
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Now we can safely drop the functions
 drop function if exists "public"."get_daily_nutrition"(p_user_id uuid, p_date date);
 
 drop function if exists "public"."get_nutrition_by_meal_type"(p_user_id uuid, p_date date);
 
+-- Drop the trigger first, then the function
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 drop function if exists "public"."handle_new_user"();
 
 drop function if exists "public"."handle_updated_at"();
