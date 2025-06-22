@@ -22,36 +22,34 @@ const { NUTRIENT_IDS } = config
 dotenv.config({ path: '.env.local' })
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const USDA_API_KEY = process.env.USDA_API_KEY
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY
 
 console.log('--- Environment Variables Status ---')
 console.log(`NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'Loaded' : 'NOT FOUND'}`)
 console.log(
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'Loaded' : 'NOT FOUND'}`
+  `SUPABASE_SERVICE_ROLE_KEY: ${serviceRoleKey ? 'Loaded' : 'NOT FOUND'}`
 )
-console.log(`USDA_API_KEY: ${USDA_API_KEY ? 'Loaded' : 'NOT FOUND'}`)
+console.log(
+  `NEXT_PUBLIC_USDA_API_KEY: ${USDA_API_KEY ? 'Loaded' : 'NOT FOUND'}`
+)
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !serviceRoleKey) {
   console.error('❌ Missing Supabase environment variables')
   process.exit(1)
 }
 
 if (!USDA_API_KEY || USDA_API_KEY === 'DEMO_KEY') {
   console.error(
-    '❌ USDA_API_KEY not found. Please add it to your .env.local file'
+    '❌ NEXT_PUBLIC_USDA_API_KEY not found. Please add it to your .env.local file'
   )
   process.exit(1)
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
     persistSession: false,
-  },
-  global: {
-    headers: {
-      Authorization: `Bearer ${supabaseAnonKey}`,
-    },
+    autoRefreshToken: false,
   },
   db: {
     schema: 'public',
@@ -59,30 +57,31 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 // Configuration
-const PAGES_TO_FETCH = 5 // How many pages to import
+const PAGES_TO_FETCH = 41 // Maximum pages (end of USDA data)
+const START_PAGE = 26 // Continue from where we left off
 const PAGE_SIZE = 200 // Max items per page (USDA limit)
 
 async function optimizedBulkImport() {
   console.log('🚀 Starting OPTIMIZED bulk food import from USDA...')
-  console.log(
-    '📈 Strategy: Using ONLY /foods/list endpoint (5x more efficient!)'
-  )
+  console.log('📈 Strategy: Using ONLY /foods/list endpoint (5x more efficient!)')
 
   let totalImported = 0
   let totalUpdated = 0
   let totalErrors = 0
   let totalSkipped = 0
 
-  for (let page = 1; page <= PAGES_TO_FETCH; page++) {
-    console.log(`\n📄 Processing page ${page} of ${PAGES_TO_FETCH}...`)
+  for (let page = START_PAGE; page <= PAGES_TO_FETCH; page++) {
+    console.log(
+      `\n📄 Processing page ${page} of ${PAGES_TO_FETCH} (starting from page ${START_PAGE})...`
+    )
 
     try {
       // Fetch foods from list endpoint (contains all nutrient data!)
       const foods = await getFoodsList(page, PAGE_SIZE)
 
-      if (!foods || foods.length === 0) {
-        console.log(`⚠️  No foods returned for page ${page}`)
-        continue
+      if (!foods || !Array.isArray(foods) || foods.length === 0) {
+        console.log(`⚠️  No more foods available after page ${page - 1}. Ending import.`)
+        break // Exit the loop as we've reached the end of data
       }
 
       console.log(`✅ Retrieved ${foods.length} foods from list endpoint`)

@@ -410,3 +410,34 @@ This project is licensed under the MIT License. Feel free to fork, modify, and u
 ---
 
 **Happy coding! 🎉**
+
+## Build Notes
+
+When building the project, you may see the following expected warnings that do not affect functionality:
+
+### Dynamic Route Warnings
+
+```
+Dynamic server usage: Route /auth/login couldn't be rendered statically because it used `cookies`
+```
+
+These warnings appear for routes that use cookies (auth, dashboard, etc). This is expected behavior as these routes need to be dynamic. The middleware handles this correctly and the routes are properly configured as server-side rendered.
+
+### Supabase Realtime Warning
+
+```
+Critical dependency: the request of a dependency is an expression
+./node_modules/@supabase/realtime-js/dist/main/RealtimeClient.js
+```
+
+This is a known warning from the Supabase Realtime client. It does not affect functionality and is related to how the client handles WebSocket connections.
+
+### Metadata Warnings
+
+```
+Unsupported metadata themeColor is configured in metadata export. Please move it to viewport export instead.
+```
+
+These are style suggestions for Next.js metadata configuration. They don't affect functionality and can be addressed in future updates if needed.
+
+All of these warnings are expected during the build process and the application will deploy and function correctly despite them.
