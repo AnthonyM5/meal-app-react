@@ -1,9 +1,2 @@
-import { FoodDetailsView } from './food-details-view'
-
-export default function FoodDetailsPage({
-  params,
-}: {
-  params: { foodId: string }
-}) {
-  return <FoodDetailsView foodId={params.foodId} />
-}
+import FoodDetailPage from './food-detail-page'
+export default FoodDetailPage

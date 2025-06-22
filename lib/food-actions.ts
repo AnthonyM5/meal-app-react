@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database, Food, Meal, MealType } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
 type DummyClient = {
   auth: {
@@ -18,20 +19,23 @@ function isDummyClient(
   return !('from' in client)
 }
 
-async function getAuthenticatedClient() {
+async function getClient() {
   const client = await createClient()
   if (isDummyClient(client)) {
     throw new Error('Database client not properly initialized')
   }
+  return client as SupabaseClient<Database>
+}
 
-  const supabase = client as SupabaseClient<Database>
+async function getAuthenticatedClientOrRedirect() {
+  const supabase = await getClient()
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    throw new Error('Not authenticated')
+    redirect('/auth/login')
   }
 
   return { supabase, user }
@@ -41,7 +45,7 @@ export async function searchFoods(query: string): Promise<Food[]> {
   if (!query || query.length < 2) return []
 
   try {
-    const { supabase } = await getAuthenticatedClient()
+    const supabase = await getClient()
 
     const { data, error } = await supabase
       .from('foods')
@@ -58,38 +62,44 @@ export async function searchFoods(query: string): Promise<Food[]> {
 
     return data || []
   } catch (error) {
-    // If not authenticated, return empty results instead of throwing
     console.error('Error in searchFoods:', error)
     return []
   }
 }
 
 export async function getTodaysMeals(): Promise<Meal[]> {
-  const { supabase, user } = await getAuthenticatedClient()
+  try {
+    const { supabase, user } = await getAuthenticatedClientOrRedirect()
 
-  const today = new Date().toISOString().split('T')[0]
+    const today = new Date().toISOString().split('T')[0]
 
-  const { data: meals, error } = await supabase
-    .from('meals')
-    .select(
-      `
-      *,
-      meal_items (
+    const { data: meals, error } = await supabase
+      .from('meals')
+      .select(
+        `
         *,
-        food:foods (*)
+        meal_items (
+          *,
+          food:foods (*)
+        )
+      `
       )
-    `
-    )
-    .eq('user_id', user.id)
-    .eq('date', today)
-    .order('created_at', { ascending: true })
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .order('created_at', { ascending: true })
 
-  if (error) throw error
-  return meals || []
+    if (error) throw error
+    return meals || []
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Not authenticated') {
+      return []
+    }
+    throw error
+  }
 }
 
 export async function addFoodToMeal(foodId: string, mealType: MealType) {
-  const { supabase, user } = await getAuthenticatedClient()
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
   const today = new Date().toISOString().split('T')[0]
 
   // Get the food details
@@ -157,7 +167,7 @@ export async function addFoodToMeal(foodId: string, mealType: MealType) {
 }
 
 export async function updateMealItem(itemId: string, newQuantity: number) {
-  const { supabase, user } = await getAuthenticatedClient()
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
 
   // Get the meal item with food details
   const { data: item, error: itemError } = await supabase
@@ -196,7 +206,7 @@ export async function updateMealItem(itemId: string, newQuantity: number) {
 }
 
 export async function deleteMealItem(itemId: string) {
-  const { supabase, user } = await getAuthenticatedClient()
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
 
   // Verify ownership
   const { data: item, error: itemError } = await supabase

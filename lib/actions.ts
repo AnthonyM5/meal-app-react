@@ -37,7 +37,7 @@ export async function signIn(prevState: any, formData: FormData) {
     return { error: error.message }
   }
 
-  redirect('/')
+  redirect('/dashboard')
 }
 
 // Update the signUp function to handle potential null formData
