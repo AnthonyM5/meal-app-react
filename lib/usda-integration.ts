@@ -77,7 +77,10 @@ export async function getFoodsList(
       )
     }
 
-    return response.json()
+    const data = await response.json()
+    // Debug log to check structure
+    console.log('Sample food item:', JSON.stringify(data[0], null, 2))
+    return data
   } catch (error) {
     console.error(`Error fetching USDA list from ${url}:`, error)
     return []
