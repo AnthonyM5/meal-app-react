@@ -1,84 +1,110 @@
-"use server"
+'use server'
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
+import type { Database } from '@/lib/types'
+import type { CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 
 // Update the signIn function to handle redirects properly
 export async function signIn(prevState: any, formData: FormData) {
-  // Check if formData is valid
-  if (!formData) {
-    return { error: "Form data is missing" }
-  }
+  const cookieStore = await cookies()
 
-  const email = formData.get("email")
-  const password = formData.get("password")
-
-  // Validate required fields
-  if (!email || !password) {
-    return { error: "Email and password are required" }
-  }
-
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
-
-  try {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.toString(),
-      password: password.toString(),
-    })
-
-    if (error) {
-      return { error: error.message }
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set(name, value, options)
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 })
+        },
+      },
     }
+  )
 
-    // Return success instead of redirecting directly
-    return { success: true }
-  } catch (error) {
-    console.error("Login error:", error)
-    return { error: "An unexpected error occurred. Please try again." }
+  const { error } = await supabase.auth.signInWithPassword({
+    email: formData.get('email') as string,
+    password: formData.get('password') as string,
+  })
+
+  if (error) {
+    return { error: error.message }
   }
+
+  redirect('/')
 }
 
 // Update the signUp function to handle potential null formData
 export async function signUp(prevState: any, formData: FormData) {
-  // Check if formData is valid
-  if (!formData) {
-    return { error: "Form data is missing" }
-  }
+  const cookieStore = await cookies()
 
-  const email = formData.get("email")
-  const password = formData.get("password")
-
-  // Validate required fields
-  if (!email || !password) {
-    return { error: "Email and password are required" }
-  }
-
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
-
-  try {
-    const { error } = await supabase.auth.signUp({
-      email: email.toString(),
-      password: password.toString(),
-    })
-
-    if (error) {
-      return { error: error.message }
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set(name, value, options)
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 })
+        },
+      },
     }
+  )
 
-    return { success: "Check your email to confirm your account." }
-  } catch (error) {
-    console.error("Sign up error:", error)
-    return { error: "An unexpected error occurred. Please try again." }
+  const { error } = await supabase.auth.signUp({
+    email: formData.get('email') as string,
+    password: formData.get('password') as string,
+    options: {
+      data: {
+        name: formData.get('name') as string,
+      },
+    },
+  })
+
+  if (error) {
+    return { error: error.message }
   }
+
+  redirect('/auth/verify')
 }
 
 export async function signOut() {
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  const cookieStore = await cookies()
 
-  await supabase.auth.signOut()
-  redirect("/auth/login")
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set(name, value, options)
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 })
+        },
+      },
+    }
+  )
+
+  const { error } = await supabase.auth.signOut()
+
+  if (error) {
+    console.error('Error signing out:', error.message)
+  }
+
+  redirect('/auth/login')
 }

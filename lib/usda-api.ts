@@ -1,14 +1,55 @@
 'use server'
 
 import type { Database } from '@/lib/types'
-import { createClient } from '@supabase/supabase-js'
+import type { CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import 'server-only'
 
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
 
-// USDA FoodData Central API types
+async function getSupabaseClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set(name, value, options)
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 })
+        },
+      },
+    }
+  )
+}
+
+// USDA API configuration
+const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
+
+// Nutrient ID mappings for USDA API
+const NUTRIENT_IDS = {
+  ENERGY: 1008, // Energy (calories)
+  PROTEIN: 1003, // Protein
+  CARBS: 1005, // Carbohydrate, by difference
+  FAT: 1004, // Total lipid (fat)
+  FIBER: 1079, // Fiber, total dietary
+  SUGAR: 2000, // Sugars, total including NLEA
+  SODIUM: 1093, // Sodium, Na
+  CHOLESTEROL: 1253, // Cholesterol
+  VITAMIN_A: 1106, // Vitamin A, RAE
+  VITAMIN_C: 1162, // Vitamin C, total ascorbic acid
+  CALCIUM: 1087, // Calcium, Ca
+  IRON: 1089, // Iron, Fe
+}
+
+// USDA API types
 interface USDAFood {
   fdcId: number
   description: string
@@ -38,26 +79,6 @@ interface USDASearchResult {
   totalHits: number
   currentPage: number
   totalPages: number
-}
-
-// USDA API configuration
-const USDA_API_KEY = process.env.USDA_API_KEY || 'DEMO_KEY'
-const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
-
-// Nutrient ID mappings for USDA API
-const NUTRIENT_IDS = {
-  ENERGY: 1008, // Energy (calories)
-  PROTEIN: 1003, // Protein
-  CARBS: 1005, // Carbohydrate, by difference
-  FAT: 1004, // Total lipid (fat)
-  FIBER: 1079, // Fiber, total dietary
-  SUGAR: 2000, // Sugars, total including NLEA
-  SODIUM: 1093, // Sodium, Na
-  CHOLESTEROL: 1253, // Cholesterol
-  VITAMIN_A: 1106, // Vitamin A, RAE
-  VITAMIN_C: 1162, // Vitamin C, total ascorbic acid
-  CALCIUM: 1087, // Calcium, Ca
-  IRON: 1089, // Iron, Fe
 }
 
 export async function searchUSDAFoods(
@@ -90,8 +111,7 @@ export async function searchUSDAFoods(
 }
 
 export async function importUSDAFood(fdcId: number) {
-  const supabase =
-    createClient() as import('@supabase/supabase-js').SupabaseClient
+  const supabase = await getSupabaseClient()
 
   try {
     // Get detailed food information from USDA
