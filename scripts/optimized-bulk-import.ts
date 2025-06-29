@@ -58,14 +58,20 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 
 // Configuration
 const PAGES_TO_FETCH = 41 // Maximum pages (end of USDA data)
-const START_PAGE = 17 // Continue from where we hit rate limit
+const START_PAGE = 1 // Continue from where we hit rate limit
 const PAGE_SIZE = 200 // Max items per page (USDA limit)
-const DELAY_BETWEEN_REQUESTS = 4000 // 4 seconds between requests to avoid rate limit
+const DELAY_BETWEEN_REQUESTS = 20000 // 20 seconds between requests to avoid rate limit
 
 async function optimizedBulkImport() {
   console.log('🚀 Starting OPTIMIZED bulk food import from USDA...')
-  console.log('📈 Strategy: Using ONLY /foods/list endpoint (5x more efficient!)')
-  console.log(`⏱️  Using ${DELAY_BETWEEN_REQUESTS / 1000}s delay between requests to avoid rate limits`)
+  console.log(
+    '📈 Strategy: Using ONLY /foods/list endpoint (5x more efficient!)'
+  )
+  console.log(
+    `⏱️  Using ${
+      DELAY_BETWEEN_REQUESTS / 1000
+    }s delay between requests to avoid rate limits`
+  )
 
   let totalImported = 0
   let totalUpdated = 0
@@ -82,7 +88,9 @@ async function optimizedBulkImport() {
       const foods = await getFoodsList(page, PAGE_SIZE)
 
       if (!foods || !Array.isArray(foods) || foods.length === 0) {
-        console.log(`⚠️  No more foods available after page ${page - 1}. Ending import.`)
+        console.log(
+          `⚠️  No more foods available after page ${page - 1}. Ending import.`
+        )
         break // Exit the loop as we've reached the end of data
       }
 
@@ -104,8 +112,12 @@ async function optimizedBulkImport() {
 
       // Rate limiting - be nice to the API
       if (page < PAGES_TO_FETCH) {
-        console.log(`⏱️  Rate limiting: waiting ${DELAY_BETWEEN_REQUESTS / 1000}s...`)
-        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_REQUESTS))
+        console.log(
+          `⏱️  Rate limiting: waiting ${DELAY_BETWEEN_REQUESTS / 1000}s...`
+        )
+        await new Promise(resolve =>
+          setTimeout(resolve, DELAY_BETWEEN_REQUESTS)
+        )
       }
     } catch (error) {
       console.error(`❌ Error processing page ${page}:`, error)

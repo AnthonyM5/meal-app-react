@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
+  console.log('Unified search request:', searchParams.toString())
   const query = searchParams.get('q')
 
   if (!query || query.length < 2) {

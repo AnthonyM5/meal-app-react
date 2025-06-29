@@ -98,7 +98,30 @@ export async function getTodaysMeals(): Promise<Meal[]> {
   }
 }
 
-export async function addFoodToMeal(foodId: string, mealType: MealType) {
+// Helper to check guest mode using cookies
+async function isGuestMode(): Promise<boolean> {
+  const client = await getClient()
+  const {
+    data: { session },
+  } = await client.auth.getSession()
+
+  // If authenticated, not in guest mode
+  if (session) return false
+
+  // Check guest mode cookie - matches middleware implementation
+  const cookies = require('next/headers').cookies
+  return cookies().get('guestMode')?.value === 'true'
+}
+
+export async function addFoodToMeal(
+  mealId: string,
+  foodId: string,
+  quantity: number,
+  unit: string
+) {
+  if (await isGuestMode()) {
+    throw new Error('Please sign in to add foods to meals')
+  }
   const { supabase, user } = await getAuthenticatedClientOrRedirect()
   const today = new Date().toISOString().split('T')[0]
 
@@ -224,6 +247,55 @@ export async function deleteMealItem(itemId: string) {
     .from('meal_items')
     .delete()
     .eq('id', itemId)
+
+  if (deleteError) throw deleteError
+
+  revalidatePath('/dashboard')
+}
+
+export async function createMeal(type: MealType, date: string) {
+  if (await isGuestMode()) {
+    throw new Error('Please sign in to create meals')
+  }
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
+
+  const { data, error } = await supabase
+    .from('meals')
+    .insert({
+      user_id: user.id,
+      meal_type: type,
+      date,
+      name: type.charAt(0).toUpperCase() + type.slice(1),
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+
+  return data
+}
+
+export async function deleteMeal(mealId: string) {
+  if (await isGuestMode()) {
+    throw new Error('Please sign in to delete meals')
+  }
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
+
+  // Verify ownership
+  const { data: meal, error: mealError } = await supabase
+    .from('meals')
+    .select('user_id')
+    .eq('id', mealId)
+    .single()
+
+  if (mealError) throw mealError
+  if (meal.user_id !== user.id) throw new Error('Unauthorized')
+
+  // Delete the meal
+  const { error: deleteError } = await supabase
+    .from('meals')
+    .delete()
+    .eq('id', mealId)
 
   if (deleteError) throw deleteError
 
