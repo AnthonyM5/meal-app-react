@@ -1,23 +1,28 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 export function useGuestMode() {
-  const [isGuest, setIsGuest] = useState(false)
-  const router = useRouter()
+  const [isGuest, setIsGuest] = useState(() => {
+    // Initialize from sessionStorage if available (client-side)
+    if (typeof window !== 'undefined') {
+      const guestModeCookie = document.cookie
+        .split(';')
+        .some(item => item.trim().startsWith('guestMode=true'))
+      const guestModeStorage = sessionStorage.getItem('guestMode') === 'true'
+      return guestModeCookie || guestModeStorage
+    }
+    return false
+  })
 
-  useEffect(() => {
-    // Check session storage for guest mode on mount
-    const guestMode = sessionStorage.getItem('guestMode') === 'true'
-    setIsGuest(guestMode)
-  }, [])
-
-  const exitGuestMode = () => {
+  const exitGuestMode = useCallback(() => {
+    // Clear both cookie and sessionStorage
+    document.cookie =
+      'guestMode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     sessionStorage.removeItem('guestMode')
     setIsGuest(false)
-    router.push('/auth/login')
-  }
+    window.location.href = '/auth/login'
+  }, [])
 
   return {
     isGuest,

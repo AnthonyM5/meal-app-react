@@ -34,6 +34,16 @@ export async function getAuthenticatedClient() {
 
 export async function checkAuthStatus() {
   try {
+    // Check for guest mode first
+    const cookieStore = cookies()
+    const isGuestMode =
+      cookieStore.has('guestMode') &&
+      cookieStore.get('guestMode')?.value === 'true'
+
+    if (isGuestMode) {
+      return { isAuthenticated: false, isGuest: true }
+    }
+
     const client = await getAuthenticatedClient()
     const {
       data: { session },
@@ -42,19 +52,20 @@ export async function checkAuthStatus() {
 
     if (error) {
       console.error('Auth error:', error.message)
-      return { isAuthenticated: false, client }
+      return { isAuthenticated: false, isGuest: false }
     }
 
     return {
       isAuthenticated: !!session,
+      isGuest: false,
       client,
       session,
     }
   } catch (error) {
     if (!(error as Error)?.message?.includes('NEXT_REDIRECT')) {
-      console.error('Auth check failed:', error)
+      console.error('Error checking auth status:', error)
     }
-    return { isAuthenticated: false }
+    return { isAuthenticated: false, isGuest: false }
   }
 }
 

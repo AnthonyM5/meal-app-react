@@ -2,7 +2,10 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
+// Routes that don't require auth
 const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
+
+// Routes that allow guest access
 const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details', '/api/foods']
 
 export async function middleware(request: NextRequest) {
@@ -12,39 +15,28 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  const isGuestMode = request.cookies.get('guestMode')?.value === 'true'
   const path = request.nextUrl.pathname
+  const isGuestMode = request.cookies.get('guestMode')?.value === 'true'
 
-  // Allow access to public routes
+  // Allow public routes
   if (PUBLIC_ROUTES.includes(path)) {
     return response
   }
 
-  // Check if route is allowed for guests
+  // Check guest mode access
   const isGuestAllowedRoute = GUEST_ALLOWED_ROUTES.some(route =>
     path.startsWith(route)
   )
 
-  // Allow access if user is authenticated or in guest mode on allowed routes
   if (session || (isGuestMode && isGuestAllowedRoute)) {
     return response
   }
 
-  // Redirect to login with error if trying to access protected route
-  const loginUrl = new URL('/auth/login', request.url)
-  loginUrl.searchParams.set('error', 'auth_required')
-  return NextResponse.redirect(loginUrl)
+  // Redirect to login for protected routes
+  return NextResponse.redirect(new URL('/auth/login', request.url))
 }
 
+// Update matcher to cover all routes
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
