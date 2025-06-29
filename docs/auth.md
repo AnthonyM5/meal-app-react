@@ -148,7 +148,7 @@ These routes are accessible without authentication
 ### Guest-Allowed Routes
 
 ```typescript
-const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details']
+const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details', '/api/foods'] // Allow food search in guest mode
 ```
 
 These routes are accessible to both authenticated and guest users
@@ -294,15 +294,64 @@ if (!isAuthenticated && !isAllowedRoute) {
 
 1. HTTP Cookie:
 
-   - Name: `guestMode`
-   - Value: `true`
-   - Max Age: 24 hours
-   - Path: `/`
+   ```typescript
+   document.cookie = 'guestMode=true; path=/; max-age=86400' // 24 hours
+   ```
 
-2. Session Storage:
-   - Key: `guestMode`
-   - Value: `true`
-   - Cleared on browser close
+2. Session Storage (for client-side checks):
+
+   ```typescript
+   sessionStorage.setItem('guestMode', 'true')
+   ```
+
+### Guest Mode Features
+
+1. **Allowed Actions**
+
+   - View dashboard
+   - Search foods
+   - View food details
+   - View nutritional information
+
+2. **Restricted Actions**
+   - Save meals
+   - Create food diary entries
+   - Save favorites
+   - Update profile
+
+### Guest Mode UI
+
+```tsx
+// Login page guest mode option
+;<GuestModeButton />
+
+// Dashboard guest mode banner
+{
+  isGuest && (
+    <Card>
+      <CardContent>
+        <div className="bg-muted p-4 rounded-lg text-center">
+          <h3>Guest Mode</h3>
+          <p>Limited functionality available. Sign in for full access.</p>
+          <Button onClick={exitGuestMode}>Sign In</Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+```
+
+### API Access Control
+
+1. **Public Endpoints**
+
+   - Food search
+   - Food details
+
+2. **Protected Endpoints**
+   - Meal management
+   - User preferences
+   - Favorites
 
 ## Best Practices
 

@@ -270,3 +270,64 @@ export function Button({ variant, size, ...props }: ButtonProps) {
    - User flows
    - Critical paths
    - Cross-browser testing
+
+# Architecture Documentation
+
+## Recent Changes
+
+### 1. Guest Mode Enhancement
+
+- Added cookie-based guest mode storage
+- Implemented route-based access control
+- Updated middleware to handle guest routes
+- Added guest mode UI components
+
+### 2. API Access Control
+
+- Moved food search to public access
+- Using service role key for consistent database access
+- Improved error handling and response formats
+- Added proper content-type headers
+
+### 3. Error Handling Improvements
+
+- Standardized error responses
+- Added specific error states (401, 503)
+- Improved client-side error handling
+- Added user-friendly error messages
+
+### 4. Performance Optimizations
+
+- Debounced search queries
+- Proper error boundary handling
+- Improved loading states
+
+## Updated Architecture Decisions
+
+### Authentication Flow
+
+```mermaid
+graph TD
+    A[User] --> B{Has Session?}
+    B -->|Yes| C[Full Access]
+    B -->|No| D{Guest Mode?}
+    D -->|Yes| E[Limited Access]
+    D -->|No| F[Login Required]
+```
+
+### API Access Layers
+
+1. **Public Layer**
+
+   - Food search
+   - Food details
+   - Authentication endpoints
+
+2. **Guest Layer**
+
+   - Dashboard view
+   - Basic features
+
+3. **Authenticated Layer**
+   - Full functionality
+   - Personal data access

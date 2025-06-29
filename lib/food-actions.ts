@@ -114,10 +114,10 @@ async function isGuestMode(): Promise<boolean> {
 }
 
 export async function addFoodToMeal(
-  mealId: string,
   foodId: string,
-  quantity: number,
-  unit: string
+  mealType: MealType,
+  quantity: number = 1,
+  unit?: string
 ) {
   if (await isGuestMode()) {
     throw new Error('Please sign in to add foods to meals')
@@ -165,18 +165,18 @@ export async function addFoodToMeal(
   }
 
   // Calculate nutrition values based on quantity
-  const calories = food.calories_per_serving
-  const protein_g = food.protein_g
-  const carbs_g = food.carbs_g
-  const fat_g = food.fat_g
-  const fiber_g = food.fiber_g
+  const calories = food.calories_per_serving * quantity
+  const protein_g = food.protein_g * quantity
+  const carbs_g = food.carbs_g * quantity
+  const fat_g = food.fat_g * quantity
+  const fiber_g = food.fiber_g * quantity
 
   // Add meal item
   const { error: itemError } = await supabase.from('meal_items').insert({
     meal_id: meal.id,
     food_id: foodId,
-    quantity: 1,
-    unit: food.serving_unit,
+    quantity,
+    unit: unit || food.serving_unit,
     calories,
     protein_g,
     carbs_g,

@@ -27,14 +27,14 @@ export function useFoodActions() {
       return actions.addFoodToMeal(...args)
     },
 
-    removeFoodFromMeal: async (
-      ...args: Parameters<typeof actions.removeFoodFromMeal>
+    deleteMealItem: async (
+      ...args: Parameters<typeof actions.deleteMealItem>
     ) => {
       if (isGuest) {
         handleGuestError()
         return null
       }
-      return actions.removeFoodFromMeal(...args)
+      return actions.deleteMealItem(...args)
     },
 
     createMeal: async (...args: Parameters<typeof actions.createMeal>) => {

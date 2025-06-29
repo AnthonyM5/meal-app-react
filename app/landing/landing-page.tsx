@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { Database } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
@@ -95,6 +94,6 @@ export default async function Home() {
   }
 }
 
-const handleGuestMode = () => {
-  cookies().set('guestMode', 'true', { path: '/' })
-}
+// const handleGuestMode = () => {
+//   cookies().set('guestMode', 'true', { path: '/' })
+// }

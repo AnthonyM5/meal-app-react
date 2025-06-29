@@ -18,11 +18,23 @@ yarn-error.log*
 
 # env files
 .env*
+!.env.example
 
-# vercel
-.vercel
+# testing
+/coverage
+.nyc_output
+cypress/videos
+cypress/screenshots
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-/test-endpoints.js
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

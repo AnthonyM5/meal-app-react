@@ -82,49 +82,23 @@ const Profile = props => {
 
 ## Testing
 
-### Unit Tests
+For detailed testing guidelines and practices, refer to [Testing Strategy](./testing.md).
 
-- Test business logic thoroughly
-- Mock external dependencies
-- Follow AAA pattern (Arrange, Act, Assert)
+### Quick Start
 
-```typescript
-describe('FoodService', () => {
-  it('should calculate correct calories', () => {
-    // Arrange
-    const food = mockFoodItem()
-    const servingSize = 100
+Before submitting a PR:
 
-    // Act
-    const calories = calculateCalories(food, servingSize)
+1. Write tests for new features
+2. Run unit tests: `npm test`
+3. Run E2E tests: `npm run test:e2e`
+4. Check coverage: `npm run test:coverage`
 
-    // Assert
-    expect(calories).toBe(expected)
-  })
-})
-```
+### Test Requirements
 
-### Integration Tests
-
-- Test component interactions
-- Test API integrations
-- Use proper setup and teardown
-
-```typescript
-describe('Food logging flow', () => {
-  beforeEach(() => {
-    // Setup
-  })
-
-  afterEach(() => {
-    // Cleanup
-  })
-
-  it('should log food successfully', async () => {
-    // Test implementation
-  })
-})
-```
+- All new features must include tests
+- Maintain minimum 80% coverage
+- E2E tests for critical user flows
+- Fix failing tests before merge
 
 ## Code Review Process
 

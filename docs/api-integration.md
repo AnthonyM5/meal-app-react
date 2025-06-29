@@ -45,9 +45,15 @@ export class USDAApiClient {
    - Used for searching foods by name/keywords
 
 2. **Food Details**
+
    - Endpoint: `/food/{fdcId}`
    - Method: GET
    - Retrieves detailed information for a specific food
+
+3. **Unified Search**
+   - Endpoint: `/api/foods/unified-search`
+   - Method: GET
+   - A unified search endpoint for finding foods by name or brand
 
 ## Data Models
 
@@ -213,3 +219,63 @@ const getFoodDetails = async (fdcId: string) => {
    - Validate API responses
    - Handle missing or null values
    - Sanitize user inputs
+
+## Food Search API
+
+### Unified Search Endpoint
+
+```typescript
+GET / api / foods / unified - search
+```
+
+#### Implementation Details
+
+```typescript
+// Route handler using service role key for consistent access
+export async function GET(request: NextRequest) {
+  const supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data: foods, error } = await supabase
+    .from('foods')
+    .select('*')
+    .or(`name.ilike.%${query}%, brand.ilike.%${query}%`)
+    .limit(50)
+    .order('is_verified', { ascending: false })
+}
+```
+
+#### Access Control
+
+- Endpoint is publicly accessible
+- Uses service role key for database access
+- No authentication required
+- Available to both guest and authenticated users
+
+#### Error Handling
+
+```typescript
+// Client-side error handling
+if (!response.ok) {
+  if (response.status === 401) {
+    // Silent fail for auth redirects
+    return
+  }
+  if (response.status === 503) {
+    setError('Database connection unavailable')
+    return
+  }
+  setError('Unable to search foods at this time')
+}
+```
+
+#### Response Format
+
+```typescript
+type SearchResponse = {
+  foods: Food[]
+  error?: string
+}
+```
