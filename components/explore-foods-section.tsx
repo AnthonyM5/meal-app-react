@@ -12,24 +12,67 @@ export function ExploreFoodsSection() {
   const [query, setQuery] = useState('')
   const [foods, setFoods] = useState<Food[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const searchTimeout = setTimeout(async () => {
       if (query.length >= 2) {
         setIsSearching(true)
+        setError(null)
         try {
           const response = await fetch(
-            `/api/foods/unified-search?q=${encodeURIComponent(query)}`
+            `/api/foods/unified-search?q=${encodeURIComponent(query)}`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            }
           )
-          const data = await response.json()
-          setFoods(data.foods || [])
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              // Don't show error for auth redirects
+              setFoods([])
+              return
+            }
+            if (response.status === 503) {
+              setFoods([])
+              setError(
+                'Database connection unavailable. Please try again in a moment.'
+              )
+              return
+            }
+            setFoods([])
+            setError('Unable to search foods at this time')
+            return
+          }
+
+          let data
+          try {
+            data = await response.json()
+          } catch (e) {
+            console.error('Failed to parse response:', e)
+            setFoods([])
+            setError('Invalid response from server')
+            return
+          }
+
+          if (data.error) {
+            setError(data.error)
+            setFoods([])
+          } else {
+            setFoods(data.foods || [])
+          }
         } catch (error) {
           console.error('Search error:', error)
+          setFoods([])
+          setError('An error occurred while searching')
         } finally {
           setIsSearching(false)
         }
       } else {
         setFoods([])
+        setError(null)
       }
     }, 300)
 
@@ -50,6 +93,11 @@ export function ExploreFoodsSection() {
         <CardTitle>Explore Foods</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {error && (
+          <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
+            {error}
+          </div>
+        )}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input

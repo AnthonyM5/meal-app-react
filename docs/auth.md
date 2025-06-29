@@ -2,6 +2,12 @@
 
 ## Overview
 
+The application supports three authentication modes:
+
+1. Traditional email/password authentication
+2. Guest mode for limited access
+3. (Future) OAuth providers
+
 NutriTrack implements a flexible authentication system using Supabase Auth, supporting both traditional user accounts and a guest mode. This guide explains the implementation details and usage.
 
 ## Authentication Methods
@@ -80,6 +86,22 @@ export function GuestModeButton() {
 }
 ```
 
+## Authentication Flow
+
+### Traditional Authentication
+
+1. User visits `/auth/login`
+2. Enters email and password
+3. On success, redirected to dashboard
+4. Session managed by Supabase Auth
+
+### Guest Mode
+
+1. User clicks "Continue as Guest" on login page
+2. Sets guest mode cookie (24-hour expiry)
+3. Sets guest mode in sessionStorage
+4. Redirected to dashboard with limited access
+
 ## Protected Routes
 
 ### Middleware Implementation
@@ -112,6 +134,28 @@ export async function middleware(request: NextRequest) {
   return NextResponse.redirect(new URL('/auth/login', request.url))
 }
 ```
+
+## Route Protection
+
+### Public Routes
+
+```typescript
+const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
+```
+
+These routes are accessible without authentication
+
+### Guest-Allowed Routes
+
+```typescript
+const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details']
+```
+
+These routes are accessible to both authenticated and guest users
+
+### Protected Routes
+
+All other routes require full authentication
 
 ## Feature Access Control
 
@@ -196,6 +240,11 @@ create policy "Anyone can view foods"
 
 ## Error Handling
 
+1. Unauthorized access attempts redirect to `/auth/login`
+2. Error query parameter indicates reason:
+   - `auth_required`: Attempted access to protected route
+   - General errors display generic message
+
 ```typescript
 async function handleAuth(action: () => Promise<void>) {
   try {
@@ -217,6 +266,43 @@ async function handleAuth(action: () => Promise<void>) {
   }
 }
 ```
+
+## Guest Mode Limitations
+
+1. Can view food details and nutrition info
+2. Cannot save meals or favorites
+3. Cannot access personal dashboard features
+4. 24-hour session limit
+
+## Implementation Details
+
+### Middleware Authentication Check
+
+```typescript
+const isAuthenticated = Boolean(session)
+const isGuestMode = cookies.get('guestMode')?.value === 'true'
+const isAllowedRoute =
+  PUBLIC_ROUTES.includes(path) ||
+  (isGuestMode && GUEST_ALLOWED_ROUTES.includes(path))
+
+if (!isAuthenticated && !isAllowedRoute) {
+  redirect('/auth/login?error=auth_required')
+}
+```
+
+### Guest Mode Storage
+
+1. HTTP Cookie:
+
+   - Name: `guestMode`
+   - Value: `true`
+   - Max Age: 24 hours
+   - Path: `/`
+
+2. Session Storage:
+   - Key: `guestMode`
+   - Value: `true`
+   - Cleared on browser close
 
 ## Best Practices
 

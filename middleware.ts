@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
 const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
-const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details']
+const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details', '/api/foods']
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
@@ -30,8 +30,10 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Redirect to login if not public route and not authenticated/guest
-  return NextResponse.redirect(new URL('/auth/login', request.url))
+  // Redirect to login with error if trying to access protected route
+  const loginUrl = new URL('/auth/login', request.url)
+  loginUrl.searchParams.set('error', 'auth_required')
+  return NextResponse.redirect(loginUrl)
 }
 
 export const config = {

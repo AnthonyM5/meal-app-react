@@ -7,7 +7,9 @@ export function GuestModeButton() {
   const router = useRouter()
 
   const handleGuestMode = () => {
-    // Set guest mode in session storage
+    // Set guest mode cookie (expires in 24 hours)
+    document.cookie = 'guestMode=true; path=/; max-age=86400'
+    // Set in session storage for client-side checks
     sessionStorage.setItem('guestMode', 'true')
     // Redirect to dashboard
     router.push('/dashboard')

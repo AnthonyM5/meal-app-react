@@ -4,7 +4,6 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  console.log('Unified search request:', searchParams.toString())
   const query = searchParams.get('q')
 
   if (!query || query.length < 2) {
@@ -12,13 +11,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Create a Supabase client with the service role key for data access
     const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
     // Search local database with comprehensive matching
-    const { data: foods, error } = await supabase
+    const { data: foods, error: searchError } = await supabase
       .from('foods')
       .select('*')
       .or(`name.ilike.%${query}%, brand.ilike.%${query}%`)
@@ -26,14 +26,32 @@ export async function GET(request: NextRequest) {
       .order('is_verified', { ascending: false })
       .order('name')
 
-    if (error) {
-      console.error('Database search error:', error)
-      return NextResponse.json({ foods: [] })
+    if (searchError) {
+      console.error('Database search error:', searchError)
+      return NextResponse.json(
+        { foods: [], error: 'Database search failed' },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json({ foods: foods || [] })
+    return NextResponse.json(
+      { foods: foods || [] },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    )
   } catch (error) {
     console.error('Unified search error:', error)
-    return NextResponse.json({ foods: [] })
+    return NextResponse.json(
+      { foods: [], error: 'Search failed unexpectedly' },
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    )
   }
 }

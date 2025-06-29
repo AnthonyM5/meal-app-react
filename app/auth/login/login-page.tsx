@@ -1,76 +1,48 @@
+'use client'
+
+import { GuestModeButton } from '@/components/guest-mode-button'
 import LoginForm from '@/components/login-form'
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/types'
-import { Metadata, Viewport } from 'next'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { useSearchParams } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Login - Meal Tracker',
-  description: 'Login to your account',
-}
+export default function LoginPage() {
+  const searchParams = useSearchParams()
+  const error = searchParams.get('error')
 
-export const viewport: Viewport = {
-  themeColor: '#000000',
-  width: 'device-width',
-  initialScale: 1,
-}
-
-type DummyClient = {
-  auth: {
-    getUser: () => Promise<{ data: { user: null }; error: null }>
-    getSession: () => Promise<{ data: { session: null }; error: null }>
-  }
-}
-
-function isDummyClient(
-  client: SupabaseClient<Database> | DummyClient
-): client is DummyClient {
-  return !('from' in client)
-}
-
-export default async function LoginPage() {
-  // If Supabase is not configured, show setup message directly
-  if (!isSupabaseConfigured) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616]">
-        <h1 className="text-2xl font-bold mb-4 text-white">
-          Connect Supabase to get started
-        </h1>
-      </div>
-    )
-  }
-
-  try {
-    // Check if user is already logged in
-    const client = await createClient()
-    if (isDummyClient(client)) {
-      console.warn('Database client not properly initialized')
-    } else {
-      const { data: { session }, error } = await client.auth.getSession()
-      if (session && !error) {
-        // If already logged in, go to dashboard
-        redirect('/dashboard')
-      }
-    }
-
-    // Show login form
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616] px-4 py-12 sm:px-6 lg:px-8">
-        <LoginForm />
-      </div>
-    )
-  } catch (error) {
-    // Only log non-redirect errors
-    if (!(error as Error)?.message?.includes('NEXT_REDIRECT')) {
-      console.error('Failed to check auth status:', error)
-    }
-
-    // Show login form if there's any error
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616] px-4 py-12 sm:px-6 lg:px-8">
-        <LoginForm />
-      </div>
-    )
-  }
+  return (
+    <div className="container mx-auto flex h-screen w-screen flex-col items-center justify-center">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Welcome Back</CardTitle>
+          <CardDescription>Sign in to your account to continue</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {error === 'auth_required'
+                  ? 'Please sign in to access this page'
+                  : 'An error occurred. Please try again.'}
+              </AlertDescription>
+            </Alert>
+          )}
+          <LoginForm />
+          <div className="flex items-center space-x-2">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <Separator className="flex-1" />
+          </div>
+          <GuestModeButton />
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
