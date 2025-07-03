@@ -1,6 +1,6 @@
-# NutriTrack Pro
+# NutriTrack
 
-A sophisticated full-stack nutrition tracking application built with modern web technologies. This project demonstrates expertise in building scalable, real-time web applications using Next.js, TypeScript, and Supabase.
+A nutrition tracking application built with Next.js, TypeScript, and Supabase.
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -8,74 +8,106 @@ A sophisticated full-stack nutrition tracking application built with modern web 
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 
-## Technical Overview
+## Overview
 
-This project showcases advanced frontend development skills and modern web development best practices:
+A web application for tracking nutrition and meals, built with modern web technologies.
 
-### Architecture & Performance
+### Features
 
-- **Next.js App Router**: Implemented server-side rendering and static generation for optimal performance
-- **TypeScript**: Utilized strict type checking and advanced TypeScript features for robust code quality
-- **Real-time Data Sync**: Engineered real-time updates using Supabase's real-time subscriptions
-- **State Management**: Efficient client-side state management with React hooks and context
-- **API Integration**: RESTful API integration with the USDA Food Database
+- **User Authentication**: Email/password signup and login with Supabase Auth
+- **Guest Mode**: Browse and search foods without creating an account
+- **Food Search**: Search for foods using the USDA Food Database
+- **Meal Tracking**: Add foods to meals (breakfast, lunch, dinner, snacks)
+- **Nutrition Information**: View detailed nutritional information for foods
+- **Responsive Design**: Mobile-friendly interface built with Tailwind CSS
 
-### Frontend Development
+### Tech Stack
 
-- **React Components**: Built reusable, performant components with React 18 features
-- **Modern UI Framework**: Implemented a component library using shadcn/ui and Radix UI
-- **Responsive Design**: Mobile-first approach using Tailwind CSS with custom design tokens
-- **Accessibility**: WCAG compliance with ARIA attributes and keyboard navigation
-- **Dark Mode**: Implemented system-aware theming with CSS variables
+- **Frontend**: Next.js 15 with App Router, React 18, TypeScript
+- **Backend**: Supabase (PostgreSQL database, authentication, real-time)
+- **Styling**: Tailwind CSS with shadcn/ui components
+- **API Integration**: USDA Food Database API
+- **Deployment**: Vercel
 
-### Backend & Database
+## Development Setup
 
-- **Supabase Integration**: Engineered a scalable backend with Supabase (PostgreSQL)
-- **Authentication**: Secure auth flow with row-level security and protected routes
-- **Database Design**: Optimized schema design for nutrition tracking and user data
-- **API Routes**: Built Next.js API routes for secure data handling
+### 1. Clone the Repository
 
-## Core Technical Features
+```bash
+git clone <repository-url>
+cd meal-app-react
+```
 
-### Advanced User Features
+### 2. Install Dependencies
 
-- **Intelligent Search**: Real-time food search with fuzzy matching and autocomplete
-- **Nutrition Analysis**: Comprehensive nutritional breakdown and analysis
-- **Smart Meal Planning**: Meal tracking with portion control and scheduling
-- **Data Visualization**: Interactive charts for nutrition trends and insights
-- **Offline Support**: Progressive Web App capabilities for offline access
+```bash
+npm install
+```
 
-### Technical Stack
+### 3. Environment Setup
 
-````typescript
-{
-  frontend: {
-    framework: "Next.js 15 (React 18)",
-    language: "TypeScript 5",
-    styling: ["Tailwind CSS", "CSS Variables", "CSS Modules"],
-    components: ["shadcn/ui", "Radix UI Primitives"],
-    stateManagement: ["React Context", "React Query"],
-    buildTools: ["Webpack", "PostCSS", "Autoprefixer"]
-  },
-  backend: {
-    database: "PostgreSQL (Supabase)",
-    auth: "Supabase Auth with Row Level Security",
-    api: ["Next.js API Routes", "USDA Food Database API"],
-    serverless: "Edge Functions (Vercel)"
-  },
-  infrastructure: {
-    hosting: "Vercel",
-    cdn: "Vercel Edge Network",
-    monitoring: ["Vercel Analytics", "Error Tracking"]
-  },
-  testing: {
-    unit: "Jest",
-    integration: "Testing Library",
-    e2e: "Playwright"
-  }
-}
+Create a `.env.local` file in the root directory:
 
-## Implementation Highlights
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+Get these values from your [Supabase Dashboard](https://supabase.com/dashboard):
+
+- Go to **Settings** → **API**
+- Copy the **Project URL** and **anon public** key
+
+### 4. Supabase Setup
+
+Set up your Supabase project with the required tables and authentication settings.
+
+### 5. Run the Development Server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 📁 Project Structure
+
+```
+meal-app-react/
+├── app/                     # Next.js App Router
+│   ├── auth/               # Authentication pages
+│   ├── dashboard/          # Dashboard and meal tracking
+│   ├── food-details/       # Food detail pages
+│   ├── landing/            # Landing page
+│   └── api/                # API routes
+├── components/             # React components
+│   ├── ui/                 # shadcn/ui components
+│   └── [component-files]   # Application components
+├── lib/                    # Utility functions and configurations
+│   ├── supabase/           # Supabase client configuration
+│   └── [utility-files]     # Actions, types, and utilities
+├── hooks/                  # Custom React hooks
+└── public/                 # Static assets
+```
+
+## 🔧 Available Scripts
+
+```bash
+# Development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm run start
+
+# Run tests
+npm run test
+
+# Run linting
+npm run lint
+```
 
 ### Advanced React Patterns
 ```typescript
@@ -305,55 +337,21 @@ The app uses Supabase Auth with:
 
 ## 🎨 UI Components
 
-Built with [shadcn/ui](https://ui.shadcn.com/) components:
+Built with [shadcn/ui](https://ui.shadcn.com/) components for a modern, accessible interface:
 
 - **Forms**: Login, signup, and data entry forms
 - **Navigation**: Responsive navigation and menus
-- **Data Display**: Tables, cards, and charts
-- **Feedback**: Toasts, alerts, and loading states
+- **Data Display**: Cards for food items and nutritional information
+- **Feedback**: Toast notifications and loading states
 
-## Performance Optimizations
+## 🚀 Deployment
 
-### Code Splitting & Bundle Optimization
+The app can be deployed to platforms that support Next.js:
 
-- Implemented dynamic imports for route-based code splitting
-- Optimized bundle size with tree shaking and module analysis
-- Utilized Next.js Image component for automatic image optimization
-
-### Database Optimization
-
-- Implemented efficient indexing strategies for fast queries
-- Used database views for complex nutrition calculations
-- Optimized real-time subscriptions with filtered events
-
-### Caching Strategy
-
-- Implemented stale-while-revalidate pattern for data freshness
-- Used React Query for intelligent client-side caching
-- Leveraged Edge Cache for static and dynamic content
-
-## Engineering Challenges & Solutions
-
-### Challenge: Real-time Nutrition Tracking
-
-Implemented a robust real-time system that handles concurrent updates from multiple users while maintaining data consistency. Used Supabase's real-time subscriptions with optimistic updates for a seamless user experience.
-
-### Challenge: Complex Nutrient Calculations
-
-Developed an efficient algorithm for calculating nutritional totals across various meal combinations. Utilized database materialized views for heavy computations and client-side caching for quick access.
-
-### Challenge: Search Performance
-
-Built a high-performance search system handling thousands of food items with fuzzy matching and instant results. Implemented debouncing, caching, and search indexing for optimal performance.
-
-## Deployment & CI/CD
-
-The app can be deployed to any platform that supports Next.js:
-
+- **Vercel** (recommended)
 - **Netlify**
 - **Railway**
 - **DigitalOcean App Platform**
-- **AWS Amplify**
 
 ## 🤝 Contributing
 
@@ -363,33 +361,25 @@ The app can be deployed to any platform that supports Next.js:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Future Enhancements
+## 📝 License
 
-- **Machine Learning Integration**: Planning to implement ML-based meal recommendations
-- **GraphQL API**: Considering migration to GraphQL for more efficient data fetching
-- **Microservices Architecture**: Planning to split certain features into microservices
-- **WebAssembly**: Exploring Rust + Wasm for complex nutrition calculations
+This project is licensed under the MIT License.
 
-## License & Contribution
+## 🐛 Troubleshooting
 
-This project is licensed under the MIT License. Feel free to fork, modify, and use it for your portfolio.
-
-## Contact & Support
+### Common Issues
 
 **Supabase Connection Issues**
-
 - Verify your environment variables are correct
 - Check your Supabase project is active
 - Ensure your database is accessible
 
 **Build Errors**
-
 - Clear `.next` folder and rebuild
 - Check for TypeScript errors
 - Verify all dependencies are installed
 
 **Authentication Issues**
-
 - Check Supabase Auth settings
 - Verify redirect URLs in Supabase dashboard
 - Clear browser cookies and try again
@@ -399,13 +389,6 @@ This project is licensed under the MIT License. Feel free to fork, modify, and u
 - Check the [Issues](../../issues) page
 - Review [Supabase Documentation](https://supabase.com/docs)
 - Visit [Next.js Documentation](https://nextjs.org/docs)
-
-## 🙏 Acknowledgments
-
-- [v0.dev](https://v0.dev) for rapid prototyping
-- [Supabase](https://supabase.com) for backend infrastructure
-- [shadcn/ui](https://ui.shadcn.com) for beautiful components
-- [Tailwind CSS](https://tailwindcss.com) for styling utilities
 
 ---
 
