@@ -1,3 +1,4 @@
+// Mock utilities for testing - not a test file itself
 export const mockSupabase = {
   auth: {
     getSession: jest.fn(),
@@ -17,3 +18,5 @@ export const mockSession = {
   },
   error: null,
 }
+
+// This file is intentionally empty of tests to avoid Jest execution
