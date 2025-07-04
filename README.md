@@ -109,106 +109,29 @@ npm run test
 npm run lint
 ```
 
-### Advanced React Patterns
-```typescript
-// Custom Hook for Real-time Data Subscription
-const useNutritionData = (userId: string) => {
-  const [data, setData] = useState<NutritionData>()
-
-  useEffect(() => {
-    const subscription = supabase
-      .from(`nutrition_${userId}`)
-      .on('*', payload => {
-        // Real-time update handling
-      })
-      .subscribe()
-
-    return () => subscription.unsubscribe()
-  }, [userId])
-}
-
-// Performance-optimized React Component
-const NutritionChart = memo(({ data }: Props) => {
-  const chartRef = useRef<HTMLCanvasElement>()
-
-  // Memoized chart computation
-  const chartData = useMemo(() => computeChartData(data), [data])
-
-  return <Chart ref={chartRef} data={chartData} />
-})
-````
-
-### Type-safe Database Queries
-
-```typescript
-// Strongly-typed Supabase query with joins
-const getMealWithNutrition = async (mealId: string) => {
-  const { data, error } = await supabase
-    .from('meals')
-    .select(
-      `
-      id,
-      name,
-      items:meal_items (
-        id,
-        food:foods (
-          id,
-          name,
-          nutrition
-        )
-      )
-    `
-    )
-    .eq('id', mealId)
-    .single()
-
-  return { data, error }
-}
-```
-
-### API Route Implementation
-
-```typescript
-// Next.js API Route with Error Handling
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const query = searchParams.get('q')
-
-    const foods = await searchFoods(query)
-    return NextResponse.json({ foods })
-  } catch (error) {
-    console.error('Search error:', error)
-    return NextResponse.json(
-      { error: 'Failed to search foods' },
-      { status: 500 }
-    )
-  }
-}
-```
-
 ## Development Setup
 
-\`\`\`bash
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd meal-app-react
+```
+
+### 2. Install Dependencies
+
+```bash
 npm install
-
-# or
-
-yarn install
-
-# or
-
-pnpm install
-\`\`\`
+```
 
 ### 3. Environment Setup
 
 Create a `.env.local` file in the root directory:
 
-\`\`\`env
+```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-\`\`\`
+```
 
 Get these values from your [Supabase Dashboard](https://supabase.com/dashboard):
 
@@ -217,215 +140,56 @@ Get these values from your [Supabase Dashboard](https://supabase.com/dashboard):
 
 ### 4. Supabase Setup
 
-#### Option A: Using Supabase CLI (Recommended)
-
-\`\`\`bash
-
-# Install Supabase CLI (macOS)
-
-brew install supabase/tap/supabase
-
-# Login to Supabase
-
-npx supabase login
-
-# Link to your project
-
-npx supabase link --project-ref your_project_ref
-
-# Pull remote schema
-
-npx supabase db pull
-\`\`\`
-
-#### Option B: Manual Setup
-
-If CLI linking fails, manually set up your environment variables as shown in step 3.
+Set up your Supabase project with the required tables and authentication settings.
 
 ### 5. Run the Development Server
 
-\`\`\`bash
+```bash
 npm run dev
-
-# or
-
-yarn dev
-
-# or
-
-pnpm dev
-\`\`\`
+```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 📁 Project Structure
 
-\`\`\`
+```
 meal-app-react/
-├── app/ # Next.js App Router
-│ ├── auth/ # Authentication pages
-│ ├── globals.css # Global styles
-│ ├── layout.tsx # Root layout
-│ └── page.tsx # Home page
-├── components/ # React components
-│ ├── ui/ # Reusable UI components (Radix UI based)
-│ ├── login-form.tsx # Login form component
-│ └── signup-form.tsx # Signup form component
-├── lib/ # Utility functions
-│ ├── actions.ts # Server actions
-│ ├── supabase/ # Supabase configuration
-│ └── utils.ts # Utility functions
-├── hooks/ # Custom React hooks
-├── .vscode/ # VS Code settings
-└── public/ # Static assets
-\`\`\`
+├── app/                     # Next.js App Router
+│   ├── auth/               # Authentication pages
+│   ├── dashboard/          # Dashboard and meal tracking
+│   ├── food-details/       # Food detail pages
+│   ├── landing/            # Landing page
+│   └── api/                # API routes
+├── components/             # React components
+│   ├── ui/                 # Reusable UI components (Radix UI based)
+│   └── [component-files]   # Application components
+├── lib/                    # Utility functions and configurations
+│   ├── supabase/           # Supabase client configuration
+│   └── [utility-files]     # Actions, types, and utilities
+├── hooks/                  # Custom React hooks
+└── public/                 # Static assets
+```
 
-## 🔧 Development
+## 🔧 Available Scripts
 
-### Available Scripts
-
-\`\`\`bash
-
+```bash
 # Development server
-
 npm run dev
 
 # Build for production
-
 npm run build
 
 # Start production server
-
 npm run start
 
-# Lint code
+# Run tests
+npm run test
 
+# Run linting
 npm run lint
-
-# Fix linting issues
-
-npm run lint:fix
-\`\`\`
-
-### VS Code Setup
-
-This project includes optimized VS Code settings:
-
-- **Auto-formatting** with Prettier
-- **TypeScript** enhanced support
-- **Tailwind CSS** IntelliSense
-- **Supabase** extension integration
-- **Debugging** configurations
-
-Install recommended extensions when prompted by VS Code.
-
-## 🗄️ Database Schema
-
-The app uses the following main tables:
-
-- **Users**: User profiles and preferences
-- **Foods**: Food items and nutritional data
-- **Meals**: User meal entries
-- **Meal_Items**: Individual food items in meals
-
-_Database migrations and schema will be added as the project develops._
-
-## 🔐 Authentication
-
-The app uses Supabase Auth with:
-
-- **Email/Password** authentication
-- **Server-side** session management
-- **Protected routes** with middleware
-- **Automatic redirects** for authenticated/unauthenticated users
-
-## 🎨 UI Components
-
-Built with Radix UI primitives and Tailwind CSS for a modern, accessible interface:
-
-- **Forms**: Login, signup, and data entry forms
-- **Navigation**: Responsive navigation and menus
-- **Data Display**: Cards for food items and nutritional information
-- **Feedback**: Toast notifications and loading states
-
-## 🚀 Deployment
-
-The app can be deployed to platforms that support Next.js:
-
-- **Vercel** (recommended)
-- **Netlify**
-- **Railway**
-- **DigitalOcean App Platform**
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License.
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Supabase Connection Issues**
-- Verify your environment variables are correct
-- Check your Supabase project is active
-- Ensure your database is accessible
-
-**Build Errors**
-- Clear `.next` folder and rebuild
-- Check for TypeScript errors
-- Verify all dependencies are installed
-
-**Authentication Issues**
-- Check Supabase Auth settings
-- Verify redirect URLs in Supabase dashboard
-- Clear browser cookies and try again
-
-### Getting Help
-
-- Check the [Issues](../../issues) page
-- Review [Supabase Documentation](https://supabase.com/docs)
-- Visit [Next.js Documentation](https://nextjs.org/docs)
-
----
-
-**Happy coding! 🎉**
+```
 
 ## Build Notes
-
-When building the project, you may see the following expected warnings that do not affect functionality:
-
-### Dynamic Route Warnings
-
-```
-Dynamic server usage: Route /auth/login couldn't be rendered statically because it used `cookies`
-```
-
-These warnings appear for routes that use cookies (auth, dashboard, etc). This is expected behavior as these routes need to be dynamic. The middleware handles this correctly and the routes are properly configured as server-side rendered.
-
-### Supabase Realtime Warning
-
-```
-Critical dependency: the request of a dependency is an expression
-./node_modules/@supabase/realtime-js/dist/main/RealtimeClient.js
-```
-
-This is a known warning from the Supabase Realtime client. It does not affect functionality and is related to how the client handles WebSocket connections.
-
-### Metadata Warnings
-
-```
-Unsupported metadata themeColor is configured in metadata export. Please move it to viewport export instead.
-```
-
-These are style suggestions for Next.js metadata configuration. They don't affect functionality and can be addressed in future updates if needed.
 
 All of these warnings are expected during the build process and the application will deploy and function correctly despite them.
 
