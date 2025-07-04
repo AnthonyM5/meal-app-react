@@ -301,6 +301,10 @@ npm run start
 # Lint code
 
 npm run lint
+
+# Fix linting issues
+
+npm run lint:fix
 \`\`\`
 
 ### VS Code Setup
@@ -424,3 +428,62 @@ Unsupported metadata themeColor is configured in metadata export. Please move it
 These are style suggestions for Next.js metadata configuration. They don't affect functionality and can be addressed in future updates if needed.
 
 All of these warnings are expected during the build process and the application will deploy and function correctly despite them.
+
+## 🧪 Testing Strategy
+
+This project implements a comprehensive testing approach:
+
+### Unit & Business Logic Tests (Jest)
+
+- **Focus**: Core business logic and utility functions
+- **Location**: `__tests__/lib/`
+- **Coverage**: Nutrition calculations, data transformations, validation
+
+```bash
+# Run unit tests
+npm run test
+
+# Run with coverage
+npm run test:coverage
+
+# Watch mode for development
+npm run test:watch
+```
+
+**Key test files:**
+- `nutrition-calculator.test.js` - Nutrition calculation logic
+- `utils.test.js` - Utility function validation
+- `usda-integration.test.js` - USDA data conversion
+- `meal-calculations.test.js` - Meal tracking business logic
+
+### End-to-End Tests (Cypress)
+
+- **Focus**: Critical user flows and integration testing
+- **Location**: `cypress/e2e/`
+- **Coverage**: Authentication, food search, meal tracking, responsive design
+
+```bash
+# Open Cypress UI
+npm run cypress
+
+# Run headless
+npm run cypress:headless
+
+# Full E2E test with server
+npm run test:e2e
+```
+
+**Test suites:**
+- `auth-flow.cy.ts` - Login, signup, navigation
+- `food-search.cy.ts` - Basic food search functionality
+- `food-search-integration.cy.ts` - Search integration & guest mode
+- `dashboard-meal-tracking.cy.ts` - Dashboard and meal tracking
+- `responsive-design.cy.ts` - Mobile/tablet/desktop compatibility
+- `error-handling.cy.ts` - Error states and edge cases
+
+### Testing Philosophy
+
+- **No UI unit tests**: We avoid testing React component rendering details
+- **Business logic focus**: Unit tests concentrate on pure functions and calculations
+- **Integration coverage**: Cypress tests handle user workflows
+- **Performance testing**: Large datasets and responsive design validation
