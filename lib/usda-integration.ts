@@ -49,7 +49,7 @@ export async function getFoodsList(
   pageNumber: number,
   pageSize = 200,
   dataTypes: string[] = ['Foundation', 'SR Legacy']
-): Promise<any[]> {
+): Promise<USDAFood[]> {
   const apiKey =
     process.env.USDA_API_KEY || process.env.NEXT_PUBLIC_USDA_API_KEY
   if (!apiKey) {
@@ -139,7 +139,18 @@ export async function getUSDAFoodDetails(
   }
 }
 
-export function convertUSDAToFood(usdaFood: USDAFood): any {
+export function convertUSDAToFood(usdaFood: USDAFood): {
+  name: string
+  brand: string | null
+  serving_size: number
+  serving_unit: string
+  calories_per_serving: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  fiber_g: number
+  is_verified: boolean
+} {
   const nutrients = usdaFood.foodNutrients.reduce(
     (acc, nutrient) => {
       switch (nutrient.nutrientId) {

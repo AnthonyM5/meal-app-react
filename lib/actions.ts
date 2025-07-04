@@ -7,7 +7,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 // Update the signIn function to handle redirects properly
-export async function signIn(prevState: any, formData: FormData) {
+export async function signIn(prevState: { error: string } | null, formData: FormData) {
   const cookieStore = await cookies()
 
   const supabase = createServerClient<Database>(
@@ -37,11 +37,14 @@ export async function signIn(prevState: any, formData: FormData) {
     return { error: error.message }
   }
 
+  // Clear any guest mode cookie on successful login
+  cookieStore.set('guestMode', '', { path: '/', maxAge: 0 })
+
   redirect('/dashboard')
 }
 
 // Update the signUp function to handle potential null formData
-export async function signUp(prevState: any, formData: FormData) {
+export async function signUp(prevState: { error: string } | null, formData: FormData) {
   const cookieStore = await cookies()
 
   const supabase = createServerClient<Database>(

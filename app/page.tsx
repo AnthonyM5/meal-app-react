@@ -1,58 +1,6 @@
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import type { Database } from '@/lib/types'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 
-type DummyClient = {
-  auth: {
-    getUser: () => Promise<{ data: { user: null }; error: null }>
-    getSession: () => Promise<{ data: { session: null }; error: null }>
-  }
-}
-
-function isDummyClient(
-  client: SupabaseClient<Database> | DummyClient
-): client is DummyClient {
-  return !('from' in client)
-}
-
 export default async function Home() {
-  // If Supabase is not configured, show setup message
-  if (!isSupabaseConfigured) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616]">
-        <h1 className="text-2xl font-bold mb-4 text-white">
-          Connect Supabase to get started
-        </h1>
-      </div>
-    )
-  }
-
-  try {
-    // Get the user from the server
-    const client = await createClient()
-    if (isDummyClient(client)) {
-      console.warn('Database client not properly initialized')
-      redirect('/auth/login')
-    }
-
-    const {
-      data: { user },
-      error,
-    } = await client.auth.getUser()
-
-    // If no user or error, redirect to login
-    if (error || !user) {
-      return redirect('/auth/login')
-    }
-
-    // If we have a user, redirect to dashboard
-    return redirect('/dashboard')
-  } catch (error) {
-    // Only log non-redirect errors
-    if (!(error as Error)?.message?.includes('NEXT_REDIRECT')) {
-      console.error('Error in home page:', error)
-    }
-    return redirect('/auth/login')
-  }
+  // Redirect to landing page which handles auth and guest mode properly
+  redirect('/landing')
 }

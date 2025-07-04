@@ -1,14 +1,12 @@
 "use client"
 
-import { useActionState } from "react"
-import { useFormStatus } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { signIn } from "@/lib/actions"
 import { Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
-import { signIn } from "@/lib/actions"
+import { useActionState, useEffect, useState } from "react"
+import { useFormStatus } from "react-dom"
 
 function SubmitButton() {
   const { pending } = useFormStatus()
@@ -32,15 +30,30 @@ function SubmitButton() {
 }
 
 export default function LoginForm() {
-  const router = useRouter()
   const [state, formAction] = useActionState(signIn, null)
+  const [isClient, setIsClient] = useState(false)
 
-  // Handle successful login by redirecting
+  // Ensure component only renders on client to avoid hydration issues
   useEffect(() => {
-    if (state?.success) {
-      router.push("/")
-    }
-  }, [state, router])
+    setIsClient(true)
+  }, [])
+
+  // Don't handle redirect here - let the server action handle it
+  // This prevents race conditions and double redirects
+
+  if (!isClient) {
+    return (
+      <div className="w-full max-w-md space-y-8">
+        <div className="space-y-2 text-center">
+          <h1 className="text-4xl font-semibold tracking-tight text-white">Welcome back</h1>
+          <p className="text-lg text-gray-400">Sign in to your account</p>
+        </div>
+        <div className="flex justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-md space-y-8">
@@ -49,7 +62,7 @@ export default function LoginForm() {
         <p className="text-lg text-gray-400">Sign in to your account</p>
       </div>
 
-      <form action={formAction} className="space-y-6">
+      <form action={formAction} className="space-y-6" suppressHydrationWarning>
         {state?.error && (
           <div className="bg-red-500/10 border border-red-500/50 text-red-700 px-4 py-3 rounded">{state.error}</div>
         )}
@@ -66,6 +79,7 @@ export default function LoginForm() {
               placeholder="you@example.com"
               required
               className="bg-[#1c1c1c] border-gray-800 text-white placeholder:text-gray-500"
+              suppressHydrationWarning
             />
           </div>
           <div className="space-y-2">

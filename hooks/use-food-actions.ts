@@ -1,12 +1,15 @@
 'use client'
 
-import { useGuestMode } from '@/hooks/use-guest-mode'
 import { useToast } from '@/hooks/use-toast'
 import * as actions from '@/lib/food-actions'
 
 export function useFoodActions() {
-  const { isGuest } = useGuestMode()
   const { toast } = useToast()
+
+  // Check guest mode directly from cookie to avoid re-renders
+  const checkGuestMode = () => {
+    return typeof window !== 'undefined' && document.cookie.includes('guestMode=true')
+  }
 
   const handleGuestError = () => {
     toast({
@@ -20,7 +23,7 @@ export function useFoodActions() {
     addFoodToMeal: async (
       ...args: Parameters<typeof actions.addFoodToMeal>
     ) => {
-      if (isGuest) {
+      if (checkGuestMode()) {
         handleGuestError()
         return null
       }
@@ -30,7 +33,7 @@ export function useFoodActions() {
     deleteMealItem: async (
       ...args: Parameters<typeof actions.deleteMealItem>
     ) => {
-      if (isGuest) {
+      if (checkGuestMode()) {
         handleGuestError()
         return null
       }
@@ -38,7 +41,7 @@ export function useFoodActions() {
     },
 
     createMeal: async (...args: Parameters<typeof actions.createMeal>) => {
-      if (isGuest) {
+      if (checkGuestMode()) {
         handleGuestError()
         return null
       }
@@ -46,7 +49,7 @@ export function useFoodActions() {
     },
 
     deleteMeal: async (...args: Parameters<typeof actions.deleteMeal>) => {
-      if (isGuest) {
+      if (checkGuestMode()) {
         handleGuestError()
         return null
       }
@@ -54,7 +57,7 @@ export function useFoodActions() {
     },
 
     getTodaysMeals: async () => {
-      if (isGuest) {
+      if (checkGuestMode()) {
         return []
       }
       return actions.getTodaysMeals()

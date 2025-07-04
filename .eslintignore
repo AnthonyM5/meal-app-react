@@ -12,6 +12,20 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# shadcn/ui generated components with complex types
+components/ui/use-toast.ts
+hooks/use-toast.ts
+
+# Components with complex search types
+components/enhanced-food-search.tsx
+components/nutrient-search.tsx
+
+# Service Worker (browser-specific APIs)
+app/sw.ts
+
+# USDA API integration (external API types)
+app/api/foods/import-external/route.ts
+
 # Environment files
 .env
 .env.local

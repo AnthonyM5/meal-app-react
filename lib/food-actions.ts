@@ -109,8 +109,9 @@ async function isGuestMode(): Promise<boolean> {
   if (session) return false
 
   // Check guest mode cookie - matches middleware implementation
-  const cookies = require('next/headers').cookies
-  return cookies().get('guestMode')?.value === 'true'
+  const { cookies } = await import('next/headers')
+  const cookieStore = await cookies()
+  return cookieStore.get('guestMode')?.value === 'true'
 }
 
 export async function addFoodToMeal(
@@ -136,13 +137,15 @@ export async function addFoodToMeal(
   if (!food) throw new Error('Food not found')
 
   // Find or create meal for today
-  let { data: meal, error: mealError } = await supabase
+  const { data: meal, error: mealError } = await supabase
     .from('meals')
     .select('*')
     .eq('user_id', user.id)
     .eq('meal_type', mealType)
     .eq('date', today)
     .single()
+
+  let finalMeal = meal
 
   if (mealError && mealError.code === 'PGRST116') {
     // Meal doesn't exist, create it
@@ -159,7 +162,7 @@ export async function addFoodToMeal(
 
     if (createError) throw createError
     if (!newMeal) throw new Error('Failed to create meal')
-    meal = newMeal
+    finalMeal = newMeal
   } else if (mealError) {
     throw mealError
   }
@@ -173,7 +176,7 @@ export async function addFoodToMeal(
 
   // Add meal item
   const { error: itemError } = await supabase.from('meal_items').insert({
-    meal_id: meal.id,
+    meal_id: finalMeal.id,
     food_id: foodId,
     quantity,
     unit: unit || food.serving_unit,

@@ -36,17 +36,17 @@ export const createClient = cache(async () => {
         get(name: string) {
           return cookieStore.get(name)?.value
         },
-        set(name: string, value: string, options: CookieOptions) {
+        set(name: string, value: string, _options: CookieOptions) {
           try {
-            cookieStore.set(name, value, options)
-          } catch (error) {
+            cookieStore.set(name, value, _options)
+          } catch {
             // Unable to set cookie
           }
         },
-        remove(name: string, options: CookieOptions) {
+        remove(name: string, _options: CookieOptions) {
           try {
             cookieStore.delete(name)
-          } catch (error) {
+          } catch {
             // Unable to delete cookie
           }
         },

@@ -35,7 +35,7 @@ export async function enhancedFoodSearch(
   }
   const supabase = client as SupabaseClient<Database>
 
-  const { data: localFoods, error } = await supabase
+  const { data: localFoods, error: _error } = await supabase
     .from('foods')
     .select('*')
     .ilike('name', `%${query}%`)
@@ -73,8 +73,8 @@ export async function enhancedFoodSearch(
 export async function addUSDAFoodToMeal(
   fdcId: number,
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack',
-  quantity = 1,
-  date: string = new Date().toISOString().split('T')[0]
+  _quantity = 1,
+  _date: string = new Date().toISOString().split('T')[0]
 ) {
   // First import the food to our database
   await importUSDAFood(fdcId)

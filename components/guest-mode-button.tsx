@@ -18,9 +18,6 @@ export function GuestModeButton() {
       const expires = date.toUTCString()
       document.cookie = `guestMode=true; path=/; expires=${expires}; SameSite=Lax`
 
-      // Set in session storage for client-side checks
-      sessionStorage.setItem('guestMode', 'true')
-
       router.push('/dashboard')
     } catch (error) {
       console.error('Error enabling guest mode:', error)

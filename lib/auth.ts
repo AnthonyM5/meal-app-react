@@ -2,7 +2,6 @@
 
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { Database } from '@/lib/types'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
@@ -35,7 +34,7 @@ export async function getAuthenticatedClient() {
 export async function checkAuthStatus() {
   try {
     // Check for guest mode first
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const isGuestMode =
       cookieStore.has('guestMode') &&
       cookieStore.get('guestMode')?.value === 'true'
@@ -77,11 +76,15 @@ export type AuthState = {
 }
 
 export async function getAuthenticatedUser() {
-  const supabase = createServerComponentClient({ cookies })
+  const client = await createClient()
+  if (isDummyClient(client)) {
+    return null
+  }
+
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser()
+  } = await client.auth.getUser()
 
   if (error || !user) {
     return null
@@ -96,11 +99,15 @@ export async function isAuthenticated() {
 }
 
 export async function getSession() {
-  const supabase = createServerComponentClient({ cookies })
+  const client = await createClient()
+  if (isDummyClient(client)) {
+    return null
+  }
+
   const {
     data: { session },
     error,
-  } = await supabase.auth.getSession()
+  } = await client.auth.getSession()
 
   if (error || !session) {
     return null
