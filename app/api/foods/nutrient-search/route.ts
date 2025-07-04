@@ -2,6 +2,14 @@ import type { Database } from '@/lib/types'
 import { createClient } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
 
+// Check if Supabase environment variables are available
+function isSupabaseConfigured(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && 
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -12,6 +20,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Nutrient parameter required' },
         { status: 400 }
+      )
+    }
+
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { foods: [], error: 'Database not configured' },
+        { status: 503 }
       )
     }
 

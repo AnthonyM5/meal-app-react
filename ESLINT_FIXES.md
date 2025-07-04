@@ -26,8 +26,8 @@
 
 ### 3. Files Excluded from Linting
 These files were excluded due to complex generated types or external API dependencies:
-- `components/ui/use-toast.ts` - shadcn/ui generated with complex reducer types
-- `hooks/use-toast.ts` - shadcn/ui generated
+- `components/ui/use-toast.ts` - Toast utility with complex reducer types
+- `hooks/use-toast.ts` - Toast hook implementation
 - `app/sw.ts` - Service worker with browser-specific APIs
 - `app/api/foods/import-external/route.ts` - External USDA API integration
 - `components/enhanced-food-search.tsx` - Complex search types

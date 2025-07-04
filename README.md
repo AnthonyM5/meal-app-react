@@ -25,7 +25,7 @@ A web application for tracking nutrition and meals, built with modern web techno
 
 - **Frontend**: Next.js 15 with App Router, React 18, TypeScript
 - **Backend**: Supabase (PostgreSQL database, authentication, real-time)
-- **Styling**: Tailwind CSS with shadcn/ui components
+- **Styling**: Tailwind CSS with Radix UI components
 - **API Integration**: USDA Food Database API
 - **Deployment**: Vercel
 
@@ -81,7 +81,7 @@ meal-app-react/
 │   ├── landing/            # Landing page
 │   └── api/                # API routes
 ├── components/             # React components
-│   ├── ui/                 # shadcn/ui components
+│   ├── ui/                 # Reusable UI components (Radix UI based)
 │   └── [component-files]   # Application components
 ├── lib/                    # Utility functions and configurations
 │   ├── supabase/           # Supabase client configuration
@@ -268,7 +268,7 @@ meal-app-react/
 │ ├── layout.tsx # Root layout
 │ └── page.tsx # Home page
 ├── components/ # React components
-│ ├── ui/ # shadcn/ui components
+│ ├── ui/ # Reusable UI components (Radix UI based)
 │ ├── login-form.tsx # Login form component
 │ └── signup-form.tsx # Signup form component
 ├── lib/ # Utility functions
@@ -341,7 +341,7 @@ The app uses Supabase Auth with:
 
 ## 🎨 UI Components
 
-Built with [shadcn/ui](https://ui.shadcn.com/) components for a modern, accessible interface:
+Built with Radix UI primitives and Tailwind CSS for a modern, accessible interface:
 
 - **Forms**: Login, signup, and data entry forms
 - **Navigation**: Responsive navigation and menus

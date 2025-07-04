@@ -12,7 +12,7 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# shadcn/ui generated components with complex types
+# UI components with complex types
 components/ui/use-toast.ts
 hooks/use-toast.ts
 

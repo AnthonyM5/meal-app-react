@@ -7,28 +7,33 @@ const USDA_API_KEY = process.env.NEXT_PUBLIC_USDA_API_KEY || 'DEMO_KEY'
 const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
 
 // Check if Supabase environment variables are available
-const isSupabaseConfigured =
-  typeof process.env.NEXT_PUBLIC_SUPABASE_URL === 'string' &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL.length > 0 &&
-  typeof process.env.SUPABASE_SERVICE_ROLE_KEY === 'string' &&
-  process.env.SUPABASE_SERVICE_ROLE_KEY.length > 0
-
-if (!isSupabaseConfigured) {
-  throw new Error('Supabase environment variables not configured')
+function isSupabaseConfigured(): boolean {
+  return !!(
+    typeof process.env.NEXT_PUBLIC_SUPABASE_URL === 'string' &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL.length > 0 &&
+    typeof process.env.SUPABASE_SERVICE_ROLE_KEY === 'string' &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY.length > 0
+  )
 }
 
-const supabase = createServerClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    cookies: {
-      // These are API routes, so we don't need cookie handling
-      get: () => undefined,
-      set: () => {},
-      remove: () => {},
-    },
+function createSupabaseClient() {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase environment variables not configured')
   }
-)
+  
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        // These are API routes, so we don't need cookie handling
+        get: () => undefined,
+        set: () => {},
+        remove: () => {},
+      },
+    }
+  )
+}
 
 const NUTRIENT_IDS = {
   ENERGY: 1008, // Energy (calories)
@@ -47,6 +52,15 @@ const NUTRIENT_IDS = {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if Supabase is configured before proceeding
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { imported: 0, error: 'Database not configured' },
+        { status: 503 }
+      )
+    }
+
+    const supabase = createSupabaseClient()
     const { query } = await request.json()
 
     if (!query || query.length < 2) {
