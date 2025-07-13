@@ -5,7 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 // Check if Supabase environment variables are available
 function isSupabaseConfigured(): boolean {
   return !!(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && 
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 }

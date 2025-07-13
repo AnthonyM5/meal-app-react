@@ -16,7 +16,7 @@ A web application for tracking nutrition and meals, built with modern web techno
 
 - **User Authentication**: Email/password signup and login with Supabase Auth
 - **Guest Mode**: Browse and search foods without creating an account
-- **Food Search**: Search for foods using the USDA Food Database
+- **Food Search**: Search for foods in the local database with fuzzy search and autocomplete. The database is populated with data from sources like the USDA Food Database.
 - **Meal Tracking**: Add foods to meals (breakfast, lunch, dinner, snacks)
 - **Nutrition Information**: View detailed nutritional information for foods
 - **Responsive Design**: Mobile-friendly interface built with Tailwind CSS
@@ -29,85 +29,19 @@ A web application for tracking nutrition and meals, built with modern web techno
 - **API Integration**: USDA Food Database API
 - **Deployment**: Vercel
 
-## Development Setup
+## Fuzzy Search and Autocomplete Implementation
 
-### 1. Clone the Repository
+The food search functionality provides instant and accurate results through a fuzzy search and autocomplete system built on Supabase and PostgreSQL. Here’s how it works:
 
-```bash
-git clone <repository-url>
-cd meal-app-react
-```
+1.  **PostgreSQL `pg_trgm` Extension**: We leverage the `pg_trgm` extension, which provides functions for determining text similarity based on trigram matching. This allows the search to handle typos and partial matches effectively. The extension is enabled in our database migration scripts.
 
-### 2. Install Dependencies
+2.  **GIN Indexing**: To ensure fast search performance, a GIN (Generalized Inverted Index) is created on the `name` and `brand` columns of the `foods` table. This index is specifically optimized for trigram-based searches.
 
-```bash
-npm install
-```
+3.  **Custom SQL Function (`fuzzy_search_foods`)**: A custom PostgreSQL function was created to encapsulate the search logic. This function takes a search query, uses the `similarity()` function from `pg_trgm` to find and rank matching foods, and returns a list of results.
 
-### 3. Environment Setup
+4.  **Supabase RPC**: The Next.js backend communicates with the database by calling the `fuzzy_search_foods` function via Supabase's RPC (Remote Procedure Call) feature. This avoids writing complex SQL queries on the client-side and keeps the logic within the database layer.
 
-Create a `.env.local` file in the root directory:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-Get these values from your [Supabase Dashboard](https://supabase.com/dashboard):
-
-- Go to **Settings** → **API**
-- Copy the **Project URL** and **anon public** key
-
-### 4. Supabase Setup
-
-Set up your Supabase project with the required tables and authentication settings.
-
-### 5. Run the Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## 📁 Project Structure
-
-```
-meal-app-react/
-├── app/                     # Next.js App Router
-│   ├── auth/               # Authentication pages
-│   ├── dashboard/          # Dashboard and meal tracking
-│   ├── food-details/       # Food detail pages
-│   ├── landing/            # Landing page
-│   └── api/                # API routes
-├── components/             # React components
-│   ├── ui/                 # Reusable UI components (Radix UI based)
-│   └── [component-files]   # Application components
-├── lib/                    # Utility functions and configurations
-│   ├── supabase/           # Supabase client configuration
-│   └── [utility-files]     # Actions, types, and utilities
-├── hooks/                  # Custom React hooks
-└── public/                 # Static assets
-```
-
-## 🔧 Available Scripts
-
-```bash
-# Development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm run start
-
-# Run tests
-npm run test
-
-# Run linting
-npm run lint
-```
+5.  **API Route**: A dedicated API route (`app/api/foods/unified-search/route.ts`) handles search requests from the frontend, invokes the Supabase RPC, and returns the results, which are then used to power the search and autocomplete features in the UI.
 
 ## Development Setup
 
@@ -215,6 +149,7 @@ npm run test:watch
 ```
 
 **Key test files:**
+
 - `nutrition-calculator.test.js` - Nutrition calculation logic
 - `utils.test.js` - Utility function validation
 - `usda-integration.test.js` - USDA data conversion
@@ -238,6 +173,7 @@ npm run test:e2e
 ```
 
 **Test suites:**
+
 - `auth-flow.cy.ts` - Login, signup, navigation
 - `food-search.cy.ts` - Basic food search functionality
 - `food-search-integration.cy.ts` - Search integration & guest mode

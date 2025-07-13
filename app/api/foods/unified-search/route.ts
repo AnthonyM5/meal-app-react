@@ -5,7 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 // Check if Supabase environment variables are available
 function isSupabaseConfigured(): boolean {
   return !!(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && 
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 }
@@ -33,14 +33,14 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Search local database with comprehensive matching
-    const { data: foods, error: searchError } = await supabase
-      .from('foods')
-      .select('*')
-      .or(`name.ilike.%${query}%, brand.ilike.%${query}%`)
-      .limit(50)
-      .order('is_verified', { ascending: false })
-      .order('name')
+    // Use the new fuzzy search function
+    const { data: foods, error: searchError } = await supabase.rpc(
+      'fuzzy_search_foods',
+      {
+        search_query: query,
+        match_limit: 50,
+      }
+    )
 
     if (searchError) {
       console.error('Database search error:', searchError)
