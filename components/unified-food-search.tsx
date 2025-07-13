@@ -1,14 +1,13 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { addFoodToMeal } from '@/lib/food-actions'
 import type { Food, MealType } from '@/lib/types'
-import { Download, ExternalLink, Loader2, Plus, Search } from 'lucide-react'
+import { Loader2, Plus, Search } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 interface UnifiedFoodSearchProps {
@@ -24,7 +23,8 @@ export function UnifiedFoodSearch({
   const [foods, setFoods] = useState<Food[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [addingFoodId, setAddingFoodId] = useState<string | null>(null)
-  const [isImporting, setIsImporting] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
 
   // Unified search that includes auto-import from external APIs
   useEffect(() => {
@@ -51,6 +51,22 @@ export function UnifiedFoodSearch({
     return () => clearTimeout(searchTimeout)
   }, [query])
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsFocused(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
   const handleAddFood = async (food: Food) => {
     setAddingFoodId(food.id)
     try {
@@ -67,163 +83,83 @@ export function UnifiedFoodSearch({
     }
   }
 
-  const handleImportMoreFoods = async () => {
-    if (!query || query.length < 2) return
-
-    setIsImporting(true)
-    try {
-      const response = await fetch('/api/foods/import-external', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      })
-
-      const data = await response.json()
-      if (data.imported > 0) {
-        toast.success(
-          `Imported ${data.imported} new foods! Search again to see them.`
-        )
-        // Refresh search results
-        const searchResponse = await fetch(
-          `/api/foods/unified-search?q=${encodeURIComponent(query)}`
-        )
-        const searchData = await searchResponse.json()
-        setFoods(searchData.foods || [])
-      } else {
-        toast.info('No new foods found to import')
-      }
-    } catch (error) {
-      console.error('Import error:', error)
-      toast.error('Failed to import foods')
-    } finally {
-      setIsImporting(false)
-    }
-  }
-
-  const getSourceBadge = (food: Food) => {
-    if (food.brand === 'USDA')
-      return { label: 'USDA', variant: 'default' as const }
-    if (food.is_verified)
-      return { label: 'Verified', variant: 'secondary' as const }
-    return null
-  }
-
   return (
-    <div className="space-y-4">
+    <div ref={searchContainerRef} className="relative">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
         <Input
-          placeholder="Search foods from all sources..."
+          type="text"
+          placeholder="Search for a food..."
           value={query}
           onChange={e => setQuery(e.target.value)}
-          className="pl-10"
+          onFocus={() => setIsFocused(true)}
+          className="pr-10"
         />
-        {isSearching && (
-          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
-        )}
+        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+          {isSearching ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : (
+            <Search className="h-5 w-5 text-muted-foreground" />
+          )}
+        </div>
       </div>
 
-      {foods.length > 0 && (
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {foods.map(food => {
-            const sourceBadge = getSourceBadge(food)
-            return (
-              <Card key={food.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+      {isFocused && query.length > 1 && (
+        <div className="absolute z-10 mt-1 w-full">
+          <Card className="shadow-lg">
+            <CardContent className="p-2">
+              {isSearching && foods.length === 0 ? (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : foods.length > 0 ? (
+                <ul>
+                  {foods.map(food => (
+                    <li
+                      key={food.id}
+                      className="flex items-center justify-between rounded-md p-2 hover:bg-muted"
+                    >
+                      <div className="flex items-center gap-2">
                         <Link
                           href={`/food-details/${food.id}`}
-                          className="font-medium hover:underline flex items-center gap-1"
+                          className="group"
+                          onClick={() => setIsFocused(false)}
                         >
-                          {food.name}
-                          <ExternalLink className="h-3 w-3" />
+                          <span className="font-semibold group-hover:underline">
+                            {food.name}
+                          </span>
+                          <p className="text-sm text-muted-foreground">
+                            {food.calories_per_serving} kcal per{' '}
+                            {food.serving_size}
+                          </p>
                         </Link>
-                        {food.brand && food.brand !== 'USDA' && (
-                          <Badge variant="outline" className="text-xs">
-                            {food.brand}
-                          </Badge>
-                        )}
-                        {sourceBadge && (
-                          <Badge
-                            variant={sourceBadge.variant}
-                            className="text-xs"
-                          >
-                            {sourceBadge.label}
-                          </Badge>
-                        )}
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {Math.round(food.calories_per_serving)} cal per{' '}
-                        {food.serving_size}
-                        {food.serving_unit}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleAddFood(food)}
+                          disabled={addingFoodId === food.id}
+                        >
+                          {addingFoodId === food.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Plus className="mr-2 h-4 w-4" />
+                          )}
+                          Add
+                        </Button>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        P: {Math.round(food.protein_g)}g • C:{' '}
-                        {Math.round(food.carbs_g)}g • F:{' '}
-                        {Math.round(food.fat_g)}g
-                        {food.fiber_g > 0 &&
-                          ` • Fiber: ${Math.round(food.fiber_g)}g`}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleAddFood(food)}
-                      disabled={addingFoodId === food.id}
-                      className="ml-4"
-                    >
-                      {addingFoodId === food.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Plus className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
-      {query.length >= 2 && foods.length === 0 && !isSearching && (
-        <div className="text-center py-8 space-y-4">
-          <div className="text-muted-foreground">
-            No foods found for "{query}"
-          </div>
-          <Button
-            variant="outline"
-            onClick={handleImportMoreFoods}
-            disabled={isImporting}
-            className="flex items-center gap-2"
-          >
-            {isImporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            Import from external databases
-          </Button>
-        </div>
-      )}
-
-      {query.length >= 2 && foods.length > 0 && (
-        <div className="text-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleImportMoreFoods}
-            disabled={isImporting}
-            className="flex items-center gap-2 text-xs"
-          >
-            {isImporting ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Download className="h-3 w-3" />
-            )}
-            Import more foods
-          </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                !isSearching && (
+                  <p className="p-4 text-center text-sm text-muted-foreground">
+                    No results found for &quot;{query}&quot;.
+                  </p>
+                )
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

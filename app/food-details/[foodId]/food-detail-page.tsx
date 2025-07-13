@@ -1,6 +1,6 @@
 import { FoodDetailsView } from './food-details-view'
 
-export default function FoodDetailsPage({
+export default async function FoodDetailsPage({
   params,
 }: {
   params: { foodId: string }

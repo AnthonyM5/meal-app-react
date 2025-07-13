@@ -11,11 +11,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAuth } from '@/hooks/use-auth'
 import { addFoodToMeal } from '@/lib/food-actions'
 import type { Food, MealType } from '@/lib/types'
 import { createClient } from '@supabase/supabase-js'
 import { ArrowLeft, Loader2, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -74,6 +76,8 @@ export function FoodDetailsView({ foodId }: { foodId: string }) {
   const [showMealTypeSelect, setShowMealTypeSelect] = useState(false)
   const [selectedMealType, setSelectedMealType] =
     useState<MealType>('breakfast')
+  const { isGuest } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     async function loadFood() {
@@ -143,57 +147,64 @@ export function FoodDetailsView({ foodId }: { foodId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold mb-2">{food.name}</h1>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>
-              {food.calories_per_serving} calories per {food.serving_size}
-              {food.serving_unit}
-            </span>
-            {food.brand && food.brand !== 'USDA' && (
-              <Badge variant="outline">{food.brand}</Badge>
-            )}
-            {food.brand === 'USDA' && <Badge>USDA</Badge>}
-            {food.is_verified && <Badge variant="secondary">Verified</Badge>}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold mb-2">{food.name}</h1>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>
+                {food.calories_per_serving} calories per {food.serving_size}
+                {food.serving_unit}
+              </span>
+              {food.brand && food.brand !== 'USDA' && (
+                <Badge variant="outline">{food.brand}</Badge>
+              )}
+              {food.brand === 'USDA' && <Badge>USDA</Badge>}
+              {food.is_verified && <Badge variant="secondary">Verified</Badge>}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {showMealTypeSelect ? (
-            <>
-              <Select
-                value={selectedMealType}
-                onValueChange={(value: string) =>
-                  setSelectedMealType(value as MealType)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select meal type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="breakfast">Breakfast</SelectItem>
-                  <SelectItem value="lunch">Lunch</SelectItem>
-                  <SelectItem value="dinner">Dinner</SelectItem>
-                  <SelectItem value="snack">Snack</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleAddToMeal} disabled={isAddingToMeal}>
-                {isAddingToMeal ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="mr-2 h-4 w-4" />
-                )}
-                Add
+        {!isGuest() && (
+          <div className="flex items-center gap-2">
+            {showMealTypeSelect ? (
+              <>
+                <Select
+                  value={selectedMealType}
+                  onValueChange={(value: string) =>
+                    setSelectedMealType(value as MealType)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select meal type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="breakfast">Breakfast</SelectItem>
+                    <SelectItem value="lunch">Lunch</SelectItem>
+                    <SelectItem value="dinner">Dinner</SelectItem>
+                    <SelectItem value="snack">Snack</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleAddToMeal} disabled={isAddingToMeal}>
+                  {isAddingToMeal ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="mr-2 h-4 w-4" />
+                  )}
+                  Add
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setShowMealTypeSelect(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add to Meal
               </Button>
-            </>
-          ) : (
-            <Button onClick={() => setShowMealTypeSelect(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add to Meal
-            </Button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
