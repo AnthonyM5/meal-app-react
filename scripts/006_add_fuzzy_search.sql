@@ -32,7 +32,7 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     -- Set a threshold for trigram similarity. A lower value is more lenient.
-    PERFORM set_limit(0.3);
+    PERFORM set_limit(0.2);
 
     RETURN QUERY
     SELECT
