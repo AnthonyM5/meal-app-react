@@ -1,5 +1,8 @@
+-- Drop the function if it exists to allow for signature changes
+DROP FUNCTION IF EXISTS public.fuzzy_search_foods(TEXT, INT);
+
 -- Enable the pg_trgm extension for fuzzy string matching
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
 
 -- Create a GIN index on the name and brand columns for faster trigram searches.
 -- This index is optimized for full-text search and trigram matching.
@@ -25,8 +28,6 @@ RETURNS TABLE (
     is_verified BOOLEAN,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
-    source TEXT,
-    source_id TEXT,
     similarity REAL
 ) AS $$
 BEGIN
@@ -49,8 +50,6 @@ BEGIN
         f.is_verified,
         f.created_at,
         f.updated_at,
-        f.source,
-        f.source_id,
         GREATEST(
             similarity(f.name, search_query),
             similarity(f.brand, search_query)
@@ -68,5 +67,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql
 SECURITY DEFINER
--- Set the search path so the function can find the pg_trgm operators
-SET search_path = public, extensions;
+-- Set the search path so the function can find
