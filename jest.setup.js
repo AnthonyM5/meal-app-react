@@ -1,4 +1,13 @@
-require('@testing-library/jest-dom')
+import '@testing-library/jest-dom'
+
+// Polyfills for Node.js environment
+global.TextEncoder = require('util').TextEncoder
+global.TextDecoder = require('util').TextDecoder
+
+// Extend Jest matchers
+expect.extend({
+  // Ensure all standard Jest matchers are available
+})
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
@@ -65,15 +74,19 @@ global.IntersectionObserver = jest.fn().mockImplementation(() => ({
   disconnect: jest.fn(),
 }))
 
-// Suppress console errors in tests
+// Suppress console errors in tests - but keep them for debugging
 const originalConsoleError = console.error
 global.console = {
   ...console,
   error: jest.fn(message => {
-    // Only suppress specific React warnings
-    if (typeof message === 'string' && message.includes('Warning:')) {
+    // Only suppress specific React warnings and known test-related errors
+    if (typeof message === 'string' && (
+      message.includes('Warning:') ||
+      message.includes('Error in searchFoods:')
+    )) {
       return
     }
+    // For other errors, still log them for debugging
     originalConsoleError(message)
   }),
   warn: jest.fn(),
