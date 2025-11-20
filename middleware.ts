@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server'
 const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
 
 // Routes that allow guest access
-const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details', '/api/foods']
+const GUEST_ALLOWED_ROUTES = ['/food-details', '/api/foods']
 
 // Check if Supabase is configured
 function isSupabaseConfigured(): boolean {
@@ -32,8 +32,12 @@ export async function middleware(request: NextRequest) {
     path.startsWith(route)
   )
 
-  if (isGuestMode && isGuestAllowedRoute) {
-    return response
+  if (isGuestMode) {
+    if (isGuestAllowedRoute) {
+      return response
+    }
+
+    return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
   // If Supabase is not configured, handle routes without authentication
@@ -43,32 +47,30 @@ export async function middleware(request: NextRequest) {
   }
 
   // Only create Supabase client and check session if NOT in guest mode
-  if (!isGuestMode) {
-    const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return request.cookies.get(name)?.value
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            response.cookies.set(name, value, options)
-          },
-          remove(name: string, options: CookieOptions) {
-            response.cookies.set(name, '', { ...options, maxAge: 0 })
-          },
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
         },
-      }
-    )
-    
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (session) {
-      return response
+        set(name: string, value: string, options: CookieOptions) {
+          response.cookies.set(name, value, options)
+        },
+        remove(name: string, options: CookieOptions) {
+          response.cookies.set(name, '', { ...options, maxAge: 0 })
+        },
+      },
     }
+  )
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (session) {
+    return response
   }
 
   // Redirect to login for protected routes
