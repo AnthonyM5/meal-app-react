@@ -254,7 +254,7 @@ export async function updateRecipe(
   const { data, error } = await supabase
     .from('recipes')
     .update({
-      ...(updates.name && { name: updates.name.trim() }),
+      ...(updates.name !== undefined && { name: updates.name.trim() }),
       ...(updates.description !== undefined && { description: updates.description?.trim() || null }),
       ...(updates.servings !== undefined && { servings: updates.servings }),
       ...(updates.is_public !== undefined && { is_public: updates.is_public }),
