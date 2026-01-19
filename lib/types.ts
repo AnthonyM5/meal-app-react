@@ -27,6 +27,28 @@ export interface Food {
   is_verified: boolean
 }
 
+export interface Recipe {
+  id: string
+  name: string
+  description?: string
+  created_by: string
+  is_public: boolean
+  servings: number
+  created_at: string
+  updated_at: string
+  recipe_ingredients?: RecipeIngredient[]
+}
+
+export interface RecipeIngredient {
+  id: string
+  recipe_id: string
+  food_id: string
+  quantity: number
+  unit: string
+  created_at: string
+  food?: Food
+}
+
 export interface Meal {
   id: string
   user_id: string
@@ -41,15 +63,18 @@ export interface Meal {
 export interface MealItem {
   id: string
   meal_id: string
-  food_id: string
+  food_id?: string
+  recipe_id?: string
   quantity: number
   unit: string
+  serving_multiplier: number
   calories: number
   protein_g: number
   carbs_g: number
   fat_g: number
   fiber_g: number
-  food: Food
+  food?: Food
+  recipe?: Recipe
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
@@ -82,6 +107,16 @@ export interface Database {
         Row: MealItem
         Insert: Omit<MealItem, 'id'>
         Update: Partial<Omit<MealItem, 'id'>>
+      }
+      recipes: {
+        Row: Recipe
+        Insert: Omit<Recipe, 'id' | 'created_at' | 'updated_at' | 'recipe_ingredients'>
+        Update: Partial<Omit<Recipe, 'id' | 'created_at' | 'updated_at' | 'recipe_ingredients'>>
+      }
+      recipe_ingredients: {
+        Row: RecipeIngredient
+        Insert: Omit<RecipeIngredient, 'id' | 'created_at' | 'food'>
+        Update: Partial<Omit<RecipeIngredient, 'id' | 'created_at' | 'food'>>
       }
       profiles: {
         Row: {

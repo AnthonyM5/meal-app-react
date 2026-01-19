@@ -180,6 +180,7 @@ export async function addFoodToMeal(
     food_id: foodId,
     quantity,
     unit: unit || food.serving_unit,
+    serving_multiplier: 1,
     calories,
     protein_g,
     carbs_g,
@@ -203,8 +204,14 @@ export async function updateMealItem(itemId: string, newQuantity: number) {
     .single()
 
   if (itemError) throw itemError
-  if (!item?.meal?.user_id || !item.food) throw new Error('Meal item not found')
+  if (!item?.meal?.user_id) throw new Error('Meal item not found')
   if (item.meal.user_id !== user.id) throw new Error('Unauthorized')
+
+  // For recipe-based items, the nutrition values need to be recalculated differently
+  // For now, we only support updating food-based items
+  if (!item.food) {
+    throw new Error('Cannot update recipe-based meal items directly')
+  }
 
   // Recalculate nutrition values
   const calories = item.food.calories_per_serving * newQuantity
