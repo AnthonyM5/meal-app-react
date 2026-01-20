@@ -39,3 +39,4 @@ cypress/screenshots
 .DS_Store
 Thumbs.db
 .env
+tsconfig.tsbuildinfo

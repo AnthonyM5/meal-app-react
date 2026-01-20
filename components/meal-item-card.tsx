@@ -67,10 +67,15 @@ export function MealItemCard({ item, onUpdate }: MealItemCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-medium">{item.food.name}</h4>
-              {item.food.brand && item.food.brand !== "USDA" && (
+              <h4 className="font-medium">{item.food?.name ?? item.recipe?.name ?? 'Unknown Item'}</h4>
+              {item.food?.brand && item.food.brand !== "USDA" && (
                 <Badge variant="outline" className="text-xs">
                   {item.food.brand}
+                </Badge>
+              )}
+              {item.recipe && (
+                <Badge variant="secondary" className="text-xs">
+                  Recipe
                 </Badge>
               )}
             </div>
