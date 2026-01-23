@@ -8,7 +8,6 @@ module.exports = {
     '<rootDir>/node_modules/',
     '<rootDir>/.next/',
     '<rootDir>/cypress/',
-    '<rootDir>/__tests__/mocks/',
   ],
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
@@ -22,7 +21,6 @@ module.exports = {
     '!**/.next/**',
     '!**/coverage/**',
     '!**/cypress/**',
-    '!**/__tests__/mocks/**',
   ],
   testEnvironmentOptions: {
     url: 'http://localhost:3000',
