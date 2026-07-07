@@ -16,8 +16,9 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'NutriTrack - Nutrition Tracker',
-  description: 'Track your nutrition and reach your health goals',
+  title: 'PawPlate - Fresh-Feeding Dog Nutrition',
+  description:
+    "Track your dog's fresh-food nutrition against NRC/AAFCO targets",
   generator: 'v0.dev',
   icons: {
     apple: [
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'NutriTrack',
+    title: 'PawPlate',
   },
 }
 
@@ -47,7 +48,7 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="NutriTrack" />
+        <meta name="apple-mobile-web-app-title" content="PawPlate" />
       </head>
       <body className={geist.className}>{children}</body>
     </html>
