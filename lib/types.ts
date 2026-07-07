@@ -1,5 +1,6 @@
 export interface Food {
   id: string
+  fdc_id?: number | null
   name: string
   brand?: string
   serving_size: number
@@ -24,7 +25,89 @@ export interface Food {
   zinc_mg?: number
   selenium_mcg?: number
   folate_mcg?: number
+  // Canine-critical nutrients (PawPlate)
+  taurine_mg?: number
+  phosphorus_mg?: number
+  omega3_epa_dha_mg?: number
+  omega6_la_mg?: number
+  vitamin_d_iu?: number
+  choline_mg?: number
+  copper_mg?: number
+  manganese_mg?: number
+  iodine_mcg?: number
+  methionine_cystine_mg?: number
+  lysine_mg?: number
+  tryptophan_mg?: number
+  is_safe_for_dogs?: boolean
+  toxicity_note?: string | null
   is_verified: boolean
+}
+
+// The physical table is still named `foods` (renaming would ripple through
+// the USDA importer and the fuzzy_search_foods RPC); PawPlate exposes it
+// as Ingredient in the type/UI layer.
+export type Ingredient = Food
+
+export type DogLifeStage =
+  | 'puppy'
+  | 'adult'
+  | 'senior'
+  | 'pregnant'
+  | 'lactating'
+export type DogActivityLevel =
+  | 'sedentary'
+  | 'lightly_active'
+  | 'moderately_active'
+  | 'very_active'
+  | 'working'
+export type MealSource = 'manual' | 'photo' | 'recipe'
+
+export interface Dog {
+  id: string
+  owner_id: string
+  name: string
+  breed?: string | null
+  weight_kg: number
+  ideal_weight_kg?: number | null
+  birth_date?: string | null
+  life_stage: DogLifeStage
+  activity_level: DogActivityLevel
+  neutered: boolean
+  health_conditions: string[]
+  avatar_url?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface NutrientRequirement {
+  id: string
+  nutrient_key: string
+  life_stage: DogLifeStage
+  /** Requirement per 1000 kcal ME; null = tracked but no formal RDA */
+  amount_per_1000kcal: number | null
+  unit: string
+  min_value: number | null
+  max_value: number | null
+  source: string
+  notes?: string | null
+}
+
+export interface BowlAnalysisItem {
+  ingredient_id: string | null
+  name: string
+  proportion: number
+  confidence: number
+}
+
+export interface BowlAnalysis {
+  id: string
+  dog_id: string | null
+  image_url: string
+  model_version: string
+  raw_output: unknown
+  identified_items: BowlAnalysisItem[]
+  user_corrected: BowlAnalysisItem[] | null
+  created_at: string
 }
 
 export interface Recipe {
@@ -52,6 +135,8 @@ export interface RecipeIngredient {
 export interface Meal {
   id: string
   user_id: string
+  dog_id?: string | null
+  source?: MealSource
   name?: string
   meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
   date: string
@@ -97,6 +182,21 @@ export interface Database {
         Row: Food
         Insert: Omit<Food, 'id'>
         Update: Partial<Omit<Food, 'id'>>
+      }
+      dogs: {
+        Row: Dog
+        Insert: Omit<Dog, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Dog, 'id' | 'owner_id' | 'created_at' | 'updated_at'>>
+      }
+      nutrient_requirements: {
+        Row: NutrientRequirement
+        Insert: Omit<NutrientRequirement, 'id'>
+        Update: Partial<Omit<NutrientRequirement, 'id'>>
+      }
+      bowl_analyses: {
+        Row: BowlAnalysis
+        Insert: Omit<BowlAnalysis, 'id' | 'created_at'>
+        Update: Partial<Omit<BowlAnalysis, 'id' | 'created_at'>>
       }
       meals: {
         Row: Meal
