@@ -125,10 +125,46 @@ project:
 - Fixed: `lib/database.types.ts` had a Supabase CLI update notice appended
   to the generated output (broke `tsc`); removed.
 
-## Not started
+### Raw vs cooked ingredients (done, 2026-07-07)
+Per-100 g values differ materially between preparations (roasted chicken
+breast: 165 kcal / 31 g protein vs raw: 120 / 22.5 — water loss concentrates
+everything, and heat degrades B-vitamins / leaches minerals), so both
+variants now coexist as separate rows. **Values always describe the food as
+fed; no raw→cooked conversion math anywhere.**
+- `preparation_state` column (`raw`|`cooked`|NULL) on `foods` —
+  `scripts/014` / migration `20260707010000`, with a name-based backfill
+  (supplements/dairy stay NULL). Live counts after import: raw 21,
+  cooked 19, NULL 10.
+- `inferPreparationState()` in `lib/usda-canine.ts` labels every future
+  USDA import automatically (whole-word `raw` beats cooking-method words;
+  unit-tested).
+- 12 cooked SR Legacy variants imported live via
+  `scripts/import-cooked-ingredients.ts` (chicken breast/thigh roasted+
+  stewed, liver simmered, 90% lean beef ×2, ground turkey, egg hard-boiled+
+  omelet, salmon, sweet potato) — all `is_verified`, all correctly labeled.
+  Re-runnable; dedupes on `fdc_id`; excludes fried/breaded/restaurant/canned.
+- **`fuzzy_search_foods` RPC return set extended** (`scripts/015` /
+  migration `20260707020000`): the pre-PawPlate signature never returned
+  `is_safe_for_dogs` / `toxicity_note` / `preparation_state`, so search
+  results couldn't power the unsafe-ingredient warning at all. Now verified
+  live: onion search returns `safe=False` + note; meal-builder shows
+  raw/cooked badges.
+- If a cooked FDC analog ever doesn't exist: USDA's *Nutrient Retention
+  Factors* (Release 6) + *Cooking Yields for Meat and Poultry* tables are
+  the deterministic fallback — but measured entries always win.
+
+## Next phase (planned)
+- **Edit logged meals after saving** (user-requested): an `updateDogMeal`
+  server action (replace items/grams/meal type on an owned meal, recompute
+  and return fresh gaps — same rollback-on-failure pattern as
+  `createDogMeal`) plus an edit button on the dashboard's "Today's meals"
+  cards that reopens `DogMealBuilder` prefilled with the meal's items.
+  Cypress: log → edit grams → assert gaps change.
 - Phase 4 UI (bowl photo → confirmation → meal), camera capture in
   `mobile/`. This plugs into the meal path built above (a confirmed bowl
-  attaches to a dog's meal via `createDogMeal` with `source: 'photo'`).
+  attaches to a dog's meal via `createDogMeal` with `source: 'photo'`) —
+  and meal editing above doubles as the correction path after a bowl
+  confirmation.
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring).
 
 ## Supabase integration (done)
