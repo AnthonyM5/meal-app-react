@@ -24,7 +24,10 @@ import { getUserDogs } from '@/lib/dog-actions'
 import {
   deleteDogMeal,
   getDogDailyGaps,
+  getDogMealForEdit,
   getDogMeals,
+  type DogMealForEdit,
+  type DogMealResult,
   type DogMealSummary,
 } from '@/lib/meal-actions'
 import { supabase } from '@/lib/supabase/client'
@@ -33,7 +36,9 @@ import {
   AlertTriangle,
   Dog as DogIcon,
   Loader2,
+  Pencil,
   Plus,
+  Search,
   Stethoscope,
   Trash2,
 } from 'lucide-react'
@@ -56,6 +61,8 @@ export default function DashboardPage() {
   const [meals, setMeals] = useState<DogMealSummary[]>([])
   const [isLoadingDay, setIsLoadingDay] = useState(false)
   const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
+  const [editingMeal, setEditingMeal] = useState<DogMealForEdit | null>(null)
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null)
 
   // Simple function to check guest mode without causing re-renders
   const checkGuestMode = useCallback(() => {
@@ -143,6 +150,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDay()
+    setEditingMeal(null)
   }, [loadDay])
 
   const handleDeleteMeal = async (mealId: string) => {
@@ -150,6 +158,7 @@ export default function DashboardPage() {
     try {
       await deleteDogMeal(mealId)
       toast.success('Meal removed')
+      if (editingMeal?.id === mealId) setEditingMeal(null)
       await loadDay()
     } catch (error) {
       console.error('Delete meal error:', error)
@@ -157,6 +166,24 @@ export default function DashboardPage() {
     } finally {
       setDeletingMealId(null)
     }
+  }
+
+  const handleEditMeal = async (mealId: string) => {
+    setLoadingEditId(mealId)
+    try {
+      const meal = await getDogMealForEdit(mealId)
+      setEditingMeal(meal)
+    } catch (error) {
+      console.error('Load meal for edit error:', error)
+      toast.error('Failed to load meal for editing')
+    } finally {
+      setLoadingEditId(null)
+    }
+  }
+
+  const handleMealSaved = async (_result: DogMealResult) => {
+    setEditingMeal(null)
+    await loadDay()
   }
 
   if (isLoading) {
@@ -240,7 +267,10 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2">
           <Select
             value={selectedDogId ?? undefined}
-            onValueChange={setSelectedDogId}
+            onValueChange={id => {
+              setSelectedDogId(id)
+              setEditingMeal(null)
+            }}
           >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Select a dog" />
@@ -257,9 +287,17 @@ export default function DashboardPage() {
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           )}
         </div>
-        <Button variant="outline" asChild>
-          <Link href="/dogs">Manage dogs</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/foods">
+              <Search className="mr-2 h-4 w-4" />
+              Browse foods
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/dogs">Manage dogs</Link>
+          </Button>
+        </div>
       </div>
 
       {dailyGaps && dailyGaps.unsafeIngredients.length > 0 && (
@@ -325,7 +363,12 @@ export default function DashboardPage() {
           )}
 
           {selectedDogId && (
-            <DogMealBuilder dogId={selectedDogId} onMealLogged={loadDay} />
+            <DogMealBuilder
+              dogId={selectedDogId}
+              onMealLogged={handleMealSaved}
+              editingMeal={editingMeal ?? undefined}
+              onCancelEdit={() => setEditingMeal(null)}
+            />
           )}
 
           {meals.length > 0 && (
@@ -338,7 +381,9 @@ export default function DashboardPage() {
                   {meals.map(meal => (
                     <li
                       key={meal.id}
-                      className="flex items-start justify-between gap-2 rounded-md border p-3"
+                      className={`flex items-start justify-between gap-2 rounded-md border p-3 ${
+                        editingMeal?.id === meal.id ? 'border-primary' : ''
+                      }`}
                     >
                       <div>
                         <p className="text-sm font-medium capitalize">
@@ -351,19 +396,34 @@ export default function DashboardPage() {
                             .join(', ')}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteMeal(meal.id)}
-                        disabled={deletingMealId === meal.id}
-                        aria-label="Delete meal"
-                      >
-                        {deletingMealId === meal.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        )}
-                      </Button>
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditMeal(meal.id)}
+                          disabled={loadingEditId === meal.id}
+                          aria-label="Edit meal"
+                        >
+                          {loadingEditId === meal.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Pencil className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteMeal(meal.id)}
+                          disabled={deletingMealId === meal.id}
+                          aria-label="Delete meal"
+                        >
+                          {deletingMealId === meal.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          )}
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>

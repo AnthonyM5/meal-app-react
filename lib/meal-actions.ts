@@ -212,6 +212,173 @@ export async function createDogMeal(
   }
 }
 
+export interface DogMealForEdit {
+  id: string
+  dogId: string
+  mealType: MealType
+  name: string | null
+  date: string
+  items: Array<{ grams: number; food: Ingredient }>
+}
+
+/**
+ * Load a meal's items (with full ingredient data, for prefilling the meal
+ * builder) for editing. Ownership is checked via the dog join.
+ */
+export async function getDogMealForEdit(mealId: string): Promise<DogMealForEdit> {
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
+
+  const { data: meal, error } = await supabase
+    .from('meals')
+    .select(
+      'id, dog_id, meal_type, name, date, dogs!inner ( owner_id ), meal_items ( quantity, food:foods (*) )'
+    )
+    .eq('id', mealId)
+    .single()
+
+  if (error) throw error
+  if (!meal) throw new Error('Meal not found')
+
+  // Supabase's nested-select typing can't express the joined shape here
+  const typed = meal as unknown as {
+    id: string
+    dog_id: string | null
+    meal_type: MealType
+    name: string | null
+    date: string
+    dogs: { owner_id: string }
+    meal_items?: Array<{ quantity: number; food: Ingredient | null }>
+  }
+
+  if (typed.dogs.owner_id !== user.id) throw new Error('Unauthorized')
+  if (!typed.dog_id) throw new Error('Meal has no associated dog')
+
+  return {
+    id: typed.id,
+    dogId: typed.dog_id,
+    mealType: typed.meal_type,
+    name: typed.name,
+    date: typed.date,
+    items: (typed.meal_items || [])
+      .filter(item => item.food)
+      .map(item => ({ grams: Number(item.quantity), food: item.food! })),
+  }
+}
+
+/**
+ * Replace a meal's items/type and return refreshed gaps, same shape as
+ * `createDogMeal`. All math happens in lib/canine-nutrition.ts.
+ */
+export async function updateDogMeal(
+  mealId: string,
+  mealType: MealType,
+  items: DogMealItemInput[],
+  options: { name?: string } = {}
+): Promise<DogMealResult> {
+  if (await isGuestMode()) {
+    throw new Error('Please sign in to edit meals')
+  }
+
+  if (!items || items.length === 0) {
+    throw new Error('Meal must have at least one ingredient')
+  }
+
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
+
+  const { data: meal, error: mealError } = await supabase
+    .from('meals')
+    .select('id, user_id, dog_id, dogs!inner ( * )')
+    .eq('id', mealId)
+    .single()
+
+  if (mealError) throw mealError
+  if (!meal) throw new Error('Meal not found')
+
+  // Supabase's nested-select typing can't express the joined shape here
+  const typedMeal = meal as unknown as {
+    user_id: string
+    dog_id: string | null
+    dogs: Dog
+  }
+  if (typedMeal.user_id !== user.id) throw new Error('Unauthorized')
+  if (!typedMeal.dog_id) throw new Error('Meal has no associated dog')
+
+  const dog = typedMeal.dogs
+  const mealItems = await loadIngredients(supabase, items)
+  const totals = computeMealNutrients(mealItems)
+
+  // Keep the old items so a failed insert can be rolled back instead of
+  // leaving the meal with no items.
+  const { data: oldItems, error: oldItemsError } = await supabase
+    .from('meal_items')
+    .select('*')
+    .eq('meal_id', mealId)
+  if (oldItemsError) throw oldItemsError
+
+  const { error: deleteError } = await supabase
+    .from('meal_items')
+    .delete()
+    .eq('meal_id', mealId)
+  if (deleteError) throw deleteError
+
+  const itemsToInsert = mealItems.map(({ grams, ingredient }) => {
+    const scale = grams / (Number(ingredient.serving_size) || 100)
+    return {
+      meal_id: mealId,
+      food_id: ingredient.id,
+      quantity: grams,
+      unit: 'g',
+      serving_multiplier: scale,
+      calories: Number(ingredient.calories_per_serving || 0) * scale,
+      protein_g: Number(ingredient.protein_g || 0) * scale,
+      carbs_g: Number(ingredient.carbs_g || 0) * scale,
+      fat_g: Number(ingredient.fat_g || 0) * scale,
+      fiber_g: Number(ingredient.fiber_g || 0) * scale,
+    }
+  })
+
+  const { error: insertError } = await supabase
+    .from('meal_items')
+    .insert(itemsToInsert)
+
+  if (insertError) {
+    if (oldItems && oldItems.length > 0) {
+      await supabase
+        .from('meal_items')
+        .insert(oldItems.map(({ id: _id, ...rest }) => rest))
+    }
+    throw insertError
+  }
+
+  const { error: updateError } = await supabase
+    .from('meals')
+    .update({
+      meal_type: mealType,
+      ...(options.name !== undefined && { name: options.name || null }),
+    })
+    .eq('id', mealId)
+  if (updateError) throw updateError
+
+  const requirements = await loadRequirements(supabase)
+  const dogTargets = computeTargets(energyInputsFromDog(dog), requirements)
+  const gaps = computeGaps(totals, dogTargets)
+
+  revalidatePath('/dashboard')
+
+  return {
+    mealId,
+    dailyKcal: dogTargets.dailyKcal,
+    mealKcal: totals.calories,
+    gaps,
+    unsafeIngredients: findUnsafeIngredients(mealItems).map(ing => ({
+      id: ing.id,
+      name: ing.name,
+      toxicity_note: ing.toxicity_note ?? null,
+    })),
+    requiresVetNotice: (dog.health_conditions?.length ?? 0) > 0,
+  }
+}
+
 /**
  * Recompute a dog's full-day nutrient gaps from everything logged on a date.
  */

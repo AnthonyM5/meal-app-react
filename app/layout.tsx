@@ -1,3 +1,4 @@
+import { Toaster } from '@/components/ui/sonner'
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import type React from 'react'
@@ -50,7 +51,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="PawPlate" />
       </head>
-      <body className={geist.className}>{children}</body>
+      <body className={geist.className}>
+        {children}
+        <Toaster />
+      </body>
     </html>
   )
 }

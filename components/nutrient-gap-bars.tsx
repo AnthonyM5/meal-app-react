@@ -1,36 +1,15 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import type { GapStatus, NutrientGap, NutrientKey } from '@/lib/canine-nutrition'
+import {
+  NUTRIENT_LABELS,
+  type GapStatus,
+  type NutrientGap,
+  type NutrientKey,
+} from '@/lib/canine-nutrition'
 import { cn } from '@/lib/utils'
 
-export const NUTRIENT_LABELS: Record<NutrientKey, string> = {
-  protein_g: 'Protein',
-  fat_g: 'Fat',
-  calcium_mg: 'Calcium',
-  phosphorus_mg: 'Phosphorus',
-  potassium_mg: 'Potassium',
-  sodium_mg: 'Sodium',
-  magnesium_mg: 'Magnesium',
-  iron_mg: 'Iron',
-  copper_mg: 'Copper',
-  manganese_mg: 'Manganese',
-  zinc_mg: 'Zinc',
-  iodine_mcg: 'Iodine',
-  selenium_mcg: 'Selenium',
-  vitamin_a_mcg: 'Vitamin A',
-  vitamin_d_iu: 'Vitamin D',
-  vitamin_e_mg: 'Vitamin E',
-  vitamin_b12_mcg: 'Vitamin B12',
-  folate_mcg: 'Folate',
-  choline_mg: 'Choline',
-  taurine_mg: 'Taurine',
-  omega3_epa_dha_mg: 'Omega-3 (EPA+DHA)',
-  omega6_la_mg: 'Omega-6 (LA)',
-  methionine_cystine_mg: 'Methionine + Cystine',
-  lysine_mg: 'Lysine',
-  tryptophan_mg: 'Tryptophan',
-}
+export { NUTRIENT_LABELS }
 
 const STATUS_STYLES: Record<
   GapStatus,

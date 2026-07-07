@@ -153,17 +153,54 @@ fed; no raw→cooked conversion math anywhere.**
   Factors* (Release 6) + *Cooking Yields for Meat and Poultry* tables are
   the deterministic fallback — but measured entries always win.
 
+### Meal editing + food browse/search (done, 2026-07-07)
+Two user-requested capabilities plus a canine rebuild of the old food
+detail page.
+- **Edit logged meals** — `getDogMealForEdit` (loads a meal's items with
+  full ingredient rows; ownership checked via the `dogs!inner` join) and
+  `updateDogMeal` (replaces items/grams/meal type, recomputes and returns
+  fresh gaps; deletes-then-reinserts `meal_items` with the *old* items kept
+  and re-inserted on failure so a meal is never left empty). `DogMealBuilder`
+  gained an `editingMeal` mode (prefilled items, "Save changes" / cancel);
+  dashboard "Today's meals" cards got an edit (pencil) button that reopens
+  the builder in place and highlights the row.
+- **`/foods` browse page** (`app/foods/`) — two tabs: search by name
+  (reuses `unified-search`) and **search by nutrient** (the "find foods high
+  in lysine" ask). Cards link to the detail page and, for nutrient search,
+  show the amount + are sorted highest-first.
+- **Generic `search_foods_by_nutrient` RPC** (`scripts/016` / migration
+  `20260707030000`) replaces the pre-PawPlate 5-nutrient CASE version with a
+  column-driven one covering all 25 tracked canine nutrients. **SQL-injection
+  safe**: the column name is validated against `information_schema` before
+  `format(%I)` interpolation, and the API route (`/api/foods/nutrient-search`)
+  independently allowlists against `TRACKED_NUTRIENTS`. Verified live: lysine
+  search returns cooked chicken breast top; a malicious column name raises.
+- **Food detail page rebuilt** (`food-details-view.tsx`) — canine nutrient
+  groups (macros/minerals/vitamins/amino acids/fatty acids), raw/cooked +
+  unsafe badges, and a dog-aware "log to a dog's meal" form (dog + meal +
+  grams → `createDogMeal`). Guest users see a sign-in prompt.
+- **Fixed a pre-existing guest-mode bug**: the old detail page queried
+  `foods` directly with the anon client, but RLS only grants SELECT to
+  `authenticated`, so guests got "Food not found". New `/api/foods/[foodId]`
+  route proxies through the service role (same pattern as the search
+  routes). `/foods` + `/food-details` added to the middleware guest allowlist.
+- **Fixed another pre-existing app-wide bug**: sonner's `<Toaster>` was
+  never mounted in any layout, so *every* `toast()` call in the app was
+  silently dropped (no "meal logged" / error feedback anywhere). Mounted it
+  in `app/layout.tsx`.
+- `NUTRIENT_LABELS` + a new `nutrientUnit()` helper moved to
+  `lib/canine-nutrition.ts` as the single source of truth (gap bars and the
+  nutrient browser both consume them).
+- Cypress `dog-nutrition-flow.cy.ts` now 3/3: the log-meal test also edits
+  the meal and asserts the kcal total changes; a new test browses by name,
+  searches by lysine (asserting descending sort), checks the empty state,
+  and logs from a detail page.
+
 ## Next phase (planned)
-- **Edit logged meals after saving** (user-requested): an `updateDogMeal`
-  server action (replace items/grams/meal type on an owned meal, recompute
-  and return fresh gaps — same rollback-on-failure pattern as
-  `createDogMeal`) plus an edit button on the dashboard's "Today's meals"
-  cards that reopens `DogMealBuilder` prefilled with the meal's items.
-  Cypress: log → edit grams → assert gaps change.
 - Phase 4 UI (bowl photo → confirmation → meal), camera capture in
   `mobile/`. This plugs into the meal path built above (a confirmed bowl
   attaches to a dog's meal via `createDogMeal` with `source: 'photo'`) —
-  and meal editing above doubles as the correction path after a bowl
+  and the meal-editing flow doubles as the correction path after a bowl
   confirmation.
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring).
 

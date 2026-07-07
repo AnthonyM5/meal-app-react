@@ -11,9 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { createDogMeal, type DogMealResult } from '@/lib/meal-actions'
+import {
+  createDogMeal,
+  updateDogMeal,
+  type DogMealForEdit,
+  type DogMealResult,
+} from '@/lib/meal-actions'
 import type { Food, MealType } from '@/lib/types'
-import { AlertTriangle, Loader2, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -27,17 +32,38 @@ interface BuilderItem {
 interface DogMealBuilderProps {
   dogId: string
   onMealLogged?: (result: DogMealResult) => void
+  /** When set, the builder edits this existing meal instead of creating one */
+  editingMeal?: DogMealForEdit
+  onCancelEdit?: () => void
 }
 
-export function DogMealBuilder({ dogId, onMealLogged }: DogMealBuilderProps) {
-  const [mealType, setMealType] = useState<MealType>('breakfast')
-  const [items, setItems] = useState<BuilderItem[]>([])
+export function DogMealBuilder({
+  dogId,
+  onMealLogged,
+  editingMeal,
+  onCancelEdit,
+}: DogMealBuilderProps) {
+  const isEditing = !!editingMeal
+  const [mealType, setMealType] = useState<MealType>(
+    editingMeal?.mealType ?? 'breakfast'
+  )
+  const [items, setItems] = useState<BuilderItem[]>(
+    () => editingMeal?.items.map(item => ({ food: item.food, grams: item.grams })) ?? []
+  )
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Food[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [isLogging, setIsLogging] = useState(false)
   const searchContainerRef = useRef<HTMLDivElement>(null)
+
+  // Re-sync when switching which meal is being edited (or back to create)
+  useEffect(() => {
+    setMealType(editingMeal?.mealType ?? 'breakfast')
+    setItems(
+      editingMeal?.items.map(item => ({ food: item.food, grams: item.grams })) ?? []
+    )
+  }, [editingMeal])
 
   useEffect(() => {
     const searchTimeout = setTimeout(async () => {
@@ -112,22 +138,28 @@ export function DogMealBuilder({ dogId, onMealLogged }: DogMealBuilderProps) {
       return
     }
 
+    const itemInputs = items.map(item => ({
+      ingredient_id: item.food.id,
+      grams: item.grams,
+    }))
+
     setIsLogging(true)
     try {
-      const result = await createDogMeal(
-        dogId,
-        mealType,
-        items.map(item => ({ ingredient_id: item.food.id, grams: item.grams }))
-      )
+      const result = isEditing
+        ? await updateDogMeal(editingMeal!.id, mealType, itemInputs)
+        : await createDogMeal(dogId, mealType, itemInputs)
+
       toast.success(
-        `Logged ${mealType} — ${Math.round(result.mealKcal)} kcal`
+        `${isEditing ? 'Updated' : 'Logged'} ${mealType} — ${Math.round(
+          result.mealKcal
+        )} kcal`
       )
-      setItems([])
+      if (!isEditing) setItems([])
       onMealLogged?.(result)
     } catch (error) {
-      console.error('Log meal error:', error)
+      console.error('Save meal error:', error)
       toast.error(
-        error instanceof Error ? error.message : 'Failed to log meal'
+        error instanceof Error ? error.message : 'Failed to save meal'
       )
     } finally {
       setIsLogging(false)
@@ -138,22 +170,36 @@ export function DogMealBuilder({ dogId, onMealLogged }: DogMealBuilderProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Log a meal</CardTitle>
-          <Select
-            value={mealType}
-            onValueChange={v => setMealType(v as MealType)}
-          >
-            <SelectTrigger className="w-32 capitalize">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MEAL_TYPES.map(type => (
-                <SelectItem key={type} value={type} className="capitalize">
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CardTitle className="text-lg">
+            {isEditing ? 'Edit meal' : 'Log a meal'}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Select
+              value={mealType}
+              onValueChange={v => setMealType(v as MealType)}
+            >
+              <SelectTrigger className="w-32 capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MEAL_TYPES.map(type => (
+                  <SelectItem key={type} value={type} className="capitalize">
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isEditing && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onCancelEdit}
+                aria-label="Cancel editing"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -292,7 +338,7 @@ export function DogMealBuilder({ dogId, onMealLogged }: DogMealBuilderProps) {
           className="w-full"
         >
           {isLogging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Log {mealType}
+          {isEditing ? 'Save changes' : `Log ${mealType}`}
         </Button>
       </CardContent>
     </Card>

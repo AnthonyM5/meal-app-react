@@ -3,7 +3,8 @@ import { FoodDetailsView } from './food-details-view'
 export default async function FoodDetailsPage({
   params,
 }: {
-  params: { foodId: string }
+  params: Promise<{ foodId: string }>
 }) {
-  return <FoodDetailsView foodId={params.foodId} />
+  const { foodId } = await params
+  return <FoodDetailsView foodId={foodId} />
 }
