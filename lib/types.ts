@@ -113,7 +113,6 @@ export interface BowlAnalysis {
   user_corrected: BowlAnalysisItem[] | null
   created_at: string
 }
-
 export interface Recipe {
   id: string
   name: string
