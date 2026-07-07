@@ -1,5 +1,6 @@
 'use client'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -195,6 +196,14 @@ export function DogMealBuilder({ dogId, onMealLogged }: DogMealBuilderProps) {
                             <span>
                               <span className="flex items-center gap-1.5 font-medium">
                                 {food.name}
+                                {food.preparation_state && (
+                                  <Badge
+                                    variant="outline"
+                                    className="px-1.5 py-0 text-xs font-normal text-muted-foreground"
+                                  >
+                                    {food.preparation_state}
+                                  </Badge>
+                                )}
                                 {food.is_safe_for_dogs === false && (
                                   <AlertTriangle className="h-4 w-4 text-red-500" />
                                 )}
@@ -230,8 +239,16 @@ export function DogMealBuilder({ dogId, onMealLogged }: DogMealBuilderProps) {
                 className="flex items-center justify-between gap-2 rounded-md border p-2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
+                  <p className="flex items-center gap-1.5 truncate text-sm font-medium">
                     {item.food.name}
+                    {item.food.preparation_state && (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 px-1.5 py-0 text-xs font-normal text-muted-foreground"
+                      >
+                        {item.food.preparation_state}
+                      </Badge>
+                    )}
                   </p>
                   {item.food.is_safe_for_dogs === false && (
                     <p className="text-xs text-red-500">

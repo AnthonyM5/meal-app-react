@@ -40,8 +40,12 @@ export interface Food {
   tryptophan_mg?: number
   is_safe_for_dogs?: boolean
   toxicity_note?: string | null
+  /** Values describe the food as fed; null = unknown/not applicable */
+  preparation_state?: PreparationState | null
   is_verified: boolean
 }
+
+export type PreparationState = 'raw' | 'cooked'
 
 // The physical table is still named `foods` (renaming would ripple through
 // the USDA importer and the fuzzy_search_foods RPC); PawPlate exposes it

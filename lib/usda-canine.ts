@@ -179,6 +179,26 @@ export function countExtractedNutrients(
   ).length
 }
 
+// Cooking-method words as they appear in FDC descriptions. 'raw' is matched
+// as a whole word so e.g. "strawberries" doesn't false-positive.
+const COOKED_PATTERN =
+  /cooked|roasted|stewed|fried|boiled|grilled|baked|braised|poached|steamed|rotisserie|hard-boiled|scrambled/i
+const RAW_PATTERN = /\braw\b/i
+
+/**
+ * Infer raw/cooked from a USDA description. Nutrient values always describe
+ * the food as analyzed (as fed) — this label only lets both variants coexist
+ * and be told apart in search; no conversion math is ever applied.
+ */
+export function inferPreparationState(
+  description: string
+): 'raw' | 'cooked' | null {
+  // Check raw first: the explicit whole-word "raw" is the stronger signal
+  if (RAW_PATTERN.test(description)) return 'raw'
+  if (COOKED_PATTERN.test(description)) return 'cooked'
+  return null
+}
+
 /**
  * Convert a USDA food into a `foods` (Ingredient) row, per 100 g, with the
  * dog-safety pass applied. Taurine/amino coverage in FDC is incomplete, so
@@ -201,6 +221,7 @@ export function convertUSDAToIngredient(usdaFood: USDAFoodLike) {
     ...nutrients,
     is_safe_for_dogs: safety.isSafe,
     toxicity_note: safety.note,
+    preparation_state: inferPreparationState(usdaFood.description),
     is_verified: isComplete,
   }
 }

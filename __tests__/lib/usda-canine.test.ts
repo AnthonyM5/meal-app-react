@@ -4,6 +4,7 @@ import {
   convertUSDAToIngredient,
   countExtractedNutrients,
   extractCanineNutrients,
+  inferPreparationState,
   type USDAFoodLike,
 } from '@/lib/usda-canine'
 // Captured live from FDC on 2026-07-06: GET /v1/food/171060?format=full
@@ -113,6 +114,36 @@ describe('convertUSDAToIngredient', () => {
       ],
     }
     expect(convertUSDAToIngredient(sparse).is_verified).toBe(false)
+  })
+
+  test('sets preparation_state from the description', () => {
+    expect(convertUSDAToIngredient(fixture).preparation_state).toBe('raw')
+  })
+})
+
+describe('inferPreparationState', () => {
+  test.each([
+    ['Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw', 'raw'],
+    ['Chicken, broilers or fryers, breast, meat only, cooked, roasted', 'cooked'],
+    ['Chicken, broilers or fryers, breast, meat only, cooked, stewed', 'cooked'],
+    ['Chicken, broiler, rotisserie, BBQ, breast, meat only', 'cooked'],
+    ['Egg, whole, cooked, hard-boiled', 'cooked'],
+    ['Beef, ground, 90% lean meat / 10% fat, patty, cooked, pan-broiled', 'cooked'],
+    ['Sweet potato, cooked, baked in skin, flesh, without salt', 'cooked'],
+    ['Fish, salmon, Atlantic, farmed, raw', 'raw'],
+  ] as const)('%s → %s', (description, expected) => {
+    expect(inferPreparationState(description)).toBe(expected)
+  })
+
+  test('returns null when the description carries no signal', () => {
+    expect(inferPreparationState('Salmon oil')).toBeNull()
+    expect(inferPreparationState('Kelp powder (iodine supplement)')).toBeNull()
+    expect(inferPreparationState('Yogurt, plain, whole milk')).toBeNull()
+  })
+
+  test('does not false-positive on words containing "raw"', () => {
+    expect(inferPreparationState('Strawberries')).toBeNull()
+    expect(inferPreparationState('Coleslaw dressing')).toBeNull()
   })
 })
 
