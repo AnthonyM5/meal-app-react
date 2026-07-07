@@ -1,11 +1,11 @@
 import { Metadata, Viewport } from 'next'
-import DashboardPage from './dashboard-page'
+import DogsPage from './dogs-page'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Dashboard - PawPlate',
-  description: "Track your dog's daily nutrition",
+  title: 'My Dogs - PawPlate',
+  description: 'Manage your dogs and their feeding profiles',
 }
 
 export const viewport: Viewport = {
@@ -14,7 +14,6 @@ export const viewport: Viewport = {
   themeColor: '#000000',
 }
 
-// No server-side auth check, let client handle everything
 export default function Page() {
-  return <DashboardPage />
+  return <DogsPage />
 }

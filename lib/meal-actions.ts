@@ -270,6 +270,68 @@ export async function getDogDailyGaps(
   }
 }
 
+export interface DogMealSummary {
+  id: string
+  meal_type: MealType
+  name: string | null
+  calories: number
+  items: Array<{ name: string; grams: number }>
+}
+
+/**
+ * List a dog's meals for a date (defaults to today) for display/deletion.
+ */
+export async function getDogMeals(
+  dogId: string,
+  date?: string
+): Promise<DogMealSummary[]> {
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
+
+  const { data: dog, error: dogError } = await supabase
+    .from('dogs')
+    .select('owner_id')
+    .eq('id', dogId)
+    .single()
+
+  if (dogError) throw dogError
+  if (!dog || dog.owner_id !== user.id) throw new Error('Unauthorized')
+
+  const targetDate = date ?? new Date().toISOString().split('T')[0]
+
+  const { data: meals, error } = await supabase
+    .from('meals')
+    .select('id, meal_type, name, created_at, meal_items ( quantity, calories, food:foods ( name ) )')
+    .eq('dog_id', dogId)
+    .eq('date', targetDate)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+
+  // Supabase's nested-select typing can't express the joined shape here
+  return ((meals || []) as unknown as Array<{
+    id: string
+    meal_type: MealType
+    name: string | null
+    meal_items?: Array<{
+      quantity: number
+      calories: number | null
+      food: { name: string } | null
+    }>
+  }>).map(meal => ({
+    id: meal.id,
+    meal_type: meal.meal_type,
+    name: meal.name,
+    calories: (meal.meal_items || []).reduce(
+      (sum, item) => sum + Number(item.calories || 0),
+      0
+    ),
+    items: (meal.meal_items || []).map(item => ({
+      name: item.food?.name ?? 'Unknown ingredient',
+      grams: Number(item.quantity),
+    })),
+  }))
+}
+
 export async function deleteDogMeal(mealId: string): Promise<void> {
   if (await isGuestMode()) {
     throw new Error('Please sign in to delete meals')

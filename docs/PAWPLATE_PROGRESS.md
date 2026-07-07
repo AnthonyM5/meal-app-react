@@ -27,11 +27,17 @@ Supabase Integration below.
   values, adult + puppy; **transcribed values — needs veterinary review before
   production claims**) and `012_seed_dog_ingredients.sql` (38 ingredients incl.
   7 toxic items flagged with `is_safe_for_dogs = FALSE`).
-- Verified on local Postgres (Postgres.app) with a stubbed `auth` schema:
-  full migration chain applies cleanly, RLS enabled on all tables,
-  `fuzzy_search_foods` works (handles typos), re-apply is idempotent.
-- Since re-verified against the real hosted `pawplate` project (see below) —
-  same checks, same results, real Supabase Auth/Storage this time.
+- Verified against the live hosted `pawplate` project (see Supabase
+  Integration below): full migration chain applies cleanly via
+  `supabase db push`, RLS enabled on all tables, `fuzzy_search_foods`
+  works (handles typos), re-apply is idempotent.
+  - Historical note: the migrations were first validated on local
+    Postgres.app with a stubbed `auth` schema, before the hosted project
+    existed. That stub was a throwaway scratchpad helper — never committed
+    — and is now retired. **All migration/DB verification from here on runs
+    against the linked Supabase project** (`supabase db push`,
+    `supabase migration list`, or `psql` over the pooler), not a local
+    stub.
 
 ### Phase 2 — Deterministic nutrient engine
 - `lib/canine-nutrition.ts`: RER (70·kg^0.75), MER factor table, meal totals
@@ -75,20 +81,55 @@ Supabase Integration below.
 - Not yet built: confirmation UI (adapt `components/recipe-builder.tsx`),
   meal creation from confirmed analysis, camera capture.
 
+### Dog-centric UI + first authenticated flow (done, 2026-07-07)
+All six planned tasks are complete and verified against the live `pawplate`
+project:
+1. **Auth + RLS smoke test** — `scripts/verify-live-auth.ts` (run with
+   `set -a && source .env.local && set +a && npx tsx scripts/verify-live-auth.ts`).
+   Creates two confirmed users via the admin API (email confirmations are on
+   remotely, so UI signup can't complete headlessly), verifies the
+   `handle_new_user` trigger creates `profiles`, signs in with the anon key,
+   and proves RLS isolation on `dogs` (cross-user select/insert/update/delete
+   all blocked). 11/11 checks pass; cleans up after itself.
+2. **`/dogs` route** — `app/dogs/{page,dogs-page}.tsx` +
+   `components/dog-form.tsx` (Radix Dialog/Select/Switch). Add/edit/delete
+   with confirm dialog; each card shows life stage, activity, and the
+   computed ~kcal/day from the deterministic engine.
+3. **Per-dog dashboard** — `app/dashboard/dashboard-page.tsx` rewritten:
+   dog selector, daily kcal progress vs `dailyEnergyForDog`, nutrient
+   coverage panel (`components/nutrient-gap-bars.tsx`, status-colored bars
+   sorted problems-first), destructive alert for `unsafeIngredients`, and
+   the `requiresVetNotice` consult-your-vet notice.
+4. **Manual meal logging** — `components/dog-meal-builder.tsx`: debounced
+   ingredient search against `/api/foods/unified-search`, grams per item,
+   inline unsafe-ingredient warnings, `createDogMeal` → gaps refresh. New
+   `getDogMeals` action lists today's meals for display/deletion.
+5. **Guest mode preserved** — `/dashboard` guest banner + explore section
+   unchanged; `/dogs` added to `GUEST_ALLOWED_ROUTES` and shows a sign-in
+   banner. Guest-cookie checks moved into effects (render-time reads caused
+   React 19 hydration errors).
+6. **Cypress spec** — `cypress/e2e/dog-nutrition-flow.cy.ts` (2/2 passing):
+   sign in → add dog → log meal → assert kcal + gap bars, plus a guest-mode
+   regression test. `cypress.config.ts` gained `createTestUser`/
+   `deleteTestUser` tasks using the service-role admin API; run with env
+   sourced from `.env.local`. (Local quirk: run Cypress with
+   `env -u ELECTRON_RUN_AS_NODE` when launched from Electron-based shells.)
+
 ### Test/build state
-- `npm test`: 107/107 passing. `next build`: compiles.
+- `npm test`: 107/107 passing. `next build`: compiles (`/dogs` +
+  `/dashboard` both in the route manifest). Cypress dog flow: 2/2.
 - Pre-existing (not from this work): tsc errors in `mobile/` (deps not
   installed), `components/signup-form.tsx`, `lib/nutrition-calculator.ts`,
   and the Next 15 async-params error in `.next/types` (build has
   `ignoreBuildErrors: true`).
+- Fixed: `lib/database.types.ts` had a Supabase CLI update notice appended
+  to the generated output (broke `tsc`); removed.
 
 ## Not started
-- Phase 4 UI (bowl confirmation → meal), camera capture in `mobile/`.
+- Phase 4 UI (bowl photo → confirmation → meal), camera capture in
+  `mobile/`. This plugs into the meal path built above (a confirmed bowl
+  attaches to a dog's meal via `createDogMeal` with `source: 'photo'`).
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring).
-- Dashboard rework to per-dog nutrient gaps (UI still the human tracker).
-- Cypress specs for dog/meal/bowl flows.
-- A test user/account to exercise authenticated flows (dogs, meals) end to
-  end — verified so far via guest-mode + service-role queries only.
 
 ## Supabase integration (done)
 
