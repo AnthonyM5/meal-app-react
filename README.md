@@ -1,4 +1,4 @@
-# NutriTrack
+# PawPlate
 
 A nutrition tracking application built with Next.js, TypeScript, and Supabase.
 

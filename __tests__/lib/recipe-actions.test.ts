@@ -1,3 +1,4 @@
+import { describe, expect, test } from '@jest/globals'
 import { calculateRecipeNutrition } from '@/lib/recipe-utils'
 import type { Recipe, RecipeIngredient, Food } from '@/lib/types'
 

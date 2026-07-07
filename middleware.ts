@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server'
 const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
 
 // Routes that allow guest access
-const GUEST_ALLOWED_ROUTES = ['/dashboard', '/food-details', '/api/foods']
+const GUEST_ALLOWED_ROUTES = ['/dashboard', '/dogs', '/food-details', '/api/foods']
 
 // Check if Supabase is configured
 function isSupabaseConfigured(): boolean {

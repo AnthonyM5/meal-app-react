@@ -58,7 +58,7 @@ export default async function Home() {
     // If no user but no error, show landing page content
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center bg-[#161616] text-white">
-        <h1 className="text-4xl font-bold mb-6">Welcome to NutriTrack</h1>
+        <h1 className="text-4xl font-bold mb-6">Welcome to PawPlate</h1>
         <p className="text-xl mb-8">
           Track your nutrition and reach your health goals
         </p>

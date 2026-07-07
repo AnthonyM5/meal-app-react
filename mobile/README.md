@@ -1,6 +1,6 @@
-# NutriTrack Mobile
+# PawPlate Mobile
 
-React Native version of the NutriTrack nutrition tracking app built with Expo.
+React Native version of the PawPlate nutrition tracking app built with Expo.
 
 ## Features
 

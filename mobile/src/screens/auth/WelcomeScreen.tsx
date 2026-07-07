@@ -19,7 +19,7 @@ export function WelcomeScreen({ navigation }: any) {
         style={styles.gradient}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>NutriTrack</Text>
+          <Text style={styles.title}>PawPlate</Text>
           <Text style={styles.subtitle}>
             Track your nutrition and reach your health goals
           </Text>

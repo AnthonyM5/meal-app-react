@@ -1,7 +1,7 @@
 {
-  "name": "NutriTrack - Nutrition Tracker",
-  "short_name": "NutriTrack",
-  "description": "Track your nutrition and reach your health goals",
+  "name": "PawPlate - Fresh-Feeding Dog Nutrition",
+  "short_name": "PawPlate",
+  "description": "Track your dog's fresh-food nutrition against NRC/AAFCO targets",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

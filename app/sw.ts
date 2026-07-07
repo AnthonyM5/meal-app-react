@@ -1,5 +1,5 @@
 // Service Worker for PWA functionality
-const CACHE_NAME = "nutritrack-v1"
+const CACHE_NAME = "pawplate-v1"
 const urlsToCache = ["/", "/dashboard", "/auth/login", "/manifest.json", "/icon-192.png", "/icon-512.png"]
 
 self.addEventListener("install", (event: any) => {
