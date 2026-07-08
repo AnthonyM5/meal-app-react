@@ -34,6 +34,7 @@ import { supabase } from '@/lib/supabase/client'
 import type { Dog } from '@/lib/types'
 import {
   AlertTriangle,
+  Camera,
   Dog as DogIcon,
   Loader2,
   Pencil,
@@ -288,6 +289,12 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button asChild>
+            <Link href={`/bowl?dog=${selectedDogId ?? ''}`}>
+              <Camera className="mr-2 h-4 w-4" />
+              Log from photo
+            </Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/foods">
               <Search className="mr-2 h-4 w-4" />

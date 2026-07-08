@@ -1,8 +1,9 @@
+import { createClient as createUserClient } from '@/lib/supabase/server'
+import type { Database, Ingredient } from '@/lib/types'
 import {
   analyzeBowlImage,
   type NormalizedBowlItem,
 } from '@/lib/vision/analyze-bowl'
-import type { Database } from '@/lib/types'
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -11,6 +12,11 @@ import { type NextRequest, NextResponse } from 'next/server'
 // bowl_analyses row, and returns the structured result for the
 // confirmation UI. Corrections are saved separately via PATCH — that
 // user_corrected data is the eval / fine-tune signal; never skip it.
+//
+// AUTHORIZATION: the service-role client below bypasses RLS, so every request
+// must first be tied to an authenticated user and the target dog must be
+// verified as theirs. Middleware only guarantees a session exists — it cannot
+// stop user A from passing user B's dog_id.
 
 const BUCKET = 'bowl-photos'
 
@@ -29,6 +35,32 @@ function createSupabaseClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { cookies: { get: () => undefined, set: () => {}, remove: () => {} } }
   )
+}
+
+/** Resolve the calling user from the session cookie, or null. */
+async function getAuthenticatedUserId(): Promise<string | null> {
+  const client = await createUserClient()
+  // The guest/unconfigured DummyClient has `auth` but no `from`
+  if (!('from' in client)) return null
+  const {
+    data: { user },
+  } = await client.auth.getUser()
+  return user?.id ?? null
+}
+
+/** True when `dogId` exists and is owned by `userId`. */
+async function userOwnsDog(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  dogId: string,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('dogs')
+    .select('id')
+    .eq('id', dogId)
+    .eq('owner_id', userId)
+    .maybeSingle()
+  return !!data
 }
 
 /** Trigram-confidence floor below which a label stays unmatched. */
@@ -60,9 +92,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const userId = await getAuthenticatedUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const formData = await request.formData()
     const file = formData.get('image')
     const dogId = formData.get('dog_id')
+
+    // Authorize before validating (or reading) the upload: never do work, or
+    // leak which inputs are wrong, for a dog the caller doesn't own.
+    // Required — an analysis with no dog can't be ownership-checked on PATCH.
+    if (typeof dogId !== 'string' || !dogId) {
+      return NextResponse.json({ error: 'dog_id is required' }, { status: 400 })
+    }
+
+    const supabase = createSupabaseClient()
+
+    if (!(await userOwnsDog(supabase, dogId, userId))) {
+      return NextResponse.json({ error: 'Dog not found' }, { status: 404 })
+    }
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'image file is required' }, { status: 400 })
@@ -72,11 +122,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Unsupported image type: ${file.type}` }, { status: 400 })
     }
 
-    const supabase = createSupabaseClient()
     const bytes = Buffer.from(await file.arrayBuffer())
 
     // Store the photo (bucket must exist; create in Supabase dashboard/migration)
-    const path = `${dogId || 'anonymous'}/${Date.now()}-${file.name}`
+    const path = `${dogId}/${Date.now()}-${file.name}`
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
       .upload(path, bytes, { contentType: file.type })
@@ -106,7 +155,7 @@ export async function POST(request: NextRequest) {
     const { data: analysis, error: insertError } = await supabase
       .from('bowl_analyses')
       .insert({
-        dog_id: typeof dogId === 'string' && dogId ? dogId : null,
+        dog_id: dogId,
         image_url: imageUrl,
         model_version: modelVersion,
         raw_output: raw,
@@ -122,10 +171,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Hydrate matched ingredients in one query so the confirmation UI has the
+    // full rows (name, kcal, safety) without N client round-trips.
+    const matchedIds = identifiedItems
+      .map(item => item.normalized_ingredient_id)
+      .filter((id): id is string => !!id)
+
+    const ingredientsById = new Map<string, Ingredient>()
+    if (matchedIds.length > 0) {
+      const { data: foods } = await supabase
+        .from('foods')
+        .select('*')
+        .in('id', matchedIds)
+      for (const food of (foods || []) as Ingredient[]) {
+        ingredientsById.set(food.id, food)
+      }
+    }
+
     return NextResponse.json({
       analysis_id: analysis.id,
       image_url: imageUrl,
-      items: identifiedItems,
+      items: identifiedItems.map(item => ({
+        ...item,
+        ingredient: item.normalized_ingredient_id
+          ? ingredientsById.get(item.normalized_ingredient_id) ?? null
+          : null,
+      })),
       notes: result.notes,
     })
   } catch (error) {
@@ -144,6 +215,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     }
 
+    const userId = await getAuthenticatedUserId()
+    if (!userId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const { analysis_id, corrected_items } = await request.json()
     if (!analysis_id || !Array.isArray(corrected_items)) {
       return NextResponse.json(
@@ -153,6 +229,21 @@ export async function PATCH(request: NextRequest) {
     }
 
     const supabase = createSupabaseClient()
+
+    // The analysis must hang off a dog this user owns.
+    const { data: analysis } = await supabase
+      .from('bowl_analyses')
+      .select('id, dog_id')
+      .eq('id', analysis_id)
+      .maybeSingle()
+
+    if (
+      !analysis?.dog_id ||
+      !(await userOwnsDog(supabase, analysis.dog_id, userId))
+    ) {
+      return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
+    }
+
     const { error } = await supabase
       .from('bowl_analyses')
       .update({ user_corrected: corrected_items })

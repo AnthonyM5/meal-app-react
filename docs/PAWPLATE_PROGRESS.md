@@ -78,8 +78,7 @@ Supabase Integration below.
   persist `bowl_analyses`), PATCH (persist `user_corrected` — the eval signal).
 - Live smoke test passed: correctly identified kibble + water in a test photo,
   ~5s latency, schema-valid output.
-- Not yet built: confirmation UI (adapt `components/recipe-builder.tsx`),
-  meal creation from confirmed analysis, camera capture.
+- Confirmation UI + full photo→meal flow shipped 2026-07-08 (see below).
 
 ### Dog-centric UI + first authenticated flow (done, 2026-07-07)
 All six planned tasks are complete and verified against the live `pawplate`
@@ -196,13 +195,49 @@ detail page.
   searches by lysine (asserting descending sort), checks the empty state,
   and logs from a detail page.
 
+### Phase 4 UI — bowl photo → confirmation → meal (done, 2026-07-08)
+The vision backend finally has a user surface; live-verified against real
+Gemini (7.9 s, correct identification, confirmation UI rendered).
+- **`/bowl` route** (`app/bowl/`) — dog selector + a single file input with
+  `capture="environment"` (rear camera on mobile, file picker on desktop).
+  Uploads to `POST /api/bowl/analyze`, then hands the result to the
+  confirmation UI. Reachable from a new **"Log from photo"** button on the
+  dashboard (carries `?dog=<id>`).
+- **`components/bowl-confirmation.tsx`** — shows the photo, the model's items
+  with **percent-of-bowl + confidence** (never grams — the physics limit is
+  enforced in the UI), low-confidence items flagged amber, unmatched labels
+  blocked from submission until resolved. Owner can replace a wrong match,
+  remove an item, add a missed one, and must enter real grams. On confirm →
+  `createDogMeal(..., { source: 'photo' })` **and** `PATCH` the analysis with
+  `user_corrected` (the Phase 6 eval signal). Unsafe ingredients surface a
+  destructive alert with ASPCA guidance.
+- **Shared search hook** `hooks/use-ingredient-search.ts` — extracted the
+  debounced `unified-search` logic; both the meal builder and the bowl
+  confirmation picker use it now.
+- **Security hardening of `/api/bowl/analyze`** (the route was
+  service-role + unauthenticated at the app layer): now requires a session,
+  verifies the caller **owns the `dog_id`** on POST (checked *before* reading
+  the upload or calling Gemini — no spend on a foreign dog), and verifies
+  **analysis ownership** on PATCH. `dog_id` is now required (a dogless
+  analysis couldn't be ownership-checked). POST response is enriched with the
+  full matched ingredient rows in one `.in()` query so the client needs no
+  extra round-trips.
+- **Env-key fix**: `GEMINI_API_KEY` was failing with `API_KEY_INVALID`. Two
+  bugs: the new key had been added to `.env` as `GEMINI_KEY` (wrong name), and
+  `.env.local` still held the **old, revoked** key under the right name and
+  shadowed it (Next precedence: `.env.local` > `.env`). Consolidated the
+  validated key into `.env.local` as `GEMINI_API_KEY`; removed the misnamed
+  `.env` entry. Verified both keys by HTTP status (new 200 / old 400).
+- **Cypress** `cypress/e2e/bowl-photo-flow.cy.ts` (4/4): stubbed-Gemini happy
+  path (upload → confirm grams → asserts meal persisted with `source:'photo'`
+  and `user_corrected` PATCH sent), plus three authz tests (foreign dog → 404,
+  missing `dog_id` → 400, foreign analysis PATCH → 404). Real-Gemini pass was
+  a throwaway spec, since removed.
+
 ## Next phase (planned)
-- Phase 4 UI (bowl photo → confirmation → meal), camera capture in
-  `mobile/`. This plugs into the meal path built above (a confirmed bowl
-  attaches to a dog's meal via `createDogMeal` with `source: 'photo'`) —
-  and the meal-editing flow doubles as the correction path after a bowl
-  confirmation.
-- Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring).
+- Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
+  consumes the `user_corrected` bowl data now being captured).
+- Camera capture / bowl flow in the Expo `mobile/` app (web flow done).
 
 ## Supabase integration (done)
 

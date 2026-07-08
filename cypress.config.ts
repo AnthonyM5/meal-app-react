@@ -46,6 +46,37 @@ export default defineConfig({
           if (error) throw error
           return null
         },
+        // Insert a dog owned by an arbitrary user. Used to prove that one
+        // user cannot analyze/patch a bowl against another user's dog.
+        async createDogForUser({
+          userId,
+          name,
+        }: {
+          userId: string
+          name: string
+        }) {
+          const admin = adminClient()
+          const { data, error } = await admin
+            .from('dogs')
+            .insert({ owner_id: userId, name, weight_kg: 12 })
+            .select('id')
+            .single()
+          if (error) throw error
+          return data.id
+        },
+        // Read back the most recent meal for a dog so tests can assert the
+        // persisted `source` (e.g. 'photo') rather than just the UI text.
+        async getLatestMealForDog(dogId: string) {
+          const admin = adminClient()
+          const { data, error } = await admin
+            .from('meals')
+            .select('id, source, meal_type, date')
+            .eq('dog_id', dogId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+          if (error) throw error
+          return data?.[0] ?? null
+        },
       })
       return config
     },

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useIngredientSearch } from '@/hooks/use-ingredient-search'
 import {
   createDogMeal,
   updateDogMeal,
@@ -51,8 +52,7 @@ export function DogMealBuilder({
     () => editingMeal?.items.map(item => ({ food: item.food, grams: item.grams })) ?? []
   )
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<Food[]>([])
-  const [isSearching, setIsSearching] = useState(false)
+  const { results, isSearching } = useIngredientSearch(query)
   const [isFocused, setIsFocused] = useState(false)
   const [isLogging, setIsLogging] = useState(false)
   const searchContainerRef = useRef<HTMLDivElement>(null)
@@ -64,30 +64,6 @@ export function DogMealBuilder({
       editingMeal?.items.map(item => ({ food: item.food, grams: item.grams })) ?? []
     )
   }, [editingMeal])
-
-  useEffect(() => {
-    const searchTimeout = setTimeout(async () => {
-      if (query.length >= 2) {
-        setIsSearching(true)
-        try {
-          const response = await fetch(
-            `/api/foods/unified-search?q=${encodeURIComponent(query)}`
-          )
-          const data = await response.json()
-          setResults(data.foods || [])
-        } catch (error) {
-          console.error('Search error:', error)
-          toast.error('Failed to search ingredients')
-        } finally {
-          setIsSearching(false)
-        }
-      } else {
-        setResults([])
-      }
-    }, 300)
-
-    return () => clearTimeout(searchTimeout)
-  }, [query])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -113,8 +89,8 @@ export function DogMealBuilder({
       })
     }
     setItems(prev => [...prev, { food, grams: 100 }])
+    // Clearing the query clears results via useIngredientSearch
     setQuery('')
-    setResults([])
     setIsFocused(false)
   }
 
