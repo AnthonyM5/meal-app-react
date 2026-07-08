@@ -2,8 +2,12 @@
 //
 // Every nutrient ID below was verified against live FDC data on 2026-07-06
 // (fixture: __tests__/fixtures/usda-chicken-liver-171060.json, fdcId 171060,
-// plus Foundation egg foods for iodine). Do not add IDs from memory — fetch
-// a food with format=full and observe nutrient.id first.
+// plus Foundation egg foods for iodine). The amino-acid/B-vitamin IDs added
+// 2026-07-08 were verified against a live 8-food format=full sample (chicken
+// breast/liver, beef, salmon, egg, spinach, broccoli, sweet potato — all raw)
+// covering meats, organs, and produce; every ID below was present in all 8.
+// Do not add IDs from memory — fetch a food with format=full and observe
+// nutrient.id first.
 //
 // KNOWN LIMITATION: taurine is not reported in FDC Foundation/SR Legacy/
 // Branded responses we probed, so it is deliberately absent here. Taurine
@@ -41,9 +45,22 @@ export const USDA_CANINE_NUTRIENT_IDS = {
   VITAMIN_B12: 1178, // Vitamin B-12 (µg)
   CHOLINE: 1180, // Choline, total (mg)
   TRYPTOPHAN: 1210, // Tryptophan (g)
+  THREONINE: 1211, // Threonine (g)
+  ISOLEUCINE: 1212, // Isoleucine (g)
+  LEUCINE: 1213, // Leucine (g)
   LYSINE: 1214, // Lysine (g)
   METHIONINE: 1215, // Methionine (g)
   CYSTINE: 1216, // Cystine (g)
+  PHENYLALANINE: 1217, // Phenylalanine (g)
+  TYROSINE: 1218, // Tyrosine (g)
+  VALINE: 1219, // Valine (g)
+  ARGININE: 1220, // Arginine (g)
+  HISTIDINE: 1221, // Histidine (g)
+  THIAMIN: 1165, // Thiamin (Vitamin B1) (mg)
+  RIBOFLAVIN: 1166, // Riboflavin (Vitamin B2) (mg)
+  NIACIN: 1167, // Niacin (mg)
+  PANTOTHENIC_ACID: 1170, // Pantothenic acid (mg)
+  VITAMIN_B6: 1175, // Vitamin B-6 (mg)
   PUFA_EPA: 1278, // PUFA 20:5 n-3 (EPA) (g)
   PUFA_DHA: 1272, // PUFA 22:6 n-3 (DHA) (g)
   PUFA_LA: 1316, // PUFA 18:2 n-6 c,c — linoleic acid (g)
@@ -109,11 +126,23 @@ export interface CanineIngredientNutrients {
   vitamin_b12_mcg: number
   folate_mcg: number
   choline_mg: number
+  thiamin_mg: number
+  riboflavin_mg: number
+  niacin_mg: number
+  pantothenic_acid_mg: number
+  vitamin_b6_mg: number
   omega3_epa_dha_mg: number
   omega6_la_mg: number
   methionine_cystine_mg: number
   lysine_mg: number
   tryptophan_mg: number
+  threonine_mg: number
+  isoleucine_mg: number
+  leucine_mg: number
+  valine_mg: number
+  arginine_mg: number
+  histidine_mg: number
+  phenylalanine_tyrosine_mg: number
 }
 
 /**
@@ -160,12 +189,25 @@ export function extractCanineNutrients(
     vitamin_b12_mcg: get(ids.VITAMIN_B12),
     folate_mcg: get(ids.FOLATE_TOTAL),
     choline_mg: get(ids.CHOLINE),
+    thiamin_mg: get(ids.THIAMIN),
+    riboflavin_mg: get(ids.RIBOFLAVIN),
+    niacin_mg: get(ids.NIACIN),
+    pantothenic_acid_mg: get(ids.PANTOTHENIC_ACID),
+    vitamin_b6_mg: get(ids.VITAMIN_B6),
     // grams → mg for fatty acids and amino acids
     omega3_epa_dha_mg: (get(ids.PUFA_EPA) + get(ids.PUFA_DHA)) * 1000,
     omega6_la_mg: linoleicG * 1000,
     methionine_cystine_mg: (get(ids.METHIONINE) + get(ids.CYSTINE)) * 1000,
     lysine_mg: get(ids.LYSINE) * 1000,
     tryptophan_mg: get(ids.TRYPTOPHAN) * 1000,
+    threonine_mg: get(ids.THREONINE) * 1000,
+    isoleucine_mg: get(ids.ISOLEUCINE) * 1000,
+    leucine_mg: get(ids.LEUCINE) * 1000,
+    valine_mg: get(ids.VALINE) * 1000,
+    arginine_mg: get(ids.ARGININE) * 1000,
+    histidine_mg: get(ids.HISTIDINE) * 1000,
+    phenylalanine_tyrosine_mg:
+      (get(ids.PHENYLALANINE) + get(ids.TYROSINE)) * 1000,
   }
 }
 
@@ -208,9 +250,10 @@ export function inferPreparationState(
 export function convertUSDAToIngredient(usdaFood: USDAFoodLike) {
   const nutrients = extractCanineNutrients(usdaFood.foodNutrients)
   const safety = checkDogSafety(usdaFood.description)
-  // Foundation/SR Legacy foods report 15+ of our tracked nutrients; below
+  // Foundation/SR Legacy foods report 21+ of our 48 tracked nutrients (same
+  // ~44% bar as before the 2026-07-08 amino-acid/B-vitamin expansion); below
   // that the profile is too sparse to trust for gap math.
-  const isComplete = countExtractedNutrients(usdaFood.foodNutrients) >= 15
+  const isComplete = countExtractedNutrients(usdaFood.foodNutrients) >= 21
 
   return {
     fdc_id: usdaFood.fdcId,

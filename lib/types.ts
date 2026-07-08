@@ -38,6 +38,18 @@ export interface Food {
   methionine_cystine_mg?: number
   lysine_mg?: number
   tryptophan_mg?: number
+  threonine_mg?: number
+  isoleucine_mg?: number
+  leucine_mg?: number
+  valine_mg?: number
+  arginine_mg?: number
+  histidine_mg?: number
+  phenylalanine_tyrosine_mg?: number
+  thiamin_mg?: number
+  riboflavin_mg?: number
+  niacin_mg?: number
+  pantothenic_acid_mg?: number
+  vitamin_b6_mg?: number
   is_safe_for_dogs?: boolean
   toxicity_note?: string | null
   /** Values describe the food as fed; null = unknown/not applicable */

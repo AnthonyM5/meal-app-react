@@ -234,10 +234,59 @@ Gemini (7.9 s, correct identification, confirmation UI rendered).
   missing `dog_id` → 400, foreign analysis PATCH → 404). Real-Gemini pass was
   a throwaway spec, since removed.
 
+### USDA nutrient coverage audit + fix (done, 2026-07-08)
+Per `NUTRIENT_API_SOURCING_AND_AUDIT.md` §3. Live-audited the 34-ID extractor
+in `lib/usda-canine.ts` against a real 8-food `format=full` sample (chicken
+breast/liver, beef, salmon, egg, spinach, broccoli, sweet potato) spanning
+meats, organs, and produce.
+- **Found**: 8 of AAFCO's 10 essential amino acids (threonine, isoleucine,
+  leucine, phenylalanine, tyrosine, valine, arginine, histidine) and 5
+  B-vitamins (thiamin, riboflavin, niacin, pantothenic acid, B6) were present
+  in every sampled food but not extracted — the gap engine was silently blind
+  to deficiencies in these. Vitamin K deliberately excluded: AAFCO sets no
+  canine dietary requirement (dogs synthesize it via gut flora), same
+  treatment as taurine.
+- **Fixed**: extended `USDA_CANINE_NUTRIENT_IDS`/`extractCanineNutrients`
+  (34 → 48 tracked IDs; sparse-profile threshold scaled 15→21 to hold the same
+  ~44% bar), `lib/types.ts` `Food`, and `TRACKED_NUTRIENTS`/`NUTRIENT_LABELS`
+  in `lib/canine-nutrition.ts`. Migrations `20260708000000` (12 new `foods`
+  columns) and `20260708000100` (AAFCO 2016 requirement rows for the new
+  nutrients, adult + puppy — **same transcribed-value caveat as
+  `011_seed_nutrient_requirements.sql`, needs vet review**) applied live.
+  `__tests__/lib/usda-canine.test.ts` extended against the existing chicken-
+  liver fixture (36/36 passing).
+- **Backfilled** the 12 already-imported USDA ingredients via
+  `scripts/017_backfill_amino_and_b_vitamins.ts` (re-fetches `format=full`,
+  re-derives, updates just the new columns + `is_verified`).
+- **Live DB check**: of 50 `foods` rows, 8 curated (hand-entered, no `fdc_id`)
+  were `is_verified: false` — sparse profiles for beef kidney, ground beef,
+  chicken breast/thigh, lamb, pork tenderloin, and turkey, all raw. 7 of 8 had
+  a real Foundation/SR Legacy raw analog; imported as new verified rows via
+  `scripts/018_import_raw_counterparts.ts` (kept the curated rows rather than
+  replacing — a `meal_item` could reference one — so both coexist; kelp
+  powder, a supplement with no FDC entry, was left as the sole unverified
+  curated row). `foods` now has 57 rows, 19 USDA-sourced, all verified.
+- **Also found, not touched**: `lib/usda-api.ts`, `lib/usda-integration.ts`,
+  `lib/enhanced-food-actions.ts`, `components/enhanced-food-search.tsx`,
+  `app/api/usda-search/route.ts`, and `scripts/import-popular-foods.ts` /
+  `optimized-bulk-import.ts` are leftover NutriTrack (human-nutrition) era
+  code — a shallower 5–12-nutrient extractor, no dog-safety pass, no
+  raw/cooked labeling — and are **unreachable from the app** (grep confirms
+  no import path from any routed page). Candidates for deletion whenever
+  there's appetite for cleanup; left alone this session since it wasn't
+  the ask.
+- **Deferred**: persisting the raw `format=full` JSON response before
+  extraction (handoff §3.4) so future nutrient-map expansions don't require
+  re-fetching from USDA — a real structural improvement, but out of scope for
+  this pass; flagging for a future session.
+
 ## Next phase (planned)
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
 - Camera capture / bowl flow in the Expo `mobile/` app (web flow done).
+- Persist raw USDA `format=full` responses before extraction (audit doc §3.4).
+- Vet review of all AAFCO-sourced `nutrient_requirements` values (25 original
+  + 12 new amino-acid/B-vitamin rows).
 
 ## Supabase integration (done)
 

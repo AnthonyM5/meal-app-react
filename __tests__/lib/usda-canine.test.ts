@@ -47,6 +47,22 @@ describe('extractCanineNutrients (against captured USDA fixture)', () => {
     expect(nutrients.methionine_cystine_mg).toBeCloseTo(704)
     expect(nutrients.lysine_mg).toBeCloseTo(1332)
     expect(nutrients.tryptophan_mg).toBeCloseTo(176)
+    expect(nutrients.threonine_mg).toBeCloseTo(725)
+    expect(nutrients.isoleucine_mg).toBeCloseTo(813)
+    expect(nutrients.leucine_mg).toBeCloseTo(1512)
+    expect(nutrients.valine_mg).toBeCloseTo(998)
+    expect(nutrients.arginine_mg).toBeCloseTo(1093)
+    expect(nutrients.histidine_mg).toBeCloseTo(507)
+    // Phenylalanine 0.824 g + Tyrosine 0.653 g = 1477 mg
+    expect(nutrients.phenylalanine_tyrosine_mg).toBeCloseTo(1477)
+  })
+
+  test('B-vitamins extracted', () => {
+    expect(nutrients.thiamin_mg).toBeCloseTo(0.305)
+    expect(nutrients.riboflavin_mg).toBeCloseTo(1.778)
+    expect(nutrients.niacin_mg).toBeCloseTo(9.728)
+    expect(nutrients.pantothenic_acid_mg).toBeCloseTo(6.233)
+    expect(nutrients.vitamin_b6_mg).toBeCloseTo(0.853)
   })
 
   test('fatty acids: EPA+DHA summed, LA prefers the n-6 isomer', () => {

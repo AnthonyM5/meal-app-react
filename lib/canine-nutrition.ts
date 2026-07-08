@@ -48,6 +48,18 @@ export const TRACKED_NUTRIENTS = [
   'methionine_cystine_mg',
   'lysine_mg',
   'tryptophan_mg',
+  'threonine_mg',
+  'isoleucine_mg',
+  'leucine_mg',
+  'valine_mg',
+  'arginine_mg',
+  'histidine_mg',
+  'phenylalanine_tyrosine_mg',
+  'thiamin_mg',
+  'riboflavin_mg',
+  'niacin_mg',
+  'pantothenic_acid_mg',
+  'vitamin_b6_mg',
 ] as const
 
 export type NutrientKey = (typeof TRACKED_NUTRIENTS)[number]
@@ -85,6 +97,18 @@ export const NUTRIENT_LABELS: Record<NutrientKey, string> = {
   methionine_cystine_mg: 'Methionine + Cystine',
   lysine_mg: 'Lysine',
   tryptophan_mg: 'Tryptophan',
+  threonine_mg: 'Threonine',
+  isoleucine_mg: 'Isoleucine',
+  leucine_mg: 'Leucine',
+  valine_mg: 'Valine',
+  arginine_mg: 'Arginine',
+  histidine_mg: 'Histidine',
+  phenylalanine_tyrosine_mg: 'Phenylalanine + Tyrosine',
+  thiamin_mg: 'Thiamin (B1)',
+  riboflavin_mg: 'Riboflavin (B2)',
+  niacin_mg: 'Niacin (B3)',
+  pantothenic_acid_mg: 'Pantothenic Acid (B5)',
+  vitamin_b6_mg: 'Vitamin B6',
 }
 
 /** Display unit derived from the column's naming convention (per 100 g). */
