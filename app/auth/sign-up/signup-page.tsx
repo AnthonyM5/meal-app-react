@@ -1,9 +1,32 @@
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import SignUpForm from '@/components/signup-form'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { Database } from '@/lib/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { Metadata, Viewport } from 'next'
+import { redirect } from 'next/navigation'
+
+function SignUpCard() {
+  return (
+    <div className="container mx-auto flex h-screen w-screen flex-col items-center justify-center">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Create an account</CardTitle>
+          <CardDescription>Sign up to get started</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SignUpForm />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
 
 export const metadata: Metadata = {
   title: 'Sign Up - Meal Tracker',
@@ -33,8 +56,8 @@ export default async function SignUpPage() {
   // If Supabase is not configured, show setup message
   if (!isSupabaseConfigured) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616]">
-        <h1 className="text-2xl font-bold mb-4 text-white">
+      <div className="flex min-h-screen items-center justify-center bg-[#1B5E20]">
+        <h1 className="mb-4 text-2xl font-bold text-white">
           Connect Supabase to get started
         </h1>
       </div>
@@ -46,11 +69,7 @@ export default async function SignUpPage() {
     const client = await createClient()
     if (isDummyClient(client)) {
       console.warn('Database client not properly initialized')
-      return (
-        <div className="flex min-h-screen items-center justify-center bg-[#161616] px-4 py-12 sm:px-6 lg:px-8">
-          <SignUpForm />
-        </div>
-      )
+      return <SignUpCard />
     }
 
     const {
@@ -66,11 +85,7 @@ export default async function SignUpPage() {
     }
 
     // Show sign up form
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616] px-4 py-12 sm:px-6 lg:px-8">
-        <SignUpForm />
-      </div>
-    )
+    return <SignUpCard />
   } catch (error) {
     // Only log non-redirect errors
     if (!(error as Error)?.message?.includes('NEXT_REDIRECT')) {
@@ -78,10 +93,6 @@ export default async function SignUpPage() {
     }
 
     // Show sign up form even if we fail to check auth
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616] px-4 py-12 sm:px-6 lg:px-8">
-        <SignUpForm />
-      </div>
-    )
+    return <SignUpCard />
   }
 }

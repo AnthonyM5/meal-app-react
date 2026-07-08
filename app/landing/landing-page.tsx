@@ -23,8 +23,8 @@ export default async function Home() {
   // If Supabase is not configured, show setup message
   if (!isSupabaseConfigured) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#161616]">
-        <h1 className="text-2xl font-bold mb-4 text-white">
+      <div className="flex min-h-screen items-center justify-center bg-[#1B5E20]">
+        <h1 className="mb-4 text-2xl font-bold text-white">
           Connect Supabase to get started
         </h1>
       </div>
@@ -57,29 +57,42 @@ export default async function Home() {
 
     // If no user but no error, show landing page content
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center bg-[#161616] text-white">
-        <h1 className="text-4xl font-bold mb-6">Welcome to PawPlate</h1>
-        <p className="text-xl mb-8">
-          Track your nutrition and reach your health goals
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#1B5E20] p-6 text-center text-white">
+        <span className="mb-6 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-white shadow-lg">
+          <img
+            src="/icon-192.png"
+            alt="PawPlate"
+            className="h-16 w-16 object-contain"
+          />
+        </span>
+
+        <h1 className="mb-5 font-display text-4xl font-bold leading-tight tracking-tight text-white">
+          Welcome to PawPlate
+        </h1>
+        <p className="mb-8 max-w-sm text-lg text-white/75">
+          Track your dog&apos;s nutrition and reach their health goals.
         </p>
 
-        <div className="flex flex-col gap-4 w-full max-w-xs">
+        <div className="flex w-full max-w-xs flex-col gap-3">
           <Link href="/auth/login" className="w-full">
-            <Button variant="default" className="w-full">
+            <Button className="h-11 w-full bg-[#FFB74D] text-base font-semibold text-[#1F2937] hover:bg-[#F0A32E]">
               Sign In
             </Button>
           </Link>
 
           <Link href="/auth/sign-up" className="w-full">
-            <Button variant="outline" className="w-full">
+            <Button
+              variant="outline"
+              className="h-11 w-full border-white/40 bg-transparent text-base font-semibold text-white hover:border-white/70 hover:bg-white/10 hover:text-white"
+            >
               Create Account
             </Button>
           </Link>
 
-          <GuestModeButton />
+          <GuestModeButton className="text-white/85 hover:bg-white/10 hover:text-white" />
         </div>
 
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="mt-5 max-w-sm text-sm text-white/50">
           Guest users can search and view nutrition information. Create an
           account to track meals and save favorites.
         </p>

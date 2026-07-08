@@ -4,35 +4,39 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
+    /* PawPlate brand palette (green/Fraunces). Values are HSL triplets the
+       shadcn/Tailwind theme consumes via hsl(var(--token)). Derived from the
+       design-system tokens: green #2E7D32, warm bg #FAF9F6, rose #F48FB1. */
+    --background: 45 29% 97%; /* warm off-white #FAF9F6 */
+    --foreground: 215 28% 17%; /* slate #1F2937 */
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
+    --card-foreground: 215 28% 17%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
+    --popover-foreground: 215 28% 17%;
 
-    --primary: 0 0% 0%;
+    --primary: 123 46% 34%; /* green #2E7D32 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 20%;
+    --secondary: 45 20% 94%; /* soft warm neutral */
+    --secondary-foreground: 215 28% 17%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 45 16% 95%;
+    --muted-foreground: 220 9% 46%; /* #6B7280 */
 
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 20%;
+    --accent: 122 39% 94%; /* green tint #E8F5E9 — hover surface */
+    --accent-foreground: 124 55% 24%; /* green-dark #1B5E20 */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 340 68% 68%; /* rose #F48FB1 (deepened for legibility) */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 0%;
+    --border: 220 13% 91%; /* #E5E7EB */
+    --input: 220 13% 91%;
+    --ring: 123 46% 34%; /* green focus ring */
 
-    --radius: 0.5rem;
+    /* Rounder brand radius: cards rounded-lg=14px, controls rounded-md=12px */
+    --radius: 0.875rem;
   }
 
   .dark {
@@ -71,6 +75,13 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+  /* Fraunces (soft serif) for headings; Inter for everything else. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+    letter-spacing: -0.02em;
   }
 }

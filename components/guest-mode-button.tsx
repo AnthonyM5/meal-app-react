@@ -1,10 +1,11 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-export function GuestModeButton() {
+export function GuestModeButton({ className }: { className?: string }) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -29,7 +30,7 @@ export function GuestModeButton() {
   return (
     <Button
       variant="ghost"
-      className="w-full"
+      className={cn('w-full', className)}
       onClick={handleGuestMode}
       disabled={isLoading}
     >
