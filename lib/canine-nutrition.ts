@@ -5,12 +5,13 @@
 // arithmetic from the structured nutrient store. No LLM, no network —
 // keep it that way.
 
-import type {
-  Dog,
-  DogActivityLevel,
-  DogLifeStage,
-  Ingredient,
-  NutrientRequirement,
+import {
+  BRANDED_SOURCES,
+  type Dog,
+  type DogActivityLevel,
+  type DogLifeStage,
+  type Ingredient,
+  type NutrientRequirement,
 } from '@/lib/types'
 
 // ---------------------------------------------------------------------------
@@ -220,6 +221,43 @@ export interface MealItemInput {
   ingredient: Ingredient
 }
 
+/**
+ * Macronutrients that branded (OFF/FatSecret) products report reliably and
+ * that therefore DO count toward gap math even for branded items. Every other
+ * tracked nutrient is a micronutrient — see `contributesMicros`.
+ */
+const MACRO_KEYS: ReadonlySet<NutrientKey> = new Set<NutrientKey>([
+  'protein_g',
+  'fat_g',
+])
+
+/**
+ * Per §6 of BRANDED_INGREDIENTS_DESIGN.md: branded sources' micronutrient data
+ * is not trustworthy, so it is excluded from the deterministic gap engine.
+ * Their macros and calories still count (for energy/protein/fat tracking).
+ */
+function contributesMicros(ingredient: Ingredient): boolean {
+  return !BRANDED_SOURCES.includes(ingredient.source ?? 'curated')
+}
+
+/** How many meal items supplied real data for a nutrient vs. were excluded. */
+export interface NutrientContribution {
+  /** Items that contributed a real (non-null, source-trusted) value */
+  counted: number
+  /** Items excluded because branded (micros) or the value was null/unreported */
+  excluded: number
+}
+
+export type NutrientCoverage = Partial<
+  Record<NutrientKey, NutrientContribution>
+>
+
+export interface MealNutrients {
+  totals: NutrientTotals
+  /** Per-nutrient data coverage, so gaps can flag unmeasured nutrients */
+  coverage: NutrientCoverage
+}
+
 function emptyTotals(): NutrientTotals {
   const totals = { calories: 0 } as NutrientTotals
   for (const key of TRACKED_NUTRIENTS) totals[key] = 0
@@ -229,19 +267,49 @@ function emptyTotals(): NutrientTotals {
 /**
  * Sum every tracked nutrient across meal items. Ingredient values are
  * per `serving_size` grams (100 g by convention), so scale by grams.
+ *
+ * Two rules make branded data safe (BRANDED_INGREDIENTS_DESIGN.md §6):
+ *  - **Missing ≠ zero**: a `null`/`undefined` nutrient value is skipped, not
+ *    treated as 0 — so an unreported nutrient doesn't fabricate a deficiency.
+ *  - **Branded micros excluded**: branded (OFF/FatSecret) items contribute
+ *    only macros + calories; their micronutrients are not summed.
+ *
+ * `coverage` records, per nutrient, how many items actually contributed so a
+ * bowl made only of branded/incomplete items reads as *unmeasured* rather than
+ * *deficient*.
  */
-export function computeMealNutrients(items: MealItemInput[]): NutrientTotals {
+export function computeMealNutrients(items: MealItemInput[]): MealNutrients {
   const totals = emptyTotals()
+  const coverage: NutrientCoverage = {}
+  for (const key of TRACKED_NUTRIENTS) coverage[key] = { counted: 0, excluded: 0 }
+
   for (const { grams, ingredient } of items) {
     if (grams < 0) throw new Error('grams cannot be negative')
     const servingSize = Number(ingredient.serving_size) || 100
     const scale = grams / servingSize
     totals.calories += Number(ingredient.calories_per_serving || 0) * scale
+
+    const itemContributesMicros = contributesMicros(ingredient)
     for (const key of TRACKED_NUTRIENTS) {
-      totals[key] += Number(ingredient[key] ?? 0) * scale
+      const cov = coverage[key]!
+      const raw = ingredient[key]
+      const isMacro = MACRO_KEYS.has(key)
+
+      // Branded items don't contribute micronutrients to gap math.
+      if (!isMacro && !itemContributesMicros) {
+        cov.excluded++
+        continue
+      }
+      // Missing ≠ zero: skip null/undefined rather than adding 0.
+      if (raw == null) {
+        cov.excluded++
+        continue
+      }
+      totals[key] += Number(raw) * scale
+      cov.counted++
     }
   }
-  return totals
+  return { totals, coverage }
 }
 
 /** Ingredients flagged unsafe for dogs — surface these before any math. */
@@ -324,6 +392,7 @@ export type GapStatus =
   | 'excess'
   | 'toxic_risk'
   | 'informational'
+  | 'unmeasured'
 
 export interface NutrientGap {
   nutrientKey: NutrientKey
@@ -334,27 +403,48 @@ export interface NutrientGap {
   /** percent of daily target; null when there is no formal target */
   pct: number | null
   status: GapStatus
+  /** True when no meal item supplied trustworthy data for this nutrient */
+  unmeasured?: boolean
 }
 
 // Classification thresholds (fractions of daily target)
 const DEFICIENT_BELOW = 0.9
 const EXCESS_ABOVE = 1.5
 
+/**
+ * Classify each nutrient against the dog's targets.
+ *
+ * When `coverage` is supplied, a nutrient that no item reported (all
+ * contributors branded or null) is marked `unmeasured` instead of being
+ * reported as a deficiency at consumed=0 — a bowl of only branded toppers must
+ * not read as "deficient in everything." A safe-upper-bound breach is always
+ * honored even if partially measured, since observed intake alone can be toxic.
+ */
 export function computeGaps(
   totals: NutrientTotals,
-  dogTargets: DogTargets
+  dogTargets: DogTargets,
+  coverage?: NutrientCoverage
 ): Partial<Record<NutrientKey, NutrientGap>> {
   const gaps: Partial<Record<NutrientKey, NutrientGap>> = {}
 
   for (const target of Object.values(dogTargets.targets)) {
     const consumed = totals[target.nutrientKey] ?? 0
+    const cov = coverage?.[target.nutrientKey]
+    // Only "unmeasured" when items were present but all excluded (branded
+    // micros / null values). A truly empty meal (nothing excluded) stays
+    // deficient — the dog ate nothing, that's a real gap, not missing data.
+    const unmeasured = cov != null && cov.counted === 0 && cov.excluded > 0
     let status: GapStatus
     let pct: number | null = null
 
     if (target.dailyMax != null && consumed > target.dailyMax) {
-      // Safe upper bound breached (critical for calcium, vitamin D)
+      // Safe upper bound breached (critical for calcium, vitamin D) — a real
+      // observed excess is dangerous regardless of coverage.
       status = 'toxic_risk'
       if (target.dailyTarget) pct = (consumed / target.dailyTarget) * 100
+    } else if (unmeasured) {
+      // No trustworthy contributor — can't judge deficiency, don't fake one.
+      status = 'unmeasured'
     } else if (target.dailyTarget == null) {
       status = 'informational'
     } else {
@@ -372,6 +462,7 @@ export function computeGaps(
       unit: target.unit,
       pct: pct != null ? Math.round(pct * 10) / 10 : null,
       status,
+      unmeasured: unmeasured || undefined,
     }
   }
   return gaps
