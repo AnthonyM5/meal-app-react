@@ -275,10 +275,23 @@ meats, organs, and produce.
   no import path from any routed page). Candidates for deletion whenever
   there's appetite for cleanup; left alone this session since it wasn't
   the ask.
-- **Deferred**: persisting the raw `format=full` JSON response before
-  extraction (handoff §3.4) so future nutrient-map expansions don't require
-  re-fetching from USDA — a real structural improvement, but out of scope for
-  this pass; flagging for a future session.
+- **Audit deliverables written** (2026-07-08, second pass) under `audits/`:
+  - `usda-nutrient-coverage.md` + `.json` (AC #1) — 20-food live diff of mapped
+    vs. available nutrients, every unmapped field classified. Headline: **no
+    AAFCO-required canine nutrient is being dropped** post-expansion; only soft
+    candidate is moisture/water (1051) for dry-matter-basis math.
+  - `usda-food-coverage.md` (AC #3) — corpus coverage **19 / 8187 = 0.23%** of
+    Foundation+SR Legacy, framed as by-design (curated importer, not bulk load).
+  - `usda-nonnutrient-fields.md` (AC #4) — keep/discard decision per non-nutrient
+    `format=full` field. Top future adds: `foodPortions` (household units),
+    `dataType`, `foodCategory`, `publicationDate`.
+- **Audit AC status**: #1 ✅, #3 ✅, #4 ✅ done. **Remaining**: #2 (30-staple
+  raw/cooked gap table — larger, needs a staple list + classifier) and #5
+  (raw-JSON persistence, §3.4). OFF/FatSecret fallback sources (§2) not started.
+- **Deferred**: §3.4 raw `format=full` JSON persistence before extraction, so
+  future nutrient-map expansions and non-nutrient field adds don't require
+  re-fetching from USDA — the structural fix that would also make AC #4's
+  recommended fields cheap to capture. Flagged for a future session.
 
 ## Next phase (planned)
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
