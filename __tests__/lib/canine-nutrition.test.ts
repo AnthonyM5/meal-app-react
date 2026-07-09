@@ -103,7 +103,7 @@ describe('dailyEnergyForDog', () => {
 
 describe('computeMealNutrients', () => {
   test('empty meal returns all zeros', () => {
-    const totals = computeMealNutrients([])
+    const { totals } = computeMealNutrients([])
     expect(totals.calories).toBe(0)
     for (const key of TRACKED_NUTRIENTS) expect(totals[key]).toBe(0)
   })
@@ -115,7 +115,7 @@ describe('computeMealNutrients', () => {
       calcium_mg: 5,
       taurine_mg: 18,
     })
-    const totals = computeMealNutrients([{ grams: 200, ingredient: chicken }])
+    const { totals } = computeMealNutrients([{ grams: 200, ingredient: chicken }])
     expect(totals.calories).toBeCloseTo(240)
     expect(totals.protein_g).toBeCloseTo(45)
     expect(totals.calcium_mg).toBeCloseTo(10)
@@ -142,7 +142,7 @@ describe('computeMealNutrients', () => {
     // prot:  19.7*1.5 + 2.3*0.5 = 29.55 + 1.15 = 30.7
     // phos:  185*1.5 + 77*0.5 = 277.5 + 38.5 = 316
     // ca:    9*1.5 + 10*0.5 = 13.5 + 5 = 18.5
-    const totals = computeMealNutrients([
+    const { totals } = computeMealNutrients([
       { grams: 150, ingredient: chickenThigh },
       { grams: 50, ingredient: rice },
     ])
@@ -152,11 +152,67 @@ describe('computeMealNutrients', () => {
     expect(totals.calcium_mg).toBeCloseTo(18.5)
   })
 
-  test('missing nutrient columns are treated as zero', () => {
-    const bare = makeIngredient({ calories_per_serving: 50 })
-    const totals = computeMealNutrients([{ grams: 100, ingredient: bare }])
+  test('missing (null/undefined) nutrient is skipped, not counted as zero', () => {
+    // taurine explicitly null (unreported) vs vitamin_d_iu simply absent
+    const bare = makeIngredient({
+      calories_per_serving: 50,
+      taurine_mg: null as unknown as number,
+    })
+    const { totals, coverage } = computeMealNutrients([
+      { grams: 100, ingredient: bare },
+    ])
+    // totals still 0 (nothing added), but coverage records it as excluded,
+    // not counted — so gaps can tell "no data" from "measured zero".
     expect(totals.taurine_mg).toBe(0)
-    expect(totals.vitamin_d_iu).toBe(0)
+    expect(coverage.taurine_mg).toEqual({ counted: 0, excluded: 1 })
+    expect(coverage.vitamin_d_iu).toEqual({ counted: 0, excluded: 1 })
+  })
+
+  test('branded item contributes macros + calories but NOT micronutrients', () => {
+    const brandedTopper = makeIngredient({
+      name: 'The Farmer\'s Dog Turkey Recipe',
+      source: 'off',
+      is_complete_food: true,
+      calories_per_serving: 150,
+      protein_g: 9,
+      fat_g: 8,
+      // OFF happened to report calcium — but branded micros are NOT trusted
+      calcium_mg: 40,
+      taurine_mg: 12,
+    })
+    const { totals, coverage } = computeMealNutrients([
+      { grams: 100, ingredient: brandedTopper },
+    ])
+    expect(totals.calories).toBeCloseTo(150)
+    expect(totals.protein_g).toBeCloseTo(9) // macro counts
+    expect(totals.fat_g).toBeCloseTo(8) // macro counts
+    expect(totals.calcium_mg).toBe(0) // micro excluded despite being reported
+    expect(totals.taurine_mg).toBe(0)
+    expect(coverage.protein_g).toEqual({ counted: 1, excluded: 0 })
+    expect(coverage.calcium_mg).toEqual({ counted: 0, excluded: 1 })
+  })
+
+  test('USDA + branded mix: micros come only from the USDA item', () => {
+    const chicken = makeIngredient({
+      source: 'usda',
+      calories_per_serving: 120,
+      protein_g: 22,
+      calcium_mg: 10,
+    })
+    const topper = makeIngredient({
+      source: 'off',
+      calories_per_serving: 100,
+      protein_g: 5,
+      calcium_mg: 999, // must be ignored
+    })
+    const { totals, coverage } = computeMealNutrients([
+      { grams: 100, ingredient: chicken },
+      { grams: 100, ingredient: topper },
+    ])
+    expect(totals.calories).toBeCloseTo(220) // both
+    expect(totals.protein_g).toBeCloseTo(27) // both (macro)
+    expect(totals.calcium_mg).toBeCloseTo(10) // USDA only
+    expect(coverage.calcium_mg).toEqual({ counted: 1, excluded: 1 })
   })
 })
 
@@ -223,7 +279,7 @@ describe('computeGaps', () => {
   const kcalFactor = dogTargets.dailyKcal / 1000
 
   const totalsWith = (overrides: Partial<Record<string, number>>) => {
-    const totals = computeMealNutrients([])
+    const { totals } = computeMealNutrients([])
     return Object.assign(totals, overrides)
   }
 
@@ -276,8 +332,33 @@ describe('computeGaps', () => {
   })
 
   test('empty meal is deficient across formal targets', () => {
-    const gaps = computeGaps(computeMealNutrients([]), dogTargets)
+    const { totals, coverage } = computeMealNutrients([])
+    const gaps = computeGaps(totals, dogTargets, coverage)
+    // Nothing was excluded (no items at all) → a real gap, not "unmeasured"
     expect(gaps.protein_g?.status).toBe('deficient')
+    expect(gaps.vitamin_d_iu?.status).toBe('deficient')
+  })
+
+  test('branded-only bowl reads micros as unmeasured, not deficient', () => {
+    const topper = makeIngredient({
+      source: 'off',
+      calories_per_serving: 150,
+      protein_g: 40, // macro still measured
+      vitamin_d_iu: 500, // reported by OFF but not trusted → excluded
+    })
+    const { totals, coverage } = computeMealNutrients([
+      { grams: 100, ingredient: topper },
+    ])
+    const gaps = computeGaps(totals, dogTargets, coverage)
+    // Vitamin D (a micro) had a branded contributor excluded → unmeasured
+    expect(gaps.vitamin_d_iu?.status).toBe('unmeasured')
+    expect(gaps.vitamin_d_iu?.unmeasured).toBe(true)
+    // Protein is a macro → still judged normally (here, well over target)
+    expect(gaps.protein_g?.status).not.toBe('unmeasured')
+  })
+
+  test('without coverage arg, behavior is unchanged (deficient at zero)', () => {
+    const gaps = computeGaps(totalsWith({}), dogTargets)
     expect(gaps.vitamin_d_iu?.status).toBe('deficient')
   })
 })
@@ -285,7 +366,7 @@ describe('computeGaps', () => {
 describe('calculateDailyProgress', () => {
   test('produces a rounded percent map keyed by nutrient', () => {
     const dogTargets = computeTargets(adultDog, [makeRequirement({})])
-    const totals = computeMealNutrients([])
+    const { totals } = computeMealNutrients([])
     totals.protein_g = (dogTargets.targets.protein_g?.dailyTarget ?? 0) * 0.75
     const progress = calculateDailyProgress(computeGaps(totals, dogTargets))
     expect(progress.protein_g).toBe(75)
@@ -309,10 +390,10 @@ describe('safety helpers', () => {
   })
 
   test('calciumPhosphorusRatio computes Ca:P', () => {
-    const totals = computeMealNutrients([])
+    const { totals } = computeMealNutrients([])
     totals.calcium_mg = 1200
     totals.phosphorus_mg = 1000
     expect(calciumPhosphorusRatio(totals)).toBeCloseTo(1.2)
-    expect(calciumPhosphorusRatio(computeMealNutrients([]))).toBeNull()
+    expect(calciumPhosphorusRatio(computeMealNutrients([]).totals)).toBeNull()
   })
 })

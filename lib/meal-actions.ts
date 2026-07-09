@@ -146,7 +146,7 @@ export async function createDogMeal(
   if ((dog as Dog).owner_id !== user.id) throw new Error('Unauthorized')
 
   const mealItems = await loadIngredients(supabase, items)
-  const totals = computeMealNutrients(mealItems)
+  const { totals, coverage } = computeMealNutrients(mealItems)
 
   const date = options.date ?? new Date().toISOString().split('T')[0]
 
@@ -194,7 +194,7 @@ export async function createDogMeal(
 
   const requirements = await loadRequirements(supabase)
   const dogTargets = computeTargets(energyInputsFromDog(dog as Dog), requirements)
-  const gaps = computeGaps(totals, dogTargets)
+  const gaps = computeGaps(totals, dogTargets, coverage)
 
   revalidatePath('/dashboard')
 
@@ -305,7 +305,7 @@ export async function updateDogMeal(
 
   const dog = typedMeal.dogs
   const mealItems = await loadIngredients(supabase, items)
-  const totals = computeMealNutrients(mealItems)
+  const { totals, coverage } = computeMealNutrients(mealItems)
 
   // Keep the old items so a failed insert can be rolled back instead of
   // leaving the meal with no items.
@@ -361,7 +361,7 @@ export async function updateDogMeal(
 
   const requirements = await loadRequirements(supabase)
   const dogTargets = computeTargets(energyInputsFromDog(dog), requirements)
-  const gaps = computeGaps(totals, dogTargets)
+  const gaps = computeGaps(totals, dogTargets, coverage)
 
   revalidatePath('/dashboard')
 
@@ -420,14 +420,14 @@ export async function getDogDailyGaps(
     }
   }
 
-  const totals = computeMealNutrients(mealItems)
+  const { totals, coverage } = computeMealNutrients(mealItems)
   const requirements = await loadRequirements(supabase)
   const dogTargets = computeTargets(energyInputsFromDog(dog as Dog), requirements)
 
   return {
     dailyKcal: dogTargets.dailyKcal,
     totalKcal: totals.calories,
-    gaps: computeGaps(totals, dogTargets),
+    gaps: computeGaps(totals, dogTargets, coverage),
     unsafeIngredients: findUnsafeIngredients(mealItems).map(ing => ({
       id: ing.id,
       name: ing.name,

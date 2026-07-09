@@ -55,9 +55,35 @@ export interface Food {
   /** Values describe the food as fed; null = unknown/not applicable */
   preparation_state?: PreparationState | null
   is_verified: boolean
+  // --- Provenance / branded-ingredient support (PawPlate) ---
+  /** Where this row came from. Defaults are backfilled from fdc_id. */
+  source?: IngredientSource
+  /** EAN/UPC for branded products; dedupe key for OFF/FatSecret imports */
+  barcode?: string | null
+  /** Source's own product id (OFF code, FatSecret food_id) */
+  external_id?: string | null
+  /** Required attribution string (e.g. ODbL credit for OFF data) */
+  source_attribution?: string | null
+  /** Branded complete meal logged as one line item, not decomposed */
+  is_complete_food?: boolean
+  /** How much of the nutrient profile is actually reported */
+  data_completeness?: DataCompleteness
 }
 
 export type PreparationState = 'raw' | 'cooked'
+
+/** Provenance of an ingredient row. Branded = 'off' | 'fatsecret'. */
+export type IngredientSource =
+  | 'usda'
+  | 'curated'
+  | 'off'
+  | 'fatsecret'
+  | 'manual'
+
+export type DataCompleteness = 'full' | 'macros_only' | 'sparse'
+
+/** Sources whose micronutrient data is NOT trusted for gap math (§6). */
+export const BRANDED_SOURCES: readonly IngredientSource[] = ['off', 'fatsecret']
 
 // The physical table is still named `foods` (renaming would ripple through
 // the USDA importer and the fuzzy_search_foods RPC); PawPlate exposes it
