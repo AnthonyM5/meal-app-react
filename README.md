@@ -24,7 +24,7 @@ The core design constraint: **no LLM ever touches the nutrient math.** A vision 
 - **Dog profiles** — weight, ideal weight, life stage, activity level, neuter status, health conditions → individualized daily energy targets.
 - **Ingredient database** — USDA FoodData Central import with raw/cooked preparation-state awareness, plus hand-curated entries USDA doesn't carry.
 - **Fuzzy ingredient search** — typo-tolerant trigram search, plus search-by-nutrient ("find foods high in lysine").
-- **Guest mode** — browse ingredients, search by nutrient, and run a rate-limited bowl scan without an account. Nothing is written; the gap analysis needs a dog.
+- **Guest mode** — browse ingredients without an account.
 
 ### Tech Stack
 
