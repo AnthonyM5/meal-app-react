@@ -77,6 +77,27 @@ Nutrient data is heterogeneous: USDA whole foods report ~everything, branded pro
 
 `/api/bowl/analyze` uses a service-role Supabase client that bypasses RLS, so it performs its own authorization: dog ownership is verified **before** the upload is read or the vision model is called. Middleware only guarantees a session exists — it can't stop user A from passing user B's `dog_id`.
 
+### Guest mode
+
+Guests can browse ingredients, search by nutrient, and run a bowl scan. The scan
+is deliberately reduced: ingredients are identified and unsafe ones are flagged,
+but **nothing is written** — no photo upload, no `bowl_analyses` row, no
+`analysis_id`, and no meal. The gap analysis needs a dog's weight and life stage,
+so it lives behind sign-up.
+
+`guestMode` is a **client-set cookie**, which means the guest branch of
+`/api/bowl/analyze` is, in practice, an unauthenticated public endpoint that
+spends money on every call (one Gemini vision request). It is metered per client
+IP via `consume_guest_bowl_quota` — an atomic Postgres upsert, because a
+read-then-write in the application layer would let concurrent requests both pass
+the check. IPs are stored only as a salted SHA-256. The limiter **fails closed**:
+if the database is unreachable, or the client IP can't be determined, the scan is
+denied rather than served for free.
+
+> The IP is read from `x-real-ip` / `x-forwarded-for`, which is trustworthy only
+> behind a proxy that overwrites those headers (Vercel does). Served directly to
+> the internet, the limit is decorative.
+
 ### Fuzzy ingredient search
 
 1. **`pg_trgm` extension** for trigram text similarity — tolerates typos and partial matches.
@@ -109,6 +130,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key   # server-only; bowl analysis + imports
 GEMINI_API_KEY=your_gemini_api_key                # server-only; bowl photo analysis
 NEXT_PUBLIC_USDA_API_KEY=your_usda_fdc_key        # ingredient imports
+
+# Optional — guest bowl scan metering (see "Guest mode" below)
+GUEST_RATE_LIMIT_SALT=any_long_random_string      # falls back to the service-role key
+GUEST_BOWL_DAILY_LIMIT=3                          # guest scans per IP per day
 ```
 
 > `.env.local` takes precedence over `.env` in Next.js. The variable names above are exact — a mismatched name fails silently at runtime (the bowl route returns a 503).

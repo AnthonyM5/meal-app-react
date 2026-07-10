@@ -1,3 +1,7 @@
+import {
+  GUEST_BOWL_DAILY_LIMIT,
+  consumeGuestBowlQuota,
+} from '@/lib/guest-rate-limit'
 import { createClient as createUserClient } from '@/lib/supabase/server'
 import type { Database, Ingredient } from '@/lib/types'
 import {
@@ -13,12 +17,58 @@ import { type NextRequest, NextResponse } from 'next/server'
 // confirmation UI. Corrections are saved separately via PATCH — that
 // user_corrected data is the eval / fine-tune signal; never skip it.
 //
-// AUTHORIZATION: the service-role client below bypasses RLS, so every request
-// must first be tied to an authenticated user and the target dog must be
-// verified as theirs. Middleware only guarantees a session exists — it cannot
-// stop user A from passing user B's dog_id.
+// AUTHORIZATION: the service-role client below bypasses RLS, so an authenticated
+// request must be tied to a user and the target dog verified as theirs.
+// Middleware only guarantees a session exists — it cannot stop user A from
+// passing user B's dog_id.
+//
+// GUEST MODE: unauthenticated callers get a strictly reduced, read-only scan —
+// identification and safety flags, nothing written. No storage upload, no
+// bowl_analyses row, no analysis_id (so there is nothing for PATCH to target),
+// and any dog_id they send is ignored outright rather than checked, so the
+// endpoint can't be used to probe which dog IDs exist. Because `guestMode` is a
+// client-set cookie, this path is effectively public and is metered per IP.
 
 const BUCKET = 'bowl-photos'
+
+const ACCEPTED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+] as const
+type AcceptedType = (typeof ACCEPTED_TYPES)[number]
+
+/** Matches the bowl-photos bucket limit. Enforced in-app for BOTH paths: the
+ *  guest path never uploads, and the owner path buffers the whole file into
+ *  memory (arrayBuffer) before the bucket could reject it — so a size check
+ *  after that point is too late to prevent the memory cost. */
+const MAX_BYTES = 10 * 1024 * 1024
+
+/**
+ * Validate an uploaded image. Returns an error response, or the narrowed File.
+ * Shared so the guest and owner paths can't drift on what they accept.
+ */
+function validateImageUpload(
+  file: FormDataEntryValue | null
+): NextResponse | { file: File; type: AcceptedType } {
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: 'image file is required' }, { status: 400 })
+  }
+  if (!ACCEPTED_TYPES.includes(file.type as AcceptedType)) {
+    return NextResponse.json(
+      { error: `Unsupported image type: ${file.type}` },
+      { status: 400 }
+    )
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      { error: 'That photo is larger than 10 MB' },
+      { status: 413 }
+    )
+  }
+  return { file, type: file.type as AcceptedType }
+}
 
 function isSupabaseConfigured(): boolean {
   return !!(
@@ -80,6 +130,52 @@ async function normalizeLabel(
   return top.id
 }
 
+/** Run vision + fuzzy normalization, and hydrate the matched ingredient rows. */
+async function identifyBowl(
+  supabase: ReturnType<typeof createSupabaseClient>,
+  bytes: Buffer,
+  mediaType: AcceptedType
+) {
+  const { result, modelVersion, raw } = await analyzeBowlImage({
+    imageBase64: bytes.toString('base64'),
+    mediaType,
+  })
+
+  const identifiedItems: NormalizedBowlItem[] = []
+  for (const item of result.items) {
+    identifiedItems.push({
+      ...item,
+      normalized_ingredient_id: await normalizeLabel(supabase, item.label),
+    })
+  }
+
+  // Hydrate matched ingredients in one query so the UI has the full rows
+  // (name, kcal, safety) without N client round-trips.
+  const matchedIds = identifiedItems
+    .map(item => item.normalized_ingredient_id)
+    .filter((id): id is string => !!id)
+
+  const ingredientsById = new Map<string, Ingredient>()
+  if (matchedIds.length > 0) {
+    const { data: foods } = await supabase
+      .from('foods')
+      .select('*')
+      .in('id', matchedIds)
+    for (const food of (foods || []) as Ingredient[]) {
+      ingredientsById.set(food.id, food)
+    }
+  }
+
+  const items = identifiedItems.map(item => ({
+    ...item,
+    ingredient: item.normalized_ingredient_id
+      ? ingredientsById.get(item.normalized_ingredient_id) ?? null
+      : null,
+  }))
+
+  return { identifiedItems, items, notes: result.notes, modelVersion, raw }
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!isSupabaseConfigured()) {
@@ -92,117 +188,140 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const userId = await getAuthenticatedUserId()
-    if (!userId) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
+    // The guest cookie wins over any session, matching the dashboard and the
+    // bowl page. Those surfaces render the guest UI whenever the cookie is set,
+    // so a signed-in user who is *viewing* as a guest sends no dog_id — if the
+    // route dispatched on the session instead, it would demand one and fail.
+    //
+    // Safe because this can only ever DOWNGRADE: honoring the cookie takes the
+    // caller to the reduced, metered, write-nothing path. Nothing is granted by
+    // presenting it, so a forged cookie buys an attacker strictly less.
+    const isGuestMode = request.cookies.get('guestMode')?.value === 'true'
+    const userId = isGuestMode ? null : await getAuthenticatedUserId()
 
     const formData = await request.formData()
     const file = formData.get('image')
-    const dogId = formData.get('dog_id')
 
-    // Authorize before validating (or reading) the upload: never do work, or
-    // leak which inputs are wrong, for a dog the caller doesn't own.
-    // Required — an analysis with no dog can't be ownership-checked on PATCH.
-    if (typeof dogId !== 'string' || !dogId) {
-      return NextResponse.json({ error: 'dog_id is required' }, { status: 400 })
-    }
-
-    const supabase = createSupabaseClient()
-
-    if (!(await userOwnsDog(supabase, dogId, userId))) {
-      return NextResponse.json({ error: 'Dog not found' }, { status: 404 })
-    }
-
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'image file is required' }, { status: 400 })
-    }
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const
-    if (!allowed.includes(file.type as (typeof allowed)[number])) {
-      return NextResponse.json({ error: `Unsupported image type: ${file.type}` }, { status: 400 })
-    }
-
-    const bytes = Buffer.from(await file.arrayBuffer())
-
-    // Store the photo (bucket must exist; create in Supabase dashboard/migration)
-    const path = `${dogId}/${Date.now()}-${file.name}`
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, bytes, { contentType: file.type })
-    if (uploadError) {
-      return NextResponse.json(
-        { error: `Failed to store image: ${uploadError.message}` },
-        { status: 500 }
-      )
-    }
-    const imageUrl = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
-
-    // Vision model → structured, Zod-validated items
-    const { result, modelVersion, raw } = await analyzeBowlImage({
-      imageBase64: bytes.toString('base64'),
-      mediaType: file.type as (typeof allowed)[number],
-    })
-
-    // Normalize labels via the existing pg_trgm fuzzy search
-    const identifiedItems: NormalizedBowlItem[] = []
-    for (const item of result.items) {
-      identifiedItems.push({
-        ...item,
-        normalized_ingredient_id: await normalizeLabel(supabase, item.label),
-      })
-    }
-
-    const { data: analysis, error: insertError } = await supabase
-      .from('bowl_analyses')
-      .insert({
-        dog_id: dogId,
-        image_url: imageUrl,
-        model_version: modelVersion,
-        raw_output: raw,
-        identified_items: identifiedItems,
-        user_corrected: null,
-      })
-      .select()
-      .single()
-    if (insertError) {
-      return NextResponse.json(
-        { error: `Failed to persist analysis: ${insertError.message}` },
-        { status: 500 }
-      )
-    }
-
-    // Hydrate matched ingredients in one query so the confirmation UI has the
-    // full rows (name, kcal, safety) without N client round-trips.
-    const matchedIds = identifiedItems
-      .map(item => item.normalized_ingredient_id)
-      .filter((id): id is string => !!id)
-
-    const ingredientsById = new Map<string, Ingredient>()
-    if (matchedIds.length > 0) {
-      const { data: foods } = await supabase
-        .from('foods')
-        .select('*')
-        .in('id', matchedIds)
-      for (const food of (foods || []) as Ingredient[]) {
-        ingredientsById.set(food.id, food)
-      }
-    }
-
-    return NextResponse.json({
-      analysis_id: analysis.id,
-      image_url: imageUrl,
-      items: identifiedItems.map(item => ({
-        ...item,
-        ingredient: item.normalized_ingredient_id
-          ? ingredientsById.get(item.normalized_ingredient_id) ?? null
-          : null,
-      })),
-      notes: result.notes,
-    })
+    return userId === null
+      ? await handleGuestScan(request, file)
+      : await handleOwnerScan(userId, file, formData.get('dog_id'))
   } catch (error) {
     console.error('Bowl analysis error:', error)
     return NextResponse.json({ error: 'Bowl analysis failed' }, { status: 500 })
   }
+}
+
+/**
+ * Unauthenticated scan: metered, read-only, writes nothing.
+ *
+ * Any `dog_id` in the form data is deliberately never read — a guest has no
+ * dog, and silently ignoring it is safer than checking it (a 404-vs-200 split
+ * would turn this into a dog-ID oracle for an unauthenticated caller).
+ */
+async function handleGuestScan(
+  request: NextRequest,
+  file: FormDataEntryValue | null
+) {
+  // Meter BEFORE touching the image or the model — the quota exists to cap
+  // spend, and decoding a 10 MB upload for a caller who is over limit is spend.
+  const quota = await consumeGuestBowlQuota(request.headers)
+  if (!quota.allowed) {
+    const status = quota.reason === 'limit_reached' ? 429 : 503
+    return NextResponse.json(
+      {
+        error:
+          quota.reason === 'limit_reached'
+            ? `Guest scans are limited to ${GUEST_BOWL_DAILY_LIMIT} per day. Sign up for unlimited scans.`
+            : 'Guest bowl analysis is temporarily unavailable. Sign in to analyze a bowl.',
+        guest_limit_reached: quota.reason === 'limit_reached',
+      },
+      { status }
+    )
+  }
+
+  const validated = validateImageUpload(file)
+  if (validated instanceof NextResponse) return validated
+
+  const bytes = Buffer.from(await validated.file.arrayBuffer())
+  const supabase = createSupabaseClient()
+
+  // The photo is analyzed in memory and dropped. Nothing is uploaded, so
+  // there is no anonymous object to retain, serve, or clean up later.
+  const { items, notes } = await identifyBowl(supabase, bytes, validated.type)
+
+  // No analysis_id and no image_url: a guest result is not a persisted
+  // analysis, and PATCH must have nothing to aim at.
+  return NextResponse.json({ guest: true, items, notes })
+}
+
+/** Authenticated scan: ownership-checked, photo stored, analysis persisted. */
+async function handleOwnerScan(
+  userId: string,
+  file: FormDataEntryValue | null,
+  dogId: FormDataEntryValue | null
+) {
+  // Authorize before validating (or reading) the upload: never do work, or
+  // leak which inputs are wrong, for a dog the caller doesn't own.
+  // Required — an analysis with no dog can't be ownership-checked on PATCH.
+  if (typeof dogId !== 'string' || !dogId) {
+    return NextResponse.json({ error: 'dog_id is required' }, { status: 400 })
+  }
+
+  const supabase = createSupabaseClient()
+
+  if (!(await userOwnsDog(supabase, dogId, userId))) {
+    return NextResponse.json({ error: 'Dog not found' }, { status: 404 })
+  }
+
+  const validated = validateImageUpload(file)
+  if (validated instanceof NextResponse) return validated
+
+  const bytes = Buffer.from(await validated.file.arrayBuffer())
+
+  // Store the photo (bucket must exist; create in Supabase dashboard/migration)
+  const path = `${dogId}/${Date.now()}-${validated.file.name}`
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, bytes, { contentType: validated.type })
+  if (uploadError) {
+    return NextResponse.json(
+      { error: `Failed to store image: ${uploadError.message}` },
+      { status: 500 }
+    )
+  }
+  const imageUrl = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+
+  const { identifiedItems, items, notes, modelVersion, raw } = await identifyBowl(
+    supabase,
+    bytes,
+    validated.type
+  )
+
+  const { data: analysis, error: insertError } = await supabase
+    .from('bowl_analyses')
+    .insert({
+      dog_id: dogId,
+      image_url: imageUrl,
+      model_version: modelVersion,
+      raw_output: raw,
+      identified_items: identifiedItems,
+      user_corrected: null,
+    })
+    .select()
+    .single()
+  if (insertError) {
+    return NextResponse.json(
+      { error: `Failed to persist analysis: ${insertError.message}` },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({
+    analysis_id: analysis.id,
+    image_url: imageUrl,
+    items,
+    notes,
+  })
 }
 
 /**

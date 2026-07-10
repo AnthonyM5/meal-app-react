@@ -212,6 +212,47 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* The two things a guest can actually do. Without these the guest
+            dashboard is a dead end — /bowl and the nutrient tab on /foods are
+            both reachable, but nothing pointed at them. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Camera className="h-5 w-5" />
+                Scan a bowl
+              </CardTitle>
+              <CardDescription>
+                Photograph a bowl and see what&apos;s in it, with safety
+                warnings.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="w-full">
+                <Link href="/bowl">Try a bowl scan</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Search className="h-5 w-5" />
+                Search by nutrient
+              </CardTitle>
+              <CardDescription>
+                Find ingredients high in lysine, taurine, calcium, and more.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/foods">Browse ingredients</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
         <ExploreFoodsSection />
       </div>
     )

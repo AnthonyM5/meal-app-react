@@ -302,6 +302,20 @@ export interface Database {
           Food & { nutrient_amount: number; nutrient_unit: string }
         >
       }
+      fuzzy_search_foods: {
+        Args: {
+          search_query: string
+          match_limit: number
+        }
+        Returns: Array<Food & { similarity: number }>
+      }
+      consume_guest_bowl_quota: {
+        Args: {
+          p_ip_hash: string
+          p_limit: number
+        }
+        Returns: boolean
+      }
     }
   }
 }
