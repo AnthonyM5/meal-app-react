@@ -42,6 +42,12 @@ interface ConfirmRow {
   proportion: number
   ingredient: Food | null
   grams: string
+  /**
+   * True once the owner has typed in this row's grams. Until then, a grams
+   * value is an ESTIMATE derived from the total-weight anchor, and the anchor
+   * is free to overwrite it. After it's touched, the anchor leaves it alone.
+   */
+  gramsTouched: boolean
 }
 
 let rowSeq = 0
@@ -143,14 +149,44 @@ export function BowlConfirmation({
       proportion: item.estimated_proportion,
       ingredient: item.ingredient,
       grams: '',
+      gramsTouched: false,
     }))
   )
+  // Total weight the owner served. This is the one real measurement the photo
+  // can't supply; combined with the model's proportions it prefills per-item
+  // grams. Empty until entered — we never assume a weight.
+  const [totalGrams, setTotalGrams] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   const updateRow = (key: string, patch: Partial<ConfirmRow>) =>
     setRows(prev =>
       prev.map(row => (row.key === key ? { ...row, ...patch } : row))
     )
+
+  /**
+   * Distribute a total weight across rows by each item's proportion, but only
+   * fill rows the owner hasn't already typed into — a manual entry is ground
+   * truth and the anchor must not clobber it. An invalid/blank total clears the
+   * untouched estimates rather than leaving stale numbers behind.
+   */
+  const applyTotalWeight = (value: string) => {
+    setTotalGrams(value)
+    const total = Number(value)
+    const valid = Number.isFinite(total) && total > 0
+    setRows(prev =>
+      prev.map(row =>
+        row.gramsTouched
+          ? row
+          : {
+              ...row,
+              grams:
+                valid && row.proportion > 0
+                  ? String(Math.round(total * row.proportion))
+                  : '',
+            }
+      )
+    )
+  }
 
   const removeRow = (key: string) =>
     setRows(prev => prev.filter(row => row.key !== key))
@@ -164,9 +200,12 @@ export function BowlConfirmation({
         // zero confidence — the eval signal needs to see what we missed.
         label: food.name,
         confidence: 0,
+        // No visual proportion for a hand-added item, so the anchor can't
+        // estimate it — the owner enters its grams directly.
         proportion: 0,
         ingredient: food,
         grams: '',
+        gramsTouched: false,
       },
     ])
 
@@ -291,7 +330,7 @@ export function BowlConfirmation({
 
           <p className="text-sm text-muted-foreground">
             Percentages are the model&apos;s rough visual estimate of the bowl,
-            not weights. Enter the actual grams you served.
+            not weights.
           </p>
 
           {notes && (
@@ -300,8 +339,43 @@ export function BowlConfirmation({
             </p>
           )}
 
+          <div className="space-y-1.5 rounded-md border bg-muted/40 p-3">
+            <label
+              htmlFor="total-served-weight"
+              className="text-sm font-medium"
+            >
+              Total served weight (optional)
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="total-served-weight"
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={totalGrams}
+                onChange={e => applyTotalWeight(e.target.value)}
+                className="w-32"
+                placeholder="e.g. 250"
+              />
+              <span className="text-sm text-muted-foreground">
+                grams total
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Weigh the bowl once and enter it here — we&apos;ll split it across
+              the items by the model&apos;s proportions as a starting estimate.
+              Adjust any row and it stays put. The model can&apos;t weigh food
+              from a photo, so these are estimates until you confirm them.
+            </p>
+          </div>
+
           <ul className="space-y-3" data-testid="bowl-items">
-            {rows.map(row => (
+            {rows.map(row => {
+              // A grams value that came from the anchor and hasn't been edited:
+              // usable, but flagged so the owner knows it's a guess to confirm.
+              const isEstimate = !row.gramsTouched && row.grams !== ''
+              return (
               <li key={row.key} className="space-y-2 rounded-md border p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -352,16 +426,34 @@ export function BowlConfirmation({
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={row.grams}
-                      onChange={e => updateRow(row.key, { grams: e.target.value })}
-                      className="w-20 text-right"
-                      placeholder="g"
-                      aria-label={`Grams of ${row.ingredient?.name ?? row.label}`}
-                    />
+                    <div className="flex flex-col items-end gap-0.5">
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={row.grams}
+                        onChange={e =>
+                          // Owner typed it → ground truth. Stop the anchor from
+                          // overwriting, and it's no longer an estimate.
+                          updateRow(row.key, {
+                            grams: e.target.value,
+                            gramsTouched: true,
+                          })
+                        }
+                        className={cn(
+                          'w-20 text-right',
+                          isEstimate &&
+                            'border-amber-500/50 text-amber-600 dark:text-amber-400'
+                        )}
+                        placeholder="g"
+                        aria-label={`Grams of ${row.ingredient?.name ?? row.label}`}
+                      />
+                      {isEstimate && (
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                          estimate
+                        </span>
+                      )}
+                    </div>
                     <span className="text-sm text-muted-foreground">g</span>
                     <Button
                       variant="ghost"
@@ -383,7 +475,8 @@ export function BowlConfirmation({
                   onSelect={food => updateRow(row.key, { ingredient: food })}
                 />
               </li>
-            ))}
+              )
+            })}
           </ul>
 
           <div className="space-y-2 rounded-md border border-dashed p-3">
