@@ -15,7 +15,10 @@
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.guest_bowl_usage (
-    ip_hash    TEXT NOT NULL,
+    -- Always a SHA-256 hex digest from lib/guest-rate-limit.ts#hashIp; the
+    -- CHECK asserts that invariant at the schema level. (TEXT, not CHAR(64):
+    -- CHAR space-pads to length and makes equality comparisons surprising.)
+    ip_hash    TEXT NOT NULL CHECK (ip_hash ~ '^[0-9a-f]{64}$'),
     day        DATE NOT NULL,
     count      INTEGER NOT NULL DEFAULT 0 CHECK (count >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

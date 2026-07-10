@@ -39,8 +39,36 @@ const ACCEPTED_TYPES = [
 ] as const
 type AcceptedType = (typeof ACCEPTED_TYPES)[number]
 
-/** Matches the bowl-photos bucket limit; enforced here too since guests skip upload. */
+/** Matches the bowl-photos bucket limit. Enforced in-app for BOTH paths: the
+ *  guest path never uploads, and the owner path buffers the whole file into
+ *  memory (arrayBuffer) before the bucket could reject it — so a size check
+ *  after that point is too late to prevent the memory cost. */
 const MAX_BYTES = 10 * 1024 * 1024
+
+/**
+ * Validate an uploaded image. Returns an error response, or the narrowed File.
+ * Shared so the guest and owner paths can't drift on what they accept.
+ */
+function validateImageUpload(
+  file: FormDataEntryValue | null
+): NextResponse | { file: File; type: AcceptedType } {
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: 'image file is required' }, { status: 400 })
+  }
+  if (!ACCEPTED_TYPES.includes(file.type as AcceptedType)) {
+    return NextResponse.json(
+      { error: `Unsupported image type: ${file.type}` },
+      { status: 400 }
+    )
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      { error: 'That photo is larger than 10 MB' },
+      { status: 413 }
+    )
+  }
+  return { file, type: file.type as AcceptedType }
+}
 
 function isSupabaseConfigured(): boolean {
   return !!(
@@ -211,32 +239,15 @@ async function handleGuestScan(
     )
   }
 
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'image file is required' }, { status: 400 })
-  }
-  if (!ACCEPTED_TYPES.includes(file.type as AcceptedType)) {
-    return NextResponse.json(
-      { error: `Unsupported image type: ${file.type}` },
-      { status: 400 }
-    )
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: 'That photo is larger than 10 MB' },
-      { status: 413 }
-    )
-  }
+  const validated = validateImageUpload(file)
+  if (validated instanceof NextResponse) return validated
 
-  const bytes = Buffer.from(await file.arrayBuffer())
+  const bytes = Buffer.from(await validated.file.arrayBuffer())
   const supabase = createSupabaseClient()
 
   // The photo is analyzed in memory and dropped. Nothing is uploaded, so
   // there is no anonymous object to retain, serve, or clean up later.
-  const { items, notes } = await identifyBowl(
-    supabase,
-    bytes,
-    file.type as AcceptedType
-  )
+  const { items, notes } = await identifyBowl(supabase, bytes, validated.type)
 
   // No analysis_id and no image_url: a guest result is not a persisted
   // analysis, and PATCH must have nothing to aim at.
@@ -262,23 +273,16 @@ async function handleOwnerScan(
     return NextResponse.json({ error: 'Dog not found' }, { status: 404 })
   }
 
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'image file is required' }, { status: 400 })
-  }
-  if (!ACCEPTED_TYPES.includes(file.type as AcceptedType)) {
-    return NextResponse.json(
-      { error: `Unsupported image type: ${file.type}` },
-      { status: 400 }
-    )
-  }
+  const validated = validateImageUpload(file)
+  if (validated instanceof NextResponse) return validated
 
-  const bytes = Buffer.from(await file.arrayBuffer())
+  const bytes = Buffer.from(await validated.file.arrayBuffer())
 
   // Store the photo (bucket must exist; create in Supabase dashboard/migration)
-  const path = `${dogId}/${Date.now()}-${file.name}`
+  const path = `${dogId}/${Date.now()}-${validated.file.name}`
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(path, bytes, { contentType: file.type })
+    .upload(path, bytes, { contentType: validated.type })
   if (uploadError) {
     return NextResponse.json(
       { error: `Failed to store image: ${uploadError.message}` },
@@ -290,7 +294,7 @@ async function handleOwnerScan(
   const { identifiedItems, items, notes, modelVersion, raw } = await identifyBowl(
     supabase,
     bytes,
-    file.type as AcceptedType
+    validated.type
   )
 
   const { data: analysis, error: insertError } = await supabase

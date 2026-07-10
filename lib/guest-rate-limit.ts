@@ -9,10 +9,25 @@ import { createHash } from 'crypto'
 // request, so this module is the spend gate. It fails CLOSED: if the database
 // is unreachable, or we can't tell who the caller is, the scan is denied.
 
+const DEFAULT_DAILY_LIMIT = 3
+
+/**
+ * Coerce a limit to a finite positive integer, falling back to the default.
+ *
+ * This matters because the value ultimately becomes the RPC's `p_limit`. A
+ * misconfigured env var (`GUEST_BOWL_DAILY_LIMIT=abc`) would parse to NaN,
+ * which `JSON.stringify` sends to Postgres as `null`; there `count < NULL` is
+ * NULL, so the first scan per IP slips through — the opposite of the
+ * fail-closed contract this module promises. `0`/negative are rejected too:
+ * an intended cap is always >= 1, and the RPC treats <= 0 as "deny everyone".
+ */
+function sanitizeLimit(value: number): number {
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_DAILY_LIMIT
+}
+
 /** Scans per IP per calendar day (UTC, per Postgres CURRENT_DATE). */
-export const GUEST_BOWL_DAILY_LIMIT = Number.parseInt(
-  process.env.GUEST_BOWL_DAILY_LIMIT || '3',
-  10
+export const GUEST_BOWL_DAILY_LIMIT = sanitizeLimit(
+  Number.parseInt(process.env.GUEST_BOWL_DAILY_LIMIT || '', 10)
 )
 
 /**
@@ -78,11 +93,15 @@ export async function consumeGuestBowlQuota(
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) return { allowed: false, reason: 'unavailable' }
 
+  // Guard the explicit-override path (the exported default is already
+  // sanitized). Never let NaN/Infinity/negative reach the RPC as `p_limit`.
+  const safeLimit = sanitizeLimit(limit)
+
   try {
     const supabase = createClient<Database>(url, serviceKey)
     const { data, error } = await supabase.rpc('consume_guest_bowl_quota', {
       p_ip_hash: hashIp(ip),
-      p_limit: limit,
+      p_limit: safeLimit,
     })
 
     if (error) {

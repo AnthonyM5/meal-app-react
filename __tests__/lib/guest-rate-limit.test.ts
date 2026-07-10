@@ -161,4 +161,19 @@ describe('consumeGuestBowlQuota', () => {
       expect.objectContaining({ p_limit: 10 })
     )
   })
+
+  it.each([NaN, 0, -5, Infinity, 2.5])(
+    'never forwards an invalid limit (%p) to the RPC — falls back to the default',
+    async badLimit => {
+      const rpc = mockRpc({ data: true })
+      await consumeGuestBowlQuota(headers({ 'x-real-ip': '1.2.3.4' }), badLimit)
+
+      // A bad limit must not reach Postgres, where NaN serializes to null and
+      // slips the first scan through. It's coerced back to the default (3).
+      expect(rpc).toHaveBeenCalledWith(
+        'consume_guest_bowl_quota',
+        expect.objectContaining({ p_limit: 3 })
+      )
+    }
+  )
 })
