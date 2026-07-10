@@ -1,3 +1,4 @@
+import { AuthShell } from '@/components/auth-shell'
 import SignUpForm from '@/components/signup-form'
 import {
   Card,
@@ -14,27 +15,29 @@ import { redirect } from 'next/navigation'
 
 function SignUpCard() {
   return (
-    <div className="container mx-auto flex h-screen w-screen flex-col items-center justify-center">
+    <AuthShell>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Create an account</CardTitle>
-          <CardDescription>Sign up to get started</CardDescription>
+          <CardDescription>
+            Start tracking your dog&apos;s nutrition — it&apos;s free.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <SignUpForm />
         </CardContent>
       </Card>
-    </div>
+    </AuthShell>
   )
 }
 
 export const metadata: Metadata = {
-  title: 'Sign Up - Meal Tracker',
-  description: 'Create a new account',
+  title: 'Sign Up - PawPlate',
+  description: 'Create your PawPlate account',
 }
 
 export const viewport: Viewport = {
-  themeColor: '#000000',
+  themeColor: '#2E7D32',
   width: 'device-width',
   initialScale: 1,
 }

@@ -1,3 +1,4 @@
+import { BrandMark } from '@/components/brand-logo'
 import { GuestModeButton } from '@/components/guest-mode-button'
 import { Button } from '@/components/ui/button'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -58,19 +59,19 @@ export default async function Home() {
     // If no user but no error, show landing page content
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#1B5E20] p-6 text-center text-white">
-        <span className="mb-6 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-white shadow-lg">
-          <img
-            src="/icon-192.png"
-            alt="PawPlate"
-            className="h-16 w-16 object-contain"
-          />
+        <span className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white p-1.5 shadow-lg ring-1 ring-white/20">
+          <BrandMark className="h-full w-full" title="PawPlate" />
         </span>
 
-        <h1 className="mb-5 font-display text-4xl font-bold leading-tight tracking-tight text-white">
-          Welcome to PawPlate
+        <h1 className="mb-2 font-display text-5xl font-bold leading-tight tracking-tight text-white">
+          PawPlate
         </h1>
+        <p className="mb-4 font-display text-xl font-medium text-[#FFB74D]">
+          Real food. Real results.
+        </p>
         <p className="mb-8 max-w-sm text-lg text-white/75">
-          Track your dog&apos;s nutrition and reach their health goals.
+          Balanced home-cooked meals and nutrient tracking for your dog —
+          measured against NRC/AAFCO targets.
         </p>
 
         <div className="flex w-full max-w-xs flex-col gap-3">
