@@ -43,9 +43,11 @@ interface ConfirmRow {
   ingredient: Food | null
   grams: string
   /**
-   * True once the owner has typed in this row's grams. Until then, a grams
-   * value is an ESTIMATE derived from the total-weight anchor, and the anchor
-   * is free to overwrite it. After it's touched, the anchor leaves it alone.
+   * True while the owner has a non-empty value typed in this row's grams.
+   * Until then, a grams value is an ESTIMATE derived from the total-weight
+   * anchor, and the anchor is free to overwrite it. While touched, the anchor
+   * leaves it alone; clearing the field back to empty un-sets this so the
+   * anchor can re-estimate the row.
    */
   gramsTouched: boolean
 }
@@ -433,11 +435,13 @@ export function BowlConfirmation({
                         step="1"
                         value={row.grams}
                         onChange={e =>
-                          // Owner typed it → ground truth. Stop the anchor from
-                          // overwriting, and it's no longer an estimate.
+                          // A non-empty value the owner typed is ground truth —
+                          // stop the anchor overwriting it. Clearing it back to
+                          // empty returns the row to the anchor, so it can be
+                          // re-estimated on the next total-weight change.
                           updateRow(row.key, {
                             grams: e.target.value,
-                            gramsTouched: true,
+                            gramsTouched: e.target.value !== '',
                           })
                         }
                         className={cn(
