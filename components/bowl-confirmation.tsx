@@ -305,7 +305,9 @@ export function BowlConfirmation({
               <li key={row.key} className="space-y-2 rounded-md border p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                    {/* Not a <p>: Badge renders a <div>, which is invalid inside
+                        a paragraph. This is a flex row, so <div> is right anyway. */}
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                       {row.ingredient ? (
                         <>
                           <Check className="h-4 w-4 text-primary" />
@@ -337,7 +339,7 @@ export function BowlConfirmation({
                           {Math.round(row.confidence * 100)}% confident
                         </Badge>
                       )}
-                    </p>
+                    </div>
                     {row.ingredient && row.label !== row.ingredient.name && (
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Model saw &ldquo;{row.label}&rdquo;

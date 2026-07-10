@@ -6,13 +6,21 @@ import { NextResponse } from 'next/server'
 // Routes that don't require auth
 const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
 
-// Routes that allow guest access
+// Routes that allow guest access.
+//
+// This list only decides whether middleware lets a request through — it grants
+// no data access. Every route below still enforces its own rules: RLS for
+// anything user-scoped, and, for /api/bowl, an explicit guest branch that is
+// read-only and rate-limited (see app/api/bowl/analyze/route.ts). The
+// `guestMode` cookie is client-set, so treat these as public routes.
 const GUEST_ALLOWED_ROUTES = [
   '/dashboard',
   '/dogs',
   '/foods',
   '/food-details',
   '/api/foods',
+  '/bowl',
+  '/api/bowl',
 ]
 
 // Check if Supabase is configured
