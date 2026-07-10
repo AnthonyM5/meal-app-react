@@ -1,5 +1,6 @@
 'use client'
 
+import { AuthShell } from '@/components/auth-shell'
 import { GuestModeButton } from '@/components/guest-mode-button'
 import LoginForm from '@/components/login-form'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -51,7 +52,7 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <div className="container mx-auto flex h-screen w-screen flex-col items-center justify-center">
+    <AuthShell>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Welcome back</CardTitle>
@@ -63,6 +64,6 @@ export default function LoginPage() {
           </React.Suspense>
         </CardContent>
       </Card>
-    </div>
+    </AuthShell>
   )
 }

@@ -89,7 +89,13 @@ export async function middleware(request: NextRequest) {
   return NextResponse.redirect(new URL('/auth/login', request.url))
 }
 
-// Update matcher to cover all routes
+// Run on every route EXCEPT Next internals, the metadata/icon routes, and any
+// static asset by extension. Without the extension/icon exclusions, requests
+// for /icon.svg, /apple-icon.png, /manifest.json, and /og.png get auth-gated
+// and 307-redirected to /auth/login — which silently breaks the favicon, the
+// PWA manifest, and social-share images for signed-out visitors.
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+  ],
 }
