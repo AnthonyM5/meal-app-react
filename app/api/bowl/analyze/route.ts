@@ -2,6 +2,11 @@ import {
   GUEST_BOWL_DAILY_LIMIT,
   consumeGuestBowlQuota,
 } from '@/lib/guest-rate-limit'
+import {
+  matchLocalIngredient,
+  suggestBranded,
+  type BrandedSuggestion,
+} from '@/lib/resolve-ingredient'
 import { createClient as createUserClient } from '@/lib/supabase/server'
 import type { Database, Ingredient } from '@/lib/types'
 import {
@@ -113,23 +118,6 @@ async function userOwnsDog(
   return !!data
 }
 
-/** Trigram-confidence floor below which a label stays unmatched. */
-const MATCH_THRESHOLD = 0.3
-
-async function normalizeLabel(
-  supabase: ReturnType<typeof createSupabaseClient>,
-  label: string
-): Promise<string | null> {
-  const { data, error } = await supabase.rpc('fuzzy_search_foods', {
-    search_query: label,
-    match_limit: 1,
-  })
-  if (error || !data || data.length === 0) return null
-  const top = data[0] as { id: string; similarity?: number }
-  if (top.similarity != null && top.similarity < MATCH_THRESHOLD) return null
-  return top.id
-}
-
 /** Run vision + fuzzy normalization, and hydrate the matched ingredient rows. */
 async function identifyBowl(
   supabase: ReturnType<typeof createSupabaseClient>,
@@ -141,13 +129,26 @@ async function identifyBowl(
     mediaType,
   })
 
-  const identifiedItems: NormalizedBowlItem[] = []
+  // Local match first (unsafe rows are never auto-matched); items the local
+  // table can't resolve get a best-effort Open (Pet) Food Facts SUGGESTION
+  // in parallel — surfaced for the owner to confirm, never auto-committed.
+  const identifiedItems: (NormalizedBowlItem & {
+    branded_suggestion: BrandedSuggestion | null
+  })[] = []
   for (const item of result.items) {
     identifiedItems.push({
       ...item,
-      normalized_ingredient_id: await normalizeLabel(supabase, item.label),
+      normalized_ingredient_id: await matchLocalIngredient(supabase, item.label),
+      branded_suggestion: null,
     })
   }
+  await Promise.all(
+    identifiedItems
+      .filter(item => !item.normalized_ingredient_id)
+      .map(async item => {
+        item.branded_suggestion = await suggestBranded(item.label)
+      })
+  )
 
   // Hydrate matched ingredients in one query so the UI has the full rows
   // (name, kcal, safety) without N client round-trips.

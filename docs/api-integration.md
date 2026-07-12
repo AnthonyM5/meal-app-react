@@ -1,281 +1,87 @@
-# USDA Food Database API Integration
+# Food Data Integration (USDA + Open Food Facts)
+
+_Rewritten 2026-07-12. The previous version of this doc described the
+NutriTrack-era `lib/usda-api.ts` client, which was deleted in Phase 3.6 —
+see `docs/PAWPLATE_PROGRESS.md`._
 
 ## Overview
 
-This application integrates with the USDA Food Data Central API to provide comprehensive nutritional information for a wide variety of foods.
+PawPlate resolves food data from two tiers:
 
-## API Configuration
+1. **USDA FoodData Central (FDC)** — the trusted, deterministic tier.
+   Foundation + SR Legacy whole foods are imported into the `foods` table
+   with full canine nutrient profiles. This is the only data the nutrient
+   gap engine trusts.
+2. **Open (Pet) Food Facts** — the branded tier. Products are looked up on
+   demand and cached into `foods` (`source='off'`) only when an owner
+   accepts a suggestion. Macros only; micros stay `null` and are excluded
+   from gap math.
 
-### Environment Variables
+## Environment
 
 ```env
-USDA_API_KEY=your_api_key_here
-USDA_API_BASE_URL=https://api.nal.usda.gov/fdc/v1
+USDA_API_KEY=...            # or NEXT_PUBLIC_USDA_API_KEY
+NEXT_PUBLIC_SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...  # scripts + payload archive
 ```
 
-### API Client Setup
+Open Food Facts requires no key (identify via User-Agent, set in
+`lib/off-integration.ts`).
 
-```typescript
-// lib/usda-api.ts
-export class USDAApiClient {
-  private baseUrl: string
-  private apiKey: string
+## Current modules
 
-  constructor() {
-    this.baseUrl = process.env.USDA_API_BASE_URL!
-    this.apiKey = process.env.USDA_API_KEY!
-  }
+| Module | Role |
+|---|---|
+| `lib/usda-canine.ts` | FDC → `foods` row conversion: 48-nutrient extraction, unit conversions, `inferPreparationState()`, `checkDogSafety()` pass, `is_verified` completeness gate |
+| `lib/dog-toxic-foods.ts` | Name-based toxicity rules (word-boundary matching for short terms) |
+| `lib/off-integration.ts` | OFF/OPFF barcode + name lookups and `convertOFFToIngredient()` (tries Open Pet Food Facts first, then Open Food Facts; ODbL attribution) |
+| `lib/resolve-ingredient.ts` | Shared resolution chain: local `fuzzy_search_foods` match (never auto-matches unsafe rows) → OFF suggestion with timeout |
+| `lib/ingredient-actions.ts` | Server actions: `acceptBrandedIngredient` (cache-on-accept) and `createManualIngredient` (owner-estimated fallback) |
+| `lib/source-payloads.ts` | Archives every raw API response into `source_payloads` so re-derivation never re-fetches |
+| `scripts/022_bulk_import_usda_wholefoods.ts` | Filtered bulk import of the whole-food corpus (category whitelist + safety pass; `--dry-run`/`--category`/`--refresh`) |
+| `scripts/020_seed_staple_gaps.ts` | Pinned fdc_id seed for the pre-bulk staple set (kept for provenance) |
+| `app/api/ingredients/import/route.ts` | Query-triggered single-search import (legacy path, still canine-safe) |
+| `app/api/foods/unified-search/route.ts` | Search endpoint over `fuzzy_search_foods` used by `use-ingredient-search` |
 
-  async searchFoods(query: string) {
-    // Implementation
-  }
+## FDC endpoints used
 
-  async getFoodDetails(fdcId: string) {
-    // Implementation
-  }
-}
-```
+- `GET /foods/search?query=*&dataType=Foundation,SR Legacy&pageSize=200` —
+  corpus enumeration (search results carry `foodCategory`; the `/foods/list`
+  endpoint does not, which is why enumeration goes through search).
+- `POST /foods` (`{ fdcIds, format: 'full' }`, max 20 ids) — batched detail
+  fetch. No nutrient filter: the complete payload is archived.
+- `GET /food/{fdcId}?format=full` — single-food fetch (seed scripts, import
+  route).
 
-## API Endpoints Used
+Rate limit: 1,000 requests/hour per key. The bulk import sleeps 500 ms
+between requests (~300 requests for a full run).
 
-1. **Food Search**
+## Search
 
-   - Endpoint: `/foods/search`
-   - Method: POST
-   - Used for searching foods by name/keywords
+`fuzzy_search_foods(search_query, match_limit)` (Postgres, pg_trgm):
 
-2. **Food Details**
+- scores `GREATEST(similarity(name), similarity(brand), word_similarity(query, name))`
+  — `word_similarity` is what lets a short label ("macaroni") match a long
+  USDA description ("Macaroni, vegetable, enriched, cooked");
+- thresholds: whole-string 0.2, word 0.5; the bowl auto-matcher additionally
+  requires ≥ 0.3 and rejects `is_safe_for_dogs=false` rows;
+- returns provenance (`source`, `data_completeness`, `is_complete_food`) so
+  UIs can badge branded/custom rows;
+- ranks: similarity → trusted source (usda/curated) → safe → verified → name.
 
-   - Endpoint: `/food/{fdcId}`
-   - Method: GET
-   - Retrieves detailed information for a specific food
+## Safety model (two layers)
 
-3. **Unified Search**
-   - Endpoint: `/api/foods/unified-search`
-   - Method: GET
-   - A unified search endpoint for finding foods by name or brand
+1. **Category whitelist** at bulk-import time — prepared dishes, snacks,
+   sweets, beverages etc. are never fetched, closing the composite-name hole
+   ("beef stroganoff mix" names no toxic ingredient).
+2. **`checkDogSafety(name)`** on every conversion — toxic whole foods inside
+   whitelisted categories (onion, garlic, grapes) import flagged
+   `is_safe_for_dogs=false` with a `toxicity_note`. They are searchable and
+   badged but never auto-matched to a bowl item.
 
-## Data Models
+## Licensing
 
-### Food Search Response
-
-```typescript
-interface FoodSearchResponse {
-  totalHits: number
-  currentPage: number
-  totalPages: number
-  foods: FoodItem[]
-}
-
-interface FoodItem {
-  fdcId: number
-  description: string
-  dataType: string
-  publishedDate: string
-  brandOwner?: string
-  brandName?: string
-  ingredients?: string
-  foodNutrients: Nutrient[]
-}
-```
-
-### Food Details Response
-
-```typescript
-interface FoodDetails {
-  fdcId: number
-  description: string
-  dataType: string
-  publicationDate: string
-  foodNutrients: NutrientDetail[]
-  portions: Portion[]
-}
-```
-
-## Error Handling
-
-```typescript
-// lib/api-error.ts
-export class ApiError extends Error {
-  constructor(message: string, public status: number, public code?: string) {
-    super(message)
-  }
-}
-
-// Example error handling
-try {
-  const result = await api.searchFoods('apple')
-} catch (error) {
-  if (error instanceof ApiError) {
-    // Handle API-specific errors
-    console.error(`API Error: ${error.message}`)
-  } else {
-    // Handle other errors
-    console.error('Unknown error occurred')
-  }
-}
-```
-
-## Rate Limiting
-
-- Basic tier: 3600 requests per hour
-- Implemented exponential backoff for retries
-- Client-side caching to reduce API calls
-
-## Caching Strategy
-
-### In-Memory Cache
-
-```typescript
-// lib/cache.ts
-export class FoodCache {
-  private cache: Map<string, CacheEntry>
-  private readonly TTL = 1000 * 60 * 60 // 1 hour
-
-  set(key: string, value: any) {
-    this.cache.set(key, {
-      value,
-      timestamp: Date.now(),
-    })
-  }
-
-  get(key: string) {
-    const entry = this.cache.get(key)
-    if (!entry) return null
-    if (Date.now() - entry.timestamp > this.TTL) {
-      this.cache.delete(key)
-      return null
-    }
-    return entry.value
-  }
-}
-```
-
-## Usage Examples
-
-### Searching Foods
-
-```typescript
-const searchFoods = async (query: string) => {
-  const cache = new FoodCache()
-  const cacheKey = `search:${query}`
-
-  // Check cache first
-  const cached = cache.get(cacheKey)
-  if (cached) return cached
-
-  // Make API call if not in cache
-  const results = await api.searchFoods(query)
-  cache.set(cacheKey, results)
-  return results
-}
-```
-
-### Getting Food Details
-
-```typescript
-const getFoodDetails = async (fdcId: string) => {
-  const cache = new FoodCache()
-  const cacheKey = `food:${fdcId}`
-
-  const cached = cache.get(cacheKey)
-  if (cached) return cached
-
-  const details = await api.getFoodDetails(fdcId)
-  cache.set(cacheKey, details)
-  return details
-}
-```
-
-## Error Codes and Handling
-
-| Error Code | Description         | Handling Strategy          |
-| ---------- | ------------------- | -------------------------- |
-| 429        | Rate limit exceeded | Implement backoff          |
-| 401        | Invalid API key     | Check configuration        |
-| 404        | Food not found      | Show user-friendly message |
-
-## Best Practices
-
-1. **Error Handling**
-
-   - Always implement proper error handling
-   - Use custom error types
-   - Show user-friendly error messages
-
-2. **Caching**
-
-   - Cache frequently accessed data
-   - Implement cache invalidation
-   - Use appropriate TTL values
-
-3. **Rate Limiting**
-
-   - Monitor API usage
-   - Implement backoff strategies
-   - Cache aggressively
-
-4. **Data Validation**
-   - Validate API responses
-   - Handle missing or null values
-   - Sanitize user inputs
-
-## Food Search API
-
-### Unified Search Endpoint
-
-```typescript
-GET / api / foods / unified - search
-```
-
-#### Implementation Details
-
-```typescript
-// Route handler using service role key for consistent access
-export async function GET(request: NextRequest) {
-  const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  const { data: foods, error } = await supabase
-    .from('foods')
-    .select('*')
-    .or(`name.ilike.%${query}%, brand.ilike.%${query}%`)
-    .limit(50)
-    .order('is_verified', { ascending: false })
-}
-```
-
-#### Access Control
-
-- Endpoint is publicly accessible
-- Uses service role key for database access
-- No authentication required
-- Available to both guest and authenticated users
-
-#### Error Handling
-
-```typescript
-// Client-side error handling
-if (!response.ok) {
-  if (response.status === 401) {
-    // Silent fail for auth redirects
-    return
-  }
-  if (response.status === 503) {
-    setError('Database connection unavailable')
-    return
-  }
-  setError('Unable to search foods at this time')
-}
-```
-
-#### Response Format
-
-```typescript
-type SearchResponse = {
-  foods: Food[]
-  error?: string
-}
-```
+OFF/OPFF data is ODbL: every cached row carries
+`source_attribution` ("Nutrition data © Open (Pet) Food Facts contributors,
+ODbL") and `source='off'` so it can be isolated from any future data export.
+See `docs/BRANDED_INGREDIENTS_DESIGN.md` §7.

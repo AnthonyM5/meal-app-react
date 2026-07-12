@@ -75,11 +75,23 @@ export interface DogSafetyResult {
   note: string | null
 }
 
+/**
+ * Short patterns (≤4 chars) match as whole words with an optional plural,
+ * not substrings — "rum" must not flag "Wheat, durum" or "breadcrumbs",
+ * "wine" must not flag "swine". Longer patterns keep the aggressive
+ * substring behavior so "grape" still catches "grapefruit" and "chocolate"
+ * still catches "chocolate chip cookies".
+ */
+function matches(lowerName: string, pattern: string): boolean {
+  if (pattern.length > 4) return lowerName.includes(pattern)
+  return new RegExp(`\\b${pattern}s?\\b`).test(lowerName)
+}
+
 /** Name-based toxicity check used by the ingredient importer. */
 export function checkDogSafety(ingredientName: string): DogSafetyResult {
   const lower = ingredientName.toLowerCase()
   for (const rule of DOG_TOXIC_FOODS) {
-    if (rule.patterns.some(p => lower.includes(p))) {
+    if (rule.patterns.some(p => matches(lower, p))) {
       return { isSafe: false, note: rule.note }
     }
   }

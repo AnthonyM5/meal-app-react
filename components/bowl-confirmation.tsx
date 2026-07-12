@@ -13,7 +13,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useIngredientSearch } from '@/hooks/use-ingredient-search'
+import {
+  acceptBrandedIngredient,
+  createManualIngredient,
+} from '@/lib/ingredient-actions'
 import { createDogMeal } from '@/lib/meal-actions'
+import type { BrandedSuggestion } from '@/lib/resolve-ingredient'
 import type { BowlAnalysisItem, Food, MealType } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { AlertTriangle, Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
@@ -31,6 +36,8 @@ export interface AnalyzedBowlItem {
   confidence: number
   normalized_ingredient_id: string | null
   ingredient: Food | null
+  /** OFF candidate for an unmatched label — owner must accept it explicitly */
+  branded_suggestion?: BrandedSuggestion | null
 }
 
 interface ConfirmRow {
@@ -41,6 +48,7 @@ interface ConfirmRow {
   confidence: number
   proportion: number
   ingredient: Food | null
+  suggestion: BrandedSuggestion | null
   grams: string
   /**
    * True while the owner has a non-empty value typed in this row's grams.
@@ -108,6 +116,23 @@ function IngredientPicker({
                             {food.preparation_state}
                           </Badge>
                         )}
+                        {(food.source === 'off' ||
+                          food.source === 'fatsecret') && (
+                          <Badge
+                            variant="outline"
+                            className="px-1.5 py-0 text-xs font-normal text-muted-foreground"
+                          >
+                            branded
+                          </Badge>
+                        )}
+                        {food.source === 'manual' && (
+                          <Badge
+                            variant="outline"
+                            className="px-1.5 py-0 text-xs font-normal text-muted-foreground"
+                          >
+                            custom
+                          </Badge>
+                        )}
                         {food.is_safe_for_dogs === false && (
                           <AlertTriangle className="h-4 w-4 text-destructive" />
                         )}
@@ -121,6 +146,132 @@ function IngredientPicker({
           </Card>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * One-tap accept for an Open (Pet) Food Facts candidate. Accepting fetches
+ * the canonical product, caches it into `foods` (source='off', ODbL
+ * attribution), and resolves this row — future bowls hit the cache locally.
+ */
+function BrandedSuggestionButton({
+  suggestion,
+  onAccepted,
+}: {
+  suggestion: BrandedSuggestion
+  onAccepted: (food: Food) => void
+}) {
+  const [isAccepting, setIsAccepting] = useState(false)
+
+  const accept = async () => {
+    setIsAccepting(true)
+    try {
+      const food = await acceptBrandedIngredient(suggestion.code)
+      onAccepted(food)
+      toast.success(`Matched "${food.name}" (branded)`)
+    } catch (error) {
+      console.error('Accept branded suggestion error:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to add product'
+      )
+    } finally {
+      setIsAccepting(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={accept}
+      disabled={isAccepting}
+      className="flex w-full items-center justify-between rounded-md border border-dashed p-2 text-left text-sm hover:bg-muted"
+    >
+      <span>
+        Looks like:{' '}
+        <span className="font-medium">
+          {suggestion.brand ? `${suggestion.brand} ` : ''}
+          {suggestion.name}
+        </span>{' '}
+        <span className="text-muted-foreground">— branded, limited data</span>
+      </span>
+      {isAccepting ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+      ) : (
+        <Plus className="h-4 w-4 shrink-0" />
+      )}
+    </button>
+  )
+}
+
+/**
+ * Inline form for the terminal fallback: nothing in the database matches, so
+ * the owner logs the item with an estimated per-100g calorie value (macros
+ * optional). Creates a source='manual' sparse row — the item then counts
+ * toward the meal total instead of being deleted and silently under-counting.
+ */
+function CustomEntryForm({
+  label,
+  onCreated,
+}: {
+  label: string
+  onCreated: (food: Food) => void
+}) {
+  const [name, setName] = useState(label)
+  const [kcal, setKcal] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const submit = async () => {
+    if (!name.trim() || !Number.isFinite(Number(kcal)) || kcal === '') {
+      toast.error('Enter a name and estimated calories per 100 g')
+      return
+    }
+    setIsSaving(true)
+    try {
+      const food = await createManualIngredient({
+        name: name.trim(),
+        calories_per_100g: Number(kcal),
+      })
+      onCreated(food)
+      toast.success(`Added "${food.name}" as a custom ingredient`)
+    } catch (error) {
+      console.error('Create manual ingredient error:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to add ingredient'
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/50 p-2">
+      <Input
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="Ingredient name"
+        className="h-8 w-44 text-sm"
+        aria-label="Custom ingredient name"
+      />
+      <Input
+        type="number"
+        min="0"
+        value={kcal}
+        onChange={e => setKcal(e.target.value)}
+        placeholder="est. kcal / 100g"
+        className="h-8 w-32 text-sm"
+        aria-label="Estimated calories per 100 grams"
+      />
+      <Button size="sm" variant="secondary" onClick={submit} disabled={isSaving}>
+        {isSaving ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          'Log as custom'
+        )}
+      </Button>
+      <p className="w-full text-xs text-muted-foreground">
+        Estimate only — counted in calories, excluded from nutrient analysis.
+      </p>
     </div>
   )
 }
@@ -150,6 +301,7 @@ export function BowlConfirmation({
       confidence: item.confidence,
       proportion: item.estimated_proportion,
       ingredient: item.ingredient,
+      suggestion: item.branded_suggestion ?? null,
       grams: '',
       gramsTouched: false,
     }))
@@ -206,6 +358,7 @@ export function BowlConfirmation({
         // estimate it — the owner enters its grams directly.
         proportion: 0,
         ingredient: food,
+        suggestion: null,
         grams: '',
         gramsTouched: false,
       },
@@ -223,7 +376,9 @@ export function BowlConfirmation({
       return
     }
     if (unmatchedCount > 0) {
-      toast.error('Match every item to an ingredient, or remove it')
+      toast.error(
+        'Resolve every item: search an ingredient, accept a suggested product, or log it as custom'
+      )
       return
     }
     if (rows.some(row => !Number(row.grams) || Number(row.grams) <= 0)) {
@@ -478,6 +633,21 @@ export function BowlConfirmation({
                   }
                   onSelect={food => updateRow(row.key, { ingredient: food })}
                 />
+
+                {!row.ingredient && row.suggestion && (
+                  <BrandedSuggestionButton
+                    suggestion={row.suggestion}
+                    onAccepted={food =>
+                      updateRow(row.key, { ingredient: food })
+                    }
+                  />
+                )}
+                {!row.ingredient && (
+                  <CustomEntryForm
+                    label={row.label}
+                    onCreated={food => updateRow(row.key, { ingredient: food })}
+                  />
+                )}
               </li>
               )
             })}
