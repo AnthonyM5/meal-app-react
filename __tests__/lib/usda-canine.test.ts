@@ -147,6 +147,8 @@ describe('inferPreparationState', () => {
     ['Beef, ground, 90% lean meat / 10% fat, patty, cooked, pan-broiled', 'cooked'],
     ['Sweet potato, cooked, baked in skin, flesh, without salt', 'cooked'],
     ['Fish, salmon, Atlantic, farmed, raw', 'raw'],
+    ['Quinoa, uncooked', 'raw'],
+    ['Lentils, raw', 'raw'],
   ] as const)('%s → %s', (description, expected) => {
     expect(inferPreparationState(description)).toBe(expected)
   })

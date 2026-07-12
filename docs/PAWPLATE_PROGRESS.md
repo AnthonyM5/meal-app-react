@@ -285,19 +285,54 @@ meats, organs, and produce.
   - `usda-nonnutrient-fields.md` (AC #4) — keep/discard decision per non-nutrient
     `format=full` field. Top future adds: `foodPortions` (household units),
     `dataType`, `foodCategory`, `publicationDate`.
-- **Audit AC status**: #1 ✅, #3 ✅, #4 ✅ done. **Remaining**: #2 (30-staple
-  raw/cooked gap table — larger, needs a staple list + classifier) and #5
-  (raw-JSON persistence, §3.4). OFF/FatSecret fallback sources (§2) not started.
-- **Deferred**: §3.4 raw `format=full` JSON persistence before extraction, so
-  future nutrient-map expansions and non-nutrient field adds don't require
-  re-fetching from USDA — the structural fix that would also make AC #4's
-  recommended fields cheap to capture. Flagged for a future session.
+- **Audit AC status**: #1 ✅, #3 ✅, #4 ✅ done; #2 ✅ (raw/cooked gap table,
+  now 44 staples) and #5 ✅ (raw-JSON persistence — `source_payloads`, Phase
+  3.5) done as of 2026-07-10. OFF fallback source (§2) started (Phase 3.5);
+  FatSecret still deferred.
+
+### Phase 3.5 — Staple coverage & branded-food kickoff (done, 2026-07-10)
+
+Hardening of the Phase 3 USDA pipeline plus the first slice of the branded
+(Open Food Facts) plan from `docs/BRANDED_INGREDIENTS_DESIGN.md`:
+
+- **Classifier fix**: `inferPreparationState()` now treats `uncooked` as raw
+  (FDC's dry-grain wording; resolved the audit's quinoa false-flag). Regression
+  test added to `__tests__/lib/usda-canine.test.ts`.
+- **Raw payload persistence (audit §3.4, done)**: new `source_payloads` table
+  (migration `20260711000000`) + `lib/source-payloads.ts` `storePayload()`,
+  wired into every USDA fetch site (`import-cooked-ingredients.ts`, `018`,
+  `020`, `/api/ingredients/import`) and the OFF helpers. Detail payloads link
+  to their `foods` row; search payloads preserve the excluded candidates, so
+  later coverage passes can widen from stored data instead of re-fetching.
+- **Staple gaps closed**: `scripts/020_seed_staple_gaps.ts` pins the exact
+  fdc_ids of the 12 previously script-only cooked imports (reproducible on a
+  fresh DB, idempotent against the live one — verified: 12 skips) and imports
+  the missing legumes: chickpeas + lentils, raw + cooked-unsalted (4 new
+  verified rows; `foods` now 61 rows, 23 USDA-sourced).
+- **Staple list expanded 34 → ~45** (`audits/pawplate-staple-ingredients.md`):
+  whitefish, mackerel, herring, zucchini, cauliflower, cucumber, watermelon,
+  strawberries, cranberries, black beans, + new fats/oils category (coconut
+  oil, flaxseed oil), each with a verified vet-class citation.
+  `scripts/019_audit_raw_cooked_gaps.ts` extended to 44 audited staples —
+  re-run: **44/44, 0 gaps** (import of the new staples is a follow-up pass).
+- **OFF mapper (design §10 step 3, first slice)**: `lib/off-integration.ts` —
+  barcode + name lookups trying **Open Pet Food Facts first, then Open Food
+  Facts** (live testing showed pet products resolve on OPFF, not OFF), and
+  `convertOFFToIngredient()` (macros, salt→sodium via /2.5, minerals g→mg,
+  unreported nutrients `null` never 0, per-host ODbL attribution,
+  `source='off'`, never verified; returns null when kcal is unreported since
+  `calories_per_serving` is NOT NULL). CLI smoke harness:
+  `scripts/021_test_off_mapper.ts <barcode> [--insert]` — dry-run by default.
+  Deferred per design: shared `resolveIngredient()` chain, bowl/meal-flow
+  wiring, barcode-scan UI, source badges, FatSecret, attribution UI.
 
 ## Next phase (planned)
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
+- Import the 12 newly-listed staples (audit-gated: 44/44 available in FDC).
+- OFF resolver + flow wiring (design §10 steps 3–5): `resolveIngredient()`
+  fallback chain into bowl analyze + ingredient search, caching OFF hits.
 - Camera capture / bowl flow in the Expo `mobile/` app (web flow done).
-- Persist raw USDA `format=full` responses before extraction (audit doc §3.4).
 - Vet review of all AAFCO-sourced `nutrient_requirements` values (25 original
   + 12 new amino-acid/B-vitamin rows).
 

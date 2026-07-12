@@ -1,3 +1,4 @@
+import { storePayload } from '@/lib/source-payloads'
 import { convertUSDAToIngredient } from '@/lib/usda-canine'
 import type { Database } from '@/lib/types'
 import { createServerClient } from '@supabase/ssr'
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     let importedCount = 0
     let flaggedToxic = 0
 
-    const usdaFoods = await searchUSDAFoods(query)
+    const usdaFoods = await searchUSDAFoods(query, supabase)
 
     for (const usdaFood of usdaFoods.slice(0, 10)) {
       try {
@@ -85,7 +86,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function searchUSDAFoods(query: string) {
+async function searchUSDAFoods(
+  query: string,
+  supabase: ReturnType<typeof createSupabaseClient>
+) {
   try {
     // Foundation / SR Legacy carry the fullest nutrient profiles —
     // prefer them over Branded for whole-food ingredients.
@@ -97,6 +101,14 @@ async function searchUSDAFoods(query: string) {
     if (!response.ok) return []
 
     const data = await response.json()
+    // Archive the search response — preserves candidates the slice(0, 10)
+    // below never touches, for later coverage passes without a re-fetch.
+    await storePayload(supabase, {
+      source: 'usda',
+      kind: 'search',
+      externalId: query,
+      payload: data,
+    })
     return data.foods || []
   } catch (error) {
     console.error('USDA search error:', error)
@@ -127,7 +139,18 @@ async function importIngredient(
   const detail = await detailResponse.json()
   const row = convertUSDAToIngredient(detail)
 
-  const { error } = await supabase.from('foods').insert(row)
+  const { data: inserted, error } = await supabase
+    .from('foods')
+    .insert(row)
+    .select('id')
+    .single()
+  await storePayload(supabase, {
+    source: 'usda',
+    kind: 'detail',
+    externalId: usdaFood.fdcId,
+    payload: detail,
+    foodId: inserted?.id ?? null,
+  })
   if (error) {
     console.error('Insert ingredient error:', error)
     return { imported: false, toxic: false }

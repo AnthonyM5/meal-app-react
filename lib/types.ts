@@ -203,6 +203,18 @@ export interface MealItem {
   recipe?: Recipe
 }
 
+// Raw USDA/OFF API responses archived at import time (see migration
+// 20260711000000_add_source_payloads.sql and lib/source-payloads.ts)
+export interface SourcePayload {
+  id: string
+  source: 'usda' | 'off'
+  kind: 'detail' | 'search'
+  external_id: string
+  payload: Record<string, unknown>
+  food_id: string | null
+  fetched_at: string
+}
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 export type ActivityLevel =
   | 'sedentary'
@@ -258,6 +270,11 @@ export interface Database {
         Row: RecipeIngredient
         Insert: Omit<RecipeIngredient, 'id' | 'created_at' | 'food'>
         Update: Partial<Omit<RecipeIngredient, 'id' | 'created_at' | 'food'>>
+      }
+      source_payloads: {
+        Row: SourcePayload
+        Insert: Omit<SourcePayload, 'id'>
+        Update: Partial<Omit<SourcePayload, 'id'>>
       }
       profiles: {
         Row: {

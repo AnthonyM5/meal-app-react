@@ -40,6 +40,9 @@ reference bowl photo (The Farmer's Dog "Jada's Turkey Recipe") are marked **📷
 | Salmon (Atlantic) | | cooked | **Must be cooked** (raw wild salmon → salmon poisoning disease); no bones | [Dogster: Omega-3 Sources for Dogs](https://www.dogster.com/dog-nutrition/sources-of-omega-3-for-dogs) |
 | Sardine (canned in water) | | cooked/canned | Low mercury; no added salt | [Dogster: Omega-3 Sources for Dogs](https://www.dogster.com/dog-nutrition/sources-of-omega-3-for-dogs) |
 | Tuna (yellowfin) *(optional)* | | raw/cooked | **Mercury — occasional only**, not a staple | [Dogster: Omega-3 Sources for Dogs](https://www.dogster.com/dog-nutrition/sources-of-omega-3-for-dogs) |
+| Whitefish (cod/haddock) | | cooked | Lean, low-mercury; plain, boneless | [PetMD: Can Dogs Eat Fish?](https://www.petmd.com/dog/nutrition/can-dogs-eat-fish) |
+| Mackerel (Atlantic) | | cooked | Omega-3 dense; **Atlantic only — king mackerel is high-mercury**; moderation | [PetMD: Can Dogs Eat Fish?](https://www.petmd.com/dog/nutrition/can-dogs-eat-fish) |
+| Herring | | cooked | Short-lived species, low mercury, high EPA/DHA; no pickled/smoked | [PetMD: Can Dogs Eat Fish?](https://www.petmd.com/dog/nutrition/can-dogs-eat-fish) |
 
 ## 4. Eggs & dairy
 
@@ -61,6 +64,9 @@ reference bowl photo (The Farmer's Dog "Jada's Turkey Recipe") are marked **📷
 | Peas (green/snap) | 📷? | raw/cooked | Fresh/frozen, not canned (sodium); see legume DCM note below | [AKC Fruits & Vegetables](https://www.akc.org/expert-advice/nutrition/fruits-vegetables-dogs-can-and-cant-eat/) |
 | Bell pepper (any color) | 📷 | raw/cooked | Vitamins A/B6/E, beta-carotene; remove seeds/stem | [AKC Fruits & Vegetables](https://www.akc.org/expert-advice/nutrition/fruits-vegetables-dogs-can-and-cant-eat/) |
 | Pumpkin (pure) | | cooked | Plain purée (not pie filling); fiber/GI aid | [AKC Fruits & Vegetables](https://www.akc.org/expert-advice/nutrition/fruits-vegetables-dogs-can-and-cant-eat/) |
+| Zucchini | | raw/cooked | Low-cal, safe; plain, no seasoning | [AKC: Can Dogs Eat Zucchini?](https://www.akc.org/expert-advice/nutrition/can-dogs-eat-zucchini/) |
+| Cauliflower | | cooked pref. | Same brassica caveats as broccoli (gas/GI) — moderation | [PetMD: Can Dogs Eat Cauliflower?](https://www.petmd.com/dog/nutrition/can-dogs-eat-cauliflower) |
+| Cucumber | | raw | Very low-cal, hydrating; slice to avoid gulping whole | [AKC: Can Dogs Eat Cucumbers?](https://www.akc.org/expert-advice/nutrition/can-dogs-eat-cucumbers/) |
 
 ## 6. Fruits
 
@@ -69,6 +75,9 @@ reference bowl photo (The Farmer's Dog "Jada's Turkey Recipe") are marked **📷
 | Blueberries | | raw | Antioxidant "superfood" | [AKC Fruits & Vegetables](https://www.akc.org/expert-advice/nutrition/fruits-vegetables-dogs-can-and-cant-eat/) |
 | Apple | | raw | **Remove seeds/core** (cyanogenic seeds) | [AKC Fruits & Vegetables](https://www.akc.org/expert-advice/nutrition/fruits-vegetables-dogs-can-and-cant-eat/) |
 | Banana | | raw | High sugar — moderation | [AKC Fruits & Vegetables](https://www.akc.org/expert-advice/nutrition/fruits-vegetables-dogs-can-and-cant-eat/) |
+| Watermelon | | raw | **Remove seeds and rind** (GI blockage); hydrating, low-cal | [AKC: Can Dogs Eat Watermelon?](https://www.akc.org/expert-advice/nutrition/can-dogs-eat-watermelon/) |
+| Strawberries | | raw | Antioxidants + vitamin C; moderate sugar | [AKC: Can Dogs Eat Strawberries?](https://www.akc.org/expert-advice/nutrition/can-dogs-eat-strawberries/) |
+| Cranberries | | raw/cooked | Plain only — **never sweetened/dried mixes** (sugar, possible raisins); UTI benefit unproven, don't overclaim | [AKC: Can Dogs Eat Cranberries?](https://www.akc.org/expert-advice/nutrition/can-dogs-eat-cranberries/) |
 
 ## 7. Carbohydrates / grains
 
@@ -86,6 +95,7 @@ reference bowl photo (The Farmer's Dog "Jada's Turkey Recipe") are marked **📷
 |---|---|---|---|---|
 | Chickpeas (garbanzo) | 📷 | cooked | Plain, cooked, unsalted; **see DCM note** | [Sundays: Lentils/Chickpeas/Potatoes myth](https://sundaysfordogs.com/blog/mythbusters-are-lentils-chickpeas-and-potatoes-good-ingredients-in-dog-food) |
 | Lentils | 📷 | cooked | Plain, cooked; **see DCM note** | [Pet Food Processing: pulses not linked to DCM (2023 study)](https://www.petfoodprocessing.net/articles/16883-new-study-pulse-ingredients-in-dog-food-not-linked-to-dcm) |
+| Black beans | | cooked | Plain, well-cooked, unsalted — **raw/undercooked beans are toxic (lectins)**; no canned with seasoning; **see DCM note** | [PetMD: Can Dogs Eat Beans?](https://www.petmd.com/dog/nutrition/can-dogs-eat-beans) |
 
 > **⚠️ Legume / DCM context (must surface in the app):** The FDA opened a 2018–2019
 > investigation into a possible link between diet-associated dilated cardiomyopathy
@@ -104,11 +114,24 @@ reference bowl photo (The Farmer's Dog "Jada's Turkey Recipe") are marked **📷
 Eggshell powder (Ca), kelp powder (iodine), salmon oil (omega-3) — hand-curated,
 no USDA analog; not part of the raw/cooked gap check.
 
+## 10. Fats & oils (calorie-dense toppers — teaspoon-scale servings, not bulk ingredients)
+
+| Ingredient | 📷 | Prep | Canine caveat | Source |
+|---|---|---|---|---|
+| Coconut oil | | n/a | Mostly saturated fat, **not** a meaningful nutrient source; popular claims (coat, immunity) lack strong evidence — small amounts only, skip for pancreatitis-prone dogs | [AKC: Coconut Oil for Dogs](https://www.akc.org/expert-advice/health/coconut-oil-dogs/) |
+| Flaxseed oil | | n/a | Plant omega-3 is **ALA — dogs convert poorly to DHA**, so it does not replace fish EPA/DHA; anti-inflammatory adjunct only | [VCA: Flaxseed Oil](https://vcahospitals.com/know-your-pet/flax-seed-oil) |
+
+_These two have no raw/cooked split (`expect: n/a`) and, like the supplements above,
+sit outside the raw/cooked gap check; they're listed so the import pipeline and
+safety layer know they're legitimate bowl items._
+
 ---
 
 ## Count & coverage
 
-**~33 whole-food staples** across 8 categories. All reference-photo items are covered:
+**~45 whole-food staples** across 10 categories (12 added 2026-07-10: whitefish,
+mackerel, herring, zucchini, cauliflower, cucumber, watermelon, strawberries,
+cranberries, black beans, coconut oil, flaxseed oil). All reference-photo items are covered:
 turkey 📷, chickpeas 📷, lentils 📷, carrot 📷, broccoli 📷, bell pepper 📷, plus the
 leafy green (spinach/kale). The **branded product** in the photo (The Farmer's Dog
 recipe) is exactly the class USDA can't resolve — that's the Open Food Facts /

@@ -50,6 +50,9 @@ const STAPLES: Staple[] = [
   { category: 'Fish', name: 'Salmon (Atlantic)', query: 'salmon atlantic', expect: 'both' },
   { category: 'Fish', name: 'Sardine', query: 'sardine atlantic', expect: 'cooked_only' },
   { category: 'Fish', name: 'Tuna (yellowfin)', query: 'tuna yellowfin fresh', expect: 'both' },
+  { category: 'Fish', name: 'Whitefish (cod)', query: 'cod atlantic', expect: 'both' },
+  { category: 'Fish', name: 'Mackerel (Atlantic)', query: 'mackerel atlantic', expect: 'both' },
+  { category: 'Fish', name: 'Herring', query: 'herring atlantic', expect: 'both' },
   // Eggs & dairy
   { category: 'Egg/Dairy', name: 'Egg (whole)', query: 'egg whole', expect: 'both' },
   { category: 'Egg/Dairy', name: 'Yogurt (plain, whole)', query: 'yogurt plain whole milk', expect: 'raw_only' },
@@ -63,10 +66,16 @@ const STAPLES: Staple[] = [
   { category: 'Vegetable', name: 'Peas (green)', query: 'peas green', expect: 'both' },
   { category: 'Vegetable', name: 'Bell pepper', query: 'peppers sweet bell', expect: 'both' },
   { category: 'Vegetable', name: 'Pumpkin', query: 'pumpkin', expect: 'both' },
+  { category: 'Vegetable', name: 'Zucchini', query: 'zucchini summer squash', expect: 'both' },
+  { category: 'Vegetable', name: 'Cauliflower', query: 'cauliflower', expect: 'both' },
+  { category: 'Vegetable', name: 'Cucumber', query: 'cucumber with peel', expect: 'raw_only' },
   // Fruits — no cooked variant expected
   { category: 'Fruit', name: 'Blueberries', query: 'blueberries', expect: 'raw_only' },
   { category: 'Fruit', name: 'Apple', query: 'apples raw', expect: 'raw_only' },
   { category: 'Fruit', name: 'Banana', query: 'bananas raw', expect: 'raw_only' },
+  { category: 'Fruit', name: 'Watermelon', query: 'watermelon raw', expect: 'raw_only' },
+  { category: 'Fruit', name: 'Strawberries', query: 'strawberries raw', expect: 'raw_only' },
+  { category: 'Fruit', name: 'Cranberries', query: 'cranberries raw', expect: 'raw_only' },
   // Carbs / grains — cooked is the fed form
   { category: 'Grain', name: 'White rice', query: 'rice white', expect: 'both' },
   { category: 'Grain', name: 'Brown rice', query: 'rice brown', expect: 'both' },
@@ -76,6 +85,9 @@ const STAPLES: Staple[] = [
   // Legumes / pulses
   { category: 'Legume', name: 'Chickpeas (garbanzo)', query: 'chickpeas garbanzo', expect: 'both' },
   { category: 'Legume', name: 'Lentils', query: 'lentils', expect: 'both' },
+  { category: 'Legume', name: 'Black beans', query: 'beans black mature seeds', expect: 'both' },
+  // Fats & oils (coconut/flaxseed oil) are deliberately absent: like the
+  // hand-curated supplements, they have no raw/cooked split to audit.
 ]
 
 interface Result extends Staple {

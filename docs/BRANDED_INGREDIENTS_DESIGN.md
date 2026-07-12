@@ -184,8 +184,15 @@ most minerals/vitamins). So:
    was excluded (branded-only bowl no longer reads as "deficient in everything"). The
    engine is backward-compatible: called without `coverage`, behavior is unchanged. Fully
    unit-tested (`__tests__/lib/canine-nutrition.test.ts`).
-3. **OFF integration** — `lib/off-integration.ts` (by-barcode + name search, mapper),
-   resolver step 2–3, caching into `foods` with attribution. (next)
+3. **OFF integration** — ⚙️ **mapper slice done (2026-07-10)**: `lib/off-integration.ts`
+   ships `fetchOFFByBarcode` / `searchOFFByName` / `convertOFFToIngredient` with a CLI
+   smoke harness (`scripts/021_test_off_mapper.ts`, dry-run by default). Two findings
+   from live testing: (a) pet products resolve on **Open Pet Food Facts**
+   (`world.openpetfoodfacts.org`, same API/license) — lookups try OPFF first, then OFF,
+   and attribution is set per-host; (b) products with no reported kcal are not
+   convertible (`calories_per_serving` is NOT NULL) — the mapper returns null and the
+   raw payload is still archived to `source_payloads`. Remaining from this step: the
+   shared resolver (steps 2–3 of §4) and automatic caching into `foods`. (next)
 4. **Bowl flow** — OFF fallback on unresolved labels + optional barcode-scan affordance.
 5. **Meal flow** — source badges, barcode entry, complete-food single-line logging.
    Also: gap UI needs an `unmeasured`/"partial coverage" treatment (new GapStatus).

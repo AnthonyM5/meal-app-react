@@ -1,17 +1,21 @@
 /**
- * Import verified USDA raw entries for staple ingredients that only existed
- * as sparse, hand-curated (`is_verified: false`) rows in `foods`. Found by
- * the 2026-07-08 nutrient-coverage audit: 8 curated entries had incomplete
- * profiles despite a real Foundation/SR Legacy raw analog existing.
+ * Pin the USDA staple imports that previously existed only as one-off live
+ * runs, plus the two legumes the 2026-07-10 coverage review found were never
+ * imported at all (chickpeas, lentils — both confirmed available raw+cooked
+ * in FDC by scripts/019_audit_raw_cooked_gaps.ts).
  *
- * These are inserted as NEW rows (not replacing the curated ones — existing
- * meal_items may reference them) so the verified USDA data becomes available
- * for meal-building and search alongside the legacy hand-entered rows.
- * Idempotent — dedupes on fdc_id like the other import scripts.
+ * scripts/import-cooked-ingredients.ts is the DISCOVERY script (fuzzy FDC
+ * search + regex match — results depend on live search ranking); this file
+ * is the PINNED REPRODUCTION: the exact fdc_ids that are live today, so a
+ * fresh database re-seeds to the same state without depending on FDC search
+ * behavior. Companion to scripts/018_import_raw_counterparts.ts (raw pins).
+ *
+ * Idempotent — dedupes on fdc_id; safe to re-run against a populated DB.
+ * Raw detail payloads are archived to source_payloads on every fetch.
  *
  * Usage:
  *   set -a && source .env.local && set +a
- *   npx tsx scripts/018_import_raw_counterparts.ts
+ *   npx tsx scripts/020_seed_staple_gaps.ts
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -32,18 +36,25 @@ const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
-// Chosen to replace: beef kidney raw, ground beef 90% raw, chicken breast/
-// thigh raw, lamb ground raw, pork tenderloin raw, turkey ground 93% raw —
-// the 7 (of 8) unverified curated entries with a real FDC raw analog. Kelp
-// powder has no FDC entry (supplement, not a whole food) — left as-is.
 const FDC_IDS = [
-  169449, // Beef, variety meats and by-products, kidneys, raw
-  174030, // Beef, ground, 90% lean meat / 10% fat, raw
-  171077, // Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw
-  173627, // Chicken, broilers or fryers, dark meat, thigh, meat only, raw
-  174370, // Lamb, ground, raw
-  168249, // Pork, fresh, loin, tenderloin, separable lean only, raw
-  172850, // Turkey, ground, 93% lean, 7% fat, raw
+  // -- Cooked variants originally imported live by import-cooked-ingredients.ts
+  171477, // Chicken, broilers or fryers, breast, meat only, cooked, roasted
+  171478, // Chicken, broilers or fryers, breast, meat only, cooked, stewed
+  172388, // Chicken, broilers or fryers, thigh, meat only, cooked, roasted
+  172389, // Chicken, broilers or fryers, thigh, meat only, cooked, stewed
+  171061, // Chicken, liver, all classes, cooked, simmered
+  171795, // Beef, ground, 90% lean meat / 10% fat, loaf, cooked, baked
+  174031, // Beef, ground, 90% lean meat / 10% fat, patty, cooked, broiled
+  171506, // Turkey, Ground, cooked
+  173424, // Egg, whole, cooked, hard-boiled
+  172185, // Egg, whole, cooked, omelet
+  175168, // Fish, salmon, Atlantic, farmed, cooked, dry heat
+  170134, // Sweet potato, cooked, baked in skin, flesh, with salt
+  // -- Legume staples never imported before (raw + cooked, unsalted for dogs)
+  173756, // Chickpeas (garbanzo beans, bengal gram), mature seeds, raw
+  173757, // Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt
+  172420, // Lentils, raw
+  172421, // Lentils, mature seeds, cooked, boiled, without salt
 ]
 
 async function importFood(fdcId: number): Promise<string> {
