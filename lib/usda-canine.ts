@@ -269,5 +269,6 @@ export function convertUSDAToIngredient(usdaFood: USDAFoodLike) {
     toxicity_note: safety.note,
     preparation_state: inferPreparationState(usdaFood.description),
     is_verified: isComplete,
+    source: 'usda' as const,
   }
 }

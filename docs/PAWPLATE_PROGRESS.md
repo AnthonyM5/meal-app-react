@@ -326,12 +326,65 @@ Hardening of the Phase 3 USDA pipeline plus the first slice of the branded
   Deferred per design: shared `resolveIngredient()` chain, bowl/meal-flow
   wiring, barcode-scan UI, source badges, FatSecret, attribution UI.
 
+### Phase 3.6 — Broad coverage: filtered bulk import, OFF resolver, manual fallback (2026-07-12)
+
+Prompted by a real bowl (macaroni + red cabbage + broth) whose items could be
+*detected* but not *tagged*: the trace showed nothing is filtered at vision
+time — items failed at fuzzy-match (no such `foods` rows) and the confirm
+gate then forced deleting them, silently under-counting the meal.
+
+- **Two-tier coverage model** (decided with user): `foods` stays the curated
+  deterministic table, broadened by a **filtered bulk import** of USDA
+  Foundation + SR Legacy; USDA Branded (456k) and OFF (3.9M) are *never*
+  bulk-loaded — branded items resolve on demand and cache on accept.
+- **Bulk import** — `scripts/022_bulk_import_usda_wholefoods.ts`: enumerates
+  the whole corpus via `/foods/search?query=*` (search results carry
+  `foodCategory`; the `/foods/list` endpoint does not), keeps 12 dog-relevant
+  categories (~5,000 of 8,187; both data types — Foundation also carries
+  sausages/baked/restaurant categories), batch-fetches `format=full` details
+  (POST `/foods`, 20/batch), converts via `convertUSDAToIngredient`, upserts
+  on `fdc_id`, archives every search page + detail payload to
+  `source_payloads`. `--dry-run` / `--category=` / `--refresh` guardrails.
+  Toxic whole foods in whitelisted categories (onion, garlic, grapes) import
+  flagged `is_safe_for_dogs=false` — kept for the safety layer.
+- **Safety fixes**: `checkDogSafety` short patterns (≤4 chars) now match as
+  whole words + plural — "rum" no longer flags "Wheat, durum"/"bread crumbs",
+  "wine" no longer flags "swine"; substring behavior kept for longer terms so
+  "grape" still catches "grapefruit". Bowl auto-match (`matchLocalIngredient`)
+  never selects an `is_safe_for_dogs=false` row.
+- **Search upgrades** (migrations `20260712000000` + `20260712000200`):
+  `fuzzy_search_foods` now returns `source`/`data_completeness`/
+  `is_complete_food`, ranks trusted sources and safe rows first, and scores
+  with `word_similarity` as well as whole-string trigram — long USDA names
+  had depressed single-word labels below the 0.3 auto-match floor
+  (similarity('macaroni', 'Macaroni, vegetable, enriched, cooked') = 0.28;
+  word_similarity = 1.0).
+- **OFF resolve-and-cache** (design §10 steps 3–5 core): `lib/resolve-ingredient.ts`
+  (`matchLocalIngredient` → `suggestBranded`, 4s OFF timeout) wired into
+  `identifyBowl`; unmatched bowl items now carry a `branded_suggestion`.
+  Accepting it (`acceptBrandedIngredient` in `lib/ingredient-actions.ts`)
+  fetches the canonical OFF record, caches it into `foods`
+  (`source='off'`, barcode-unique, ODbL attribution) — cache-on-accept, never
+  on-fetch, so generic labels can't pull crowd junk into the table.
+- **Manual fallback** (`createManualIngredient` + `CustomEntryForm` in
+  `bowl-confirmation.tsx`): an unmatched item can be logged with an estimated
+  kcal/100g as a `source='manual'`, sparse, unverified row — it counts toward
+  the meal total instead of being deleted. Confirm gate now offers three
+  resolution paths (search / accept branded / log custom); search results show
+  "branded"/"custom" badges in both the bowl picker and meal builder.
+- **Legacy NutriTrack import chain deleted** (it wrote 12–20-column
+  human-schema rows with `is_verified: true` and no safety pass, and
+  `/api/usda-search` was still publicly routable): `lib/usda-api.ts`,
+  `lib/usda-integration.ts`, `lib/enhanced-food-actions.ts`,
+  `components/enhanced-food-search.tsx`, `app/api/usda-search/`,
+  `scripts/optimized-bulk-import.ts`, `scripts/import-popular-foods.ts`,
+  `scripts/import.config.json`, `scripts/analyze-usda-data.ts`.
+
 ## Next phase (planned)
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
-- Import the 12 newly-listed staples (audit-gated: 44/44 available in FDC).
-- OFF resolver + flow wiring (design §10 steps 3–5): `resolveIngredient()`
-  fallback chain into bowl analyze + ingredient search, caching OFF hits.
+- Barcode-scan affordance for branded items (design §5); FatSecret still
+  deferred on caching terms.
 - Camera capture / bowl flow in the Expo `mobile/` app (web flow done).
 - Vet review of all AAFCO-sourced `nutrient_requirements` values (25 original
   + 12 new amino-acid/B-vitamin rows).

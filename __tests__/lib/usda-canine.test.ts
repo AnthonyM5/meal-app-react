@@ -187,7 +187,17 @@ describe('checkDogSafety', () => {
     ['Rice, brown, cooked'],
     ['Pumpkin, cooked, mashed'],
     ['Egg, whole, raw'],
+    // Short toxic terms must not substring-match inside larger words
+    ['Wheat, durum'], // "rum"
+    ['Bread crumbs, dry, grated, plain'], // "rum"
+    ['Pork, fresh, swine, cooked'], // "wine"
   ])('passes %s as safe', name => {
     expect(checkDogSafety(name).isSafe).toBe(true)
+  })
+
+  test('short terms still flag as whole words and plurals', () => {
+    expect(checkDogSafety('Rum, 80 proof').isSafe).toBe(false)
+    expect(checkDogSafety('Leeks, cooked, boiled').isSafe).toBe(false)
+    expect(checkDogSafety('Wine, table, red').isSafe).toBe(false)
   })
 })

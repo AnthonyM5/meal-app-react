@@ -226,6 +226,23 @@ export function DogMealBuilder({
                                     {food.preparation_state}
                                   </Badge>
                                 )}
+                                {(food.source === 'off' ||
+                                  food.source === 'fatsecret') && (
+                                  <Badge
+                                    variant="outline"
+                                    className="px-1.5 py-0 text-xs font-normal text-muted-foreground"
+                                  >
+                                    branded
+                                  </Badge>
+                                )}
+                                {food.source === 'manual' && (
+                                  <Badge
+                                    variant="outline"
+                                    className="px-1.5 py-0 text-xs font-normal text-muted-foreground"
+                                  >
+                                    custom
+                                  </Badge>
+                                )}
                                 {food.is_safe_for_dogs === false && (
                                   <AlertTriangle className="h-4 w-4 text-red-500" />
                                 )}
