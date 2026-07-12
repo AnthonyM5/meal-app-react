@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-08",
+  "generated": "2026-07-10",
   "results": [
     {
       "category": "Muscle meat",
@@ -158,6 +158,42 @@
       "gap": null
     },
     {
+      "category": "Fish",
+      "name": "Whitefish (cod)",
+      "query": "cod atlantic",
+      "expect": "both",
+      "totalHits": 32,
+      "hasRaw": true,
+      "hasCooked": true,
+      "rawExample": "Fish, cod, Atlantic, raw",
+      "cookedExample": "Fish, cod, Atlantic, cooked, dry heat",
+      "gap": null
+    },
+    {
+      "category": "Fish",
+      "name": "Mackerel (Atlantic)",
+      "query": "mackerel atlantic",
+      "expect": "both",
+      "totalHits": 35,
+      "hasRaw": true,
+      "hasCooked": true,
+      "rawExample": "Fish, mackerel, Atlantic, raw",
+      "cookedExample": "Fish, mackerel, Atlantic, cooked, dry heat",
+      "gap": null
+    },
+    {
+      "category": "Fish",
+      "name": "Herring",
+      "query": "herring atlantic",
+      "expect": "both",
+      "totalHits": 34,
+      "hasRaw": true,
+      "hasCooked": true,
+      "rawExample": "Fish, herring, Atlantic, raw",
+      "cookedExample": "Fish, herring, Atlantic, cooked, dry heat",
+      "gap": null
+    },
+    {
       "category": "Egg/Dairy",
       "name": "Egg (whole)",
       "query": "egg whole",
@@ -290,6 +326,42 @@
       "gap": null
     },
     {
+      "category": "Vegetable",
+      "name": "Zucchini",
+      "query": "zucchini summer squash",
+      "expect": "both",
+      "totalHits": 64,
+      "hasRaw": true,
+      "hasCooked": true,
+      "rawExample": "Squash, summer, zucchini, includes skin, raw",
+      "cookedExample": "Squash, summer, zucchini, includes skin, cooked, boiled, drained, with salt",
+      "gap": null
+    },
+    {
+      "category": "Vegetable",
+      "name": "Cauliflower",
+      "query": "cauliflower",
+      "expect": "both",
+      "totalHits": 11,
+      "hasRaw": true,
+      "hasCooked": true,
+      "rawExample": "Cauliflower, raw",
+      "cookedExample": "Cauliflower, green, cooked, with salt",
+      "gap": null
+    },
+    {
+      "category": "Vegetable",
+      "name": "Cucumber",
+      "query": "cucumber with peel",
+      "expect": "raw_only",
+      "totalHits": 27,
+      "hasRaw": true,
+      "hasCooked": false,
+      "rawExample": "Cucumber, peeled, raw",
+      "cookedExample": null,
+      "gap": null
+    },
+    {
       "category": "Fruit",
       "name": "Blueberries",
       "query": "blueberries",
@@ -326,6 +398,42 @@
       "gap": null
     },
     {
+      "category": "Fruit",
+      "name": "Watermelon",
+      "query": "watermelon raw",
+      "expect": "raw_only",
+      "totalHits": 1553,
+      "hasRaw": true,
+      "hasCooked": false,
+      "rawExample": "Watermelon, raw",
+      "cookedExample": null,
+      "gap": null
+    },
+    {
+      "category": "Fruit",
+      "name": "Strawberries",
+      "query": "strawberries raw",
+      "expect": "raw_only",
+      "totalHits": 1595,
+      "hasRaw": true,
+      "hasCooked": false,
+      "rawExample": "Strawberries, raw",
+      "cookedExample": null,
+      "gap": null
+    },
+    {
+      "category": "Fruit",
+      "name": "Cranberries",
+      "query": "cranberries raw",
+      "expect": "raw_only",
+      "totalHits": 1585,
+      "hasRaw": true,
+      "hasCooked": false,
+      "rawExample": "Cranberries, raw",
+      "cookedExample": null,
+      "gap": null
+    },
+    {
       "category": "Grain",
       "name": "White rice",
       "query": "rice white",
@@ -333,7 +441,7 @@
       "totalHits": 344,
       "hasRaw": true,
       "hasCooked": true,
-      "rawExample": "Rice, white, long grain, unenriched, raw",
+      "rawExample": "Rice, white, glutinous, unenriched, uncooked",
       "cookedExample": "Rice, white, glutinous, unenriched, cooked",
       "gap": null
     },
@@ -367,11 +475,11 @@
       "query": "quinoa",
       "expect": "both",
       "totalHits": 4,
-      "hasRaw": false,
+      "hasRaw": true,
       "hasCooked": true,
-      "rawExample": null,
+      "rawExample": "Quinoa, uncooked",
       "cookedExample": "Quinoa, cooked",
-      "gap": "missing RAW variant"
+      "gap": null
     },
     {
       "category": "Grain",
@@ -407,6 +515,18 @@
       "hasCooked": true,
       "rawExample": "Lentils, raw",
       "cookedExample": "Lentils, mature seeds, cooked, boiled, with salt",
+      "gap": null
+    },
+    {
+      "category": "Legume",
+      "name": "Black beans",
+      "query": "beans black mature seeds",
+      "expect": "both",
+      "totalHits": 524,
+      "hasRaw": true,
+      "hasCooked": true,
+      "rawExample": "Beans, black, mature seeds, raw",
+      "cookedExample": "Beans, black, mature seeds, cooked, boiled, with salt",
       "gap": null
     }
   ]

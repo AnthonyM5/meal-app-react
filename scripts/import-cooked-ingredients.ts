@@ -11,6 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { storePayload } from '../lib/source-payloads'
 import { convertUSDAToIngredient, type USDAFoodLike } from '../lib/usda-canine'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -61,6 +62,15 @@ async function searchUSDA(query: string): Promise<USDAFoodLike[]> {
   )
   if (!response.ok) throw new Error(`USDA search failed: ${response.status}`)
   const data = await response.json()
+  // Archive the whole search response — it holds the candidates the regex/
+  // EXCLUDE filters below reject, so a later pass can widen coverage from
+  // stored results instead of re-querying the API.
+  await storePayload(supabase, {
+    source: 'usda',
+    kind: 'search',
+    externalId: query,
+    payload: data,
+  })
   return data.foods || []
 }
 
@@ -81,7 +91,18 @@ async function importFood(fdcId: number): Promise<string> {
   const detail = (await detailResponse.json()) as USDAFoodLike
   const row = convertUSDAToIngredient(detail)
 
-  const { error } = await supabase.from('foods').insert(row)
+  const { data: inserted, error } = await supabase
+    .from('foods')
+    .insert(row)
+    .select('id')
+    .single()
+  await storePayload(supabase, {
+    source: 'usda',
+    kind: 'detail',
+    externalId: fdcId,
+    payload: detail,
+    foodId: inserted?.id ?? null,
+  })
   if (error) return `FAILED: ${error.message}`
   return `imported [${row.preparation_state ?? 'unknown'}] verified=${row.is_verified}`
 }

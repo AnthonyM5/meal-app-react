@@ -222,10 +222,13 @@ export function countExtractedNutrients(
 }
 
 // Cooking-method words as they appear in FDC descriptions. 'raw' is matched
-// as a whole word so e.g. "strawberries" doesn't false-positive.
+// as a whole word so e.g. "strawberries" doesn't false-positive. 'uncooked'
+// (FDC's dry-grain wording, e.g. "Quinoa, uncooked") counts as raw and must
+// be tested before COOKED_PATTERN, which would substring-match it. 'dried'
+// is deliberately excluded — dried fruit is not a raw fresh-feeding form.
 const COOKED_PATTERN =
   /cooked|roasted|stewed|fried|boiled|grilled|baked|braised|poached|steamed|rotisserie|hard-boiled|scrambled/i
-const RAW_PATTERN = /\braw\b/i
+const RAW_PATTERN = /\b(raw|uncooked)\b/i
 
 /**
  * Infer raw/cooked from a USDA description. Nutrient values always describe
