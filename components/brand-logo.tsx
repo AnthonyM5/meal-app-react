@@ -35,17 +35,27 @@ export function BrandMark({
       </defs>
       <circle cx="50" cy="50" r="49" fill="#2E7D32" />
       <g clipPath={`url(#${clipId})`}>
-        <circle cx="50" cy="46" r="40" fill="#FAF6EF" />
-        <ellipse cx="22" cy="34" rx="15" ry="20" fill="#1B5E20" transform="rotate(-25 22 34)" />
-        <ellipse cx="78" cy="34" rx="15" ry="20" fill="#1B5E20" transform="rotate(25 78 34)" />
-        <ellipse cx="34" cy="42" rx="12" ry="16" fill="#D99A55" transform="rotate(-12 34 42)" />
-        <ellipse cx="66" cy="42" rx="12" ry="16" fill="#B9843F" transform="rotate(12 66 42)" />
-        <circle cx="38" cy="46" r="3.4" fill="#1F2937" />
-        <circle cx="62" cy="46" r="3.4" fill="#1F2937" />
-        <ellipse cx="50" cy="62" rx="8" ry="6" fill="#1F2937" />
-        <path d="M30 68 Q50 82 70 68" stroke="#1F2937" strokeWidth="2.4" fill="none" strokeLinecap="round" />
-        <path d="M0 74 Q50 96 100 74 L100 100 L0 100 Z" fill="#2E7D32" />
-        <path d="M0 74 Q50 92 100 74" stroke="#1B5E20" strokeWidth="2" fill="none" />
+        <circle cx="50" cy="46" r="40" fill="#FBF9F4" />
+        {/* Ears */}
+        <path d="M22 20 Q4 34 8 56 Q10 68 22 74 Q30 70 29 56 Q28 40 34 26 Z" fill="#C97A2E" />
+        <path d="M78 20 Q96 34 92 56 Q90 68 78 74 Q70 70 71 56 Q72 40 66 26 Z" fill="#8A5A2B" />
+        {/* Face, with the tan left-side marking */}
+        <path d="M50 14 Q72 16 74 42 Q75 60 62 70 Q56 74 50 74 Q44 74 38 70 Q25 60 26 42 Q28 16 50 14 Z" fill="#FEFCF6" />
+        <path d="M50 14 Q30 16 27 40 Q26 54 33 64 Q40 70 50 72 L50 14 Z" fill="#D98A3D" />
+        {/* Eyes */}
+        <ellipse cx="39" cy="42" rx="4.6" ry="5.6" fill="#3A2A1A" />
+        <ellipse cx="39" cy="42" rx="2.1" ry="2.6" fill="#8A5A22" />
+        <circle cx="37.8" cy="40" r="0.9" fill="#FFFFFF" opacity="0.85" />
+        <ellipse cx="63" cy="42" rx="4.6" ry="5.6" fill="#2A1E14" />
+        <ellipse cx="63" cy="42" rx="2.1" ry="2.6" fill="#6B4419" />
+        <circle cx="61.8" cy="40" r="0.9" fill="#FFFFFF" opacity="0.85" />
+        {/* Snout + mouth */}
+        <ellipse cx="50" cy="60" rx="7.5" ry="5.6" fill="#241C18" />
+        <path d="M50 64 L50 68" stroke="#241C18" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M40 70 Q50 76 60 70" stroke="#241C18" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        {/* Bowl */}
+        <path d="M4 78 Q50 96 96 78 L96 100 L4 100 Z" fill="#2E7D32" />
+        <path d="M4 78 Q50 96 96 78" stroke="#1B5E20" strokeWidth="1.6" fill="none" />
       </g>
     </svg>
   )
