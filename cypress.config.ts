@@ -1,9 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { defineConfig } from 'cypress'
+import dotenv from 'dotenv'
 
-// Admin client for test-user lifecycle. Requires the shell to have
-// NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY exported
-// (e.g. `set -a && source .env.local && set +a`).
+// Load the same env files Next.js does, in the same precedence order
+// (.env first, then .env.local overrides it) — so `npx cypress run` works
+// standalone, with no need to `set -a && source .env.local && set +a` first.
+dotenv.config({ path: '.env' })
+dotenv.config({ path: '.env.local', override: true })
+
+// Admin client for test-user lifecycle.
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -81,6 +86,7 @@ export default defineConfig({
       return config
     },
   },
+  defaultCommandTimeout: 10000,
   component: {
     devServer: {
       framework: 'next',
