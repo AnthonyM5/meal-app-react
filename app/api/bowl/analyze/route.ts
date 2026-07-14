@@ -10,6 +10,7 @@ import {
 import { createClient as createUserClient } from '@/lib/supabase/server'
 import type { Database, Ingredient } from '@/lib/types'
 import {
+  MAX_USER_HINT_LENGTH,
   analyzeBowlImage,
   type NormalizedBowlItem,
 } from '@/lib/vision/analyze-bowl'
@@ -118,15 +119,28 @@ async function userOwnsDog(
   return !!data
 }
 
+/**
+ * Normalize the optional owner hint from form data: trimmed, length-capped,
+ * null when absent/blank. The hint guides identification only — it can never
+ * carry grams or nutrient values (enforced by the vision system prompt).
+ */
+function parseHint(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== 'string') return null
+  const hint = value.trim().slice(0, MAX_USER_HINT_LENGTH)
+  return hint.length > 0 ? hint : null
+}
+
 /** Run vision + fuzzy normalization, and hydrate the matched ingredient rows. */
 async function identifyBowl(
   supabase: ReturnType<typeof createSupabaseClient>,
   bytes: Buffer,
-  mediaType: AcceptedType
+  mediaType: AcceptedType,
+  userHint: string | null
 ) {
   const { result, modelVersion, raw } = await analyzeBowlImage({
     imageBase64: bytes.toString('base64'),
     mediaType,
+    userHint: userHint ?? undefined,
   })
 
   // Local match first (unsafe rows are never auto-matched); items the local
@@ -202,10 +216,21 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData()
     const file = formData.get('image')
+    const hint = parseHint(formData.get('hint'))
+    const analysisId = formData.get('analysis_id')
+
+    // Re-analysis of an existing photo (owner noticed a miss on the confirm
+    // screen): no re-upload, owner-only. Guests never have an analysis_id.
+    if (typeof analysisId === 'string' && analysisId) {
+      if (userId === null) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      }
+      return await handleOwnerReanalyze(userId, analysisId, hint)
+    }
 
     return userId === null
-      ? await handleGuestScan(request, file)
-      : await handleOwnerScan(userId, file, formData.get('dog_id'))
+      ? await handleGuestScan(request, file, hint)
+      : await handleOwnerScan(userId, file, formData.get('dog_id'), hint)
   } catch (error) {
     console.error('Bowl analysis error:', error)
     return NextResponse.json({ error: 'Bowl analysis failed' }, { status: 500 })
@@ -221,7 +246,8 @@ export async function POST(request: NextRequest) {
  */
 async function handleGuestScan(
   request: NextRequest,
-  file: FormDataEntryValue | null
+  file: FormDataEntryValue | null,
+  hint: string | null
 ) {
   // Meter BEFORE touching the image or the model — the quota exists to cap
   // spend, and decoding a 10 MB upload for a caller who is over limit is spend.
@@ -248,7 +274,12 @@ async function handleGuestScan(
 
   // The photo is analyzed in memory and dropped. Nothing is uploaded, so
   // there is no anonymous object to retain, serve, or clean up later.
-  const { items, notes } = await identifyBowl(supabase, bytes, validated.type)
+  const { items, notes } = await identifyBowl(
+    supabase,
+    bytes,
+    validated.type,
+    hint
+  )
 
   // No analysis_id and no image_url: a guest result is not a persisted
   // analysis, and PATCH must have nothing to aim at.
@@ -259,7 +290,8 @@ async function handleGuestScan(
 async function handleOwnerScan(
   userId: string,
   file: FormDataEntryValue | null,
-  dogId: FormDataEntryValue | null
+  dogId: FormDataEntryValue | null,
+  hint: string | null
 ) {
   // Authorize before validating (or reading) the upload: never do work, or
   // leak which inputs are wrong, for a dog the caller doesn't own.
@@ -295,7 +327,8 @@ async function handleOwnerScan(
   const { identifiedItems, items, notes, modelVersion, raw } = await identifyBowl(
     supabase,
     bytes,
-    validated.type
+    validated.type,
+    hint
   )
 
   const { data: analysis, error: insertError } = await supabase
@@ -307,6 +340,7 @@ async function handleOwnerScan(
       raw_output: raw,
       identified_items: identifiedItems,
       user_corrected: null,
+      user_hint: hint,
     })
     .select()
     .single()
@@ -320,6 +354,100 @@ async function handleOwnerScan(
   return NextResponse.json({
     analysis_id: analysis.id,
     image_url: imageUrl,
+    items,
+    notes,
+  })
+}
+
+/**
+ * Re-run the vision model on an ALREADY-UPLOADED photo with an owner hint —
+ * the owner usually only notices a missed item once the confirmation UI is
+ * up, and shouldn't have to re-photograph the bowl to fix it. The existing
+ * bowl_analyses row is updated in place (latest pass + latest hint win);
+ * the hint itself is kept as the Phase 6 eval signal for what the first
+ * pass missed.
+ */
+async function handleOwnerReanalyze(
+  userId: string,
+  analysisId: string,
+  hint: string | null
+) {
+  if (!hint) {
+    return NextResponse.json(
+      { error: 'A note is required to re-analyze' },
+      { status: 400 }
+    )
+  }
+
+  const supabase = createSupabaseClient()
+
+  // Same ownership rule as PATCH: the analysis must hang off the caller's dog.
+  const { data: analysis } = await supabase
+    .from('bowl_analyses')
+    .select('id, dog_id, image_url')
+    .eq('id', analysisId)
+    .maybeSingle()
+  if (
+    !analysis?.dog_id ||
+    !(await userOwnsDog(supabase, analysis.dog_id, userId))
+  ) {
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
+  }
+
+  // Recover the storage object path from the stored public URL and download
+  // the original bytes — never trust a client-supplied image for a re-run.
+  const marker = `/object/public/${BUCKET}/`
+  const markerIndex = analysis.image_url.indexOf(marker)
+  if (markerIndex === -1) {
+    return NextResponse.json(
+      { error: 'Stored photo is unavailable for re-analysis' },
+      { status: 500 }
+    )
+  }
+  const path = decodeURIComponent(
+    analysis.image_url.slice(markerIndex + marker.length)
+  )
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from(BUCKET)
+    .download(path)
+  if (downloadError || !blob) {
+    return NextResponse.json(
+      { error: 'Stored photo is unavailable for re-analysis' },
+      { status: 500 }
+    )
+  }
+
+  const mediaType = ACCEPTED_TYPES.includes(blob.type as AcceptedType)
+    ? (blob.type as AcceptedType)
+    : 'image/jpeg'
+  const bytes = Buffer.from(await blob.arrayBuffer())
+
+  const { identifiedItems, items, notes, modelVersion, raw } = await identifyBowl(
+    supabase,
+    bytes,
+    mediaType,
+    hint
+  )
+
+  const { error: updateError } = await supabase
+    .from('bowl_analyses')
+    .update({
+      model_version: modelVersion,
+      raw_output: raw,
+      identified_items: identifiedItems,
+      user_hint: hint,
+    })
+    .eq('id', analysisId)
+  if (updateError) {
+    return NextResponse.json(
+      { error: `Failed to persist analysis: ${updateError.message}` },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({
+    analysis_id: analysisId,
+    image_url: analysis.image_url,
     items,
     notes,
   })

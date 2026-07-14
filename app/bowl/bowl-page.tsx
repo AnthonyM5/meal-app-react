@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { useGuestMode } from '@/hooks/use-guest-mode'
 import { getUserDogs } from '@/lib/dog-actions'
 import type { Dog } from '@/lib/types'
@@ -228,6 +229,12 @@ function OwnerBowlView() {
   const [isLoadingDogs, setIsLoadingDogs] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null)
+  // Optional owner note guiding identification (mixed-in/submerged items the
+  // photo can't show). Passed to the model; never a source of grams.
+  const [hint, setHint] = useState('')
+  // Bumped on re-analysis so BowlConfirmation remounts with the fresh items
+  // (its rows state is seeded once from props).
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
     getUserDogs()
@@ -264,6 +271,7 @@ function OwnerBowlView() {
         const body = new FormData()
         body.append('image', file)
         body.append('dog_id', selectedDogId)
+        if (hint.trim()) body.append('hint', hint.trim())
 
         const response = await fetch('/api/bowl/analyze', {
           method: 'POST',
@@ -283,7 +291,30 @@ function OwnerBowlView() {
         setIsAnalyzing(false)
       }
     },
-    [selectedDogId]
+    [selectedDogId, hint]
+  )
+
+  // Re-run the model on the already-uploaded photo with a corrective note —
+  // for misses the owner only spots on the confirmation screen.
+  const handleReanalyze = useCallback(
+    async (note: string) => {
+      if (!analysis?.analysis_id) return
+      const body = new FormData()
+      body.append('analysis_id', analysis.analysis_id)
+      body.append('hint', note)
+
+      const response = await fetch('/api/bowl/analyze', {
+        method: 'POST',
+        body,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Re-analysis failed')
+      }
+      setAnalysis(data as AnalysisResponse)
+      setRevision(r => r + 1)
+    },
+    [analysis?.analysis_id]
   )
 
   if (isLoadingDogs) {
@@ -331,12 +362,14 @@ function OwnerBowlView() {
 
       {analysis?.analysis_id && analysis.image_url && selectedDogId ? (
         <BowlConfirmation
+          key={revision}
           dogId={selectedDogId}
           analysisId={analysis.analysis_id}
           imageUrl={analysis.image_url}
           items={analysis.items}
           notes={analysis.notes}
           onLogged={() => router.push('/dashboard')}
+          onReanalyze={handleReanalyze}
         />
       ) : (
         <Card>
@@ -364,6 +397,27 @@ function OwnerBowlView() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label
+                htmlFor="bowl-hint"
+                className="text-sm text-muted-foreground"
+              >
+                Anything the photo might miss? (optional)
+              </label>
+              <Textarea
+                id="bowl-hint"
+                value={hint}
+                onChange={e => setHint(e.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder='e.g. "there&apos;s also ground beef and shredded chicken mixed in"'
+              />
+              <p className="text-xs text-muted-foreground">
+                Mixed-in, shredded, or broth-covered foods are easy to miss —
+                name them here and the analysis will include them.
+              </p>
             </div>
 
             <PhotoPicker

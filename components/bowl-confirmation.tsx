@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { useIngredientSearch } from '@/hooks/use-ingredient-search'
 import {
   acceptBrandedIngredient,
@@ -21,7 +22,15 @@ import { createDogMeal } from '@/lib/meal-actions'
 import type { BrandedSuggestion } from '@/lib/resolve-ingredient'
 import type { BowlAnalysisItem, Food, MealType } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { AlertTriangle, Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Check,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -283,6 +292,12 @@ interface BowlConfirmationProps {
   items: AnalyzedBowlItem[]
   notes: string
   onLogged?: () => void
+  /**
+   * Re-run the vision model on the already-uploaded photo with a corrective
+   * note (e.g. "there's also ground beef in there"). The parent owns the
+   * fetch and remounts this component with the fresh items on success.
+   */
+  onReanalyze?: (note: string) => Promise<void>
 }
 
 export function BowlConfirmation({
@@ -292,6 +307,7 @@ export function BowlConfirmation({
   items,
   notes,
   onLogged,
+  onReanalyze,
 }: BowlConfirmationProps) {
   const [mealType, setMealType] = useState<MealType>('breakfast')
   const [rows, setRows] = useState<ConfirmRow[]>(() =>
@@ -311,6 +327,30 @@ export function BowlConfirmation({
   // grams. Empty until entered — we never assume a weight.
   const [totalGrams, setTotalGrams] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [reanalyzeNote, setReanalyzeNote] = useState('')
+  const [isReanalyzing, setIsReanalyzing] = useState(false)
+
+  const handleReanalyze = async () => {
+    if (!onReanalyze) return
+    const note = reanalyzeNote.trim()
+    if (!note) {
+      toast.error('Describe what the analysis missed or got wrong')
+      return
+    }
+    setIsReanalyzing(true)
+    try {
+      // On success the parent remounts this component with the new result,
+      // so there is no local state to reconcile here.
+      await onReanalyze(note)
+      toast.success('Re-analyzed with your note')
+    } catch (error) {
+      console.error('Re-analyze bowl error:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Re-analysis failed'
+      )
+      setIsReanalyzing(false)
+    }
+  }
 
   const updateRow = (key: string, patch: Partial<ConfirmRow>) =>
     setRows(prev =>
@@ -659,6 +699,47 @@ export function BowlConfirmation({
               placeholder="Add another ingredient…"
               onSelect={addRow}
             />
+            {onReanalyze && (
+              <div className="space-y-2 border-t pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Or tell the model what it missed and re-analyze the same
+                  photo — good for mixed-in or broth-covered foods it
+                  can&apos;t see.
+                </p>
+                <Textarea
+                  value={reanalyzeNote}
+                  onChange={e => setReanalyzeNote(e.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  disabled={isReanalyzing}
+                  placeholder='e.g. "there&apos;s also ground beef and shredded chicken mixed in"'
+                  aria-label="Note for re-analysis"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleReanalyze}
+                  disabled={isReanalyzing || !reanalyzeNote.trim()}
+                >
+                  {isReanalyzing ? (
+                    <>
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      Re-analyzing…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                      Re-analyze with this note
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Re-analyzing replaces the item list above — grams you&apos;ve
+                  entered here will reset.
+                </p>
+              </div>
+            )}
           </div>
 
           <Button
