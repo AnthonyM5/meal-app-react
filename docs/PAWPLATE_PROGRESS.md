@@ -380,14 +380,162 @@ gate then forced deleting them, silently under-counting the meal.
   `scripts/optimized-bulk-import.ts`, `scripts/import-popular-foods.ts`,
   `scripts/import.config.json`, `scripts/analyze-usda-data.ts`.
 
+### Mobile phasing step 1 — service extraction + dead-action cleanup (done, 2026-07-13)
+
+First step of the mobile plan below, executed on `main`:
+- **`food-actions.ts` overlap resolved: it was entirely dead.** Its only
+  page-level consumer (`app/dashboard/food-diary-view.tsx`) was imported by
+  nothing, and the whole human-era chain hung off it. Deleted rather than
+  ported: `lib/food-actions.ts`, `lib/recipe-actions.ts` (0 importers, as
+  scoped), `food-diary-view.tsx`, `components/{meal-section,meal-item-card,
+  unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
+  their two test files. Grep-verified zero residual references.
+- **Business logic extracted** into plain modules with no Next.js imports —
+  each function takes `(supabase, userId, ...)` so a REST route can call it
+  identically: `lib/services/dog-service.ts`, `lib/services/meal-service.ts`,
+  `lib/services/ingredient-service.ts`. Types (`DogInput`, `DogMealResult`,
+  etc.) now live in the services and are re-exported (type-only) from the
+  action files, so no call site changed.
+- **Actions are now thin wrappers**: `dog-actions.ts` / `meal-actions.ts` /
+  `ingredient-actions.ts` keep only guest-mode checks, auth-or-redirect, and
+  `revalidatePath`, then delegate. The auth/client helpers they had
+  duplicated moved to `lib/server/auth-context.ts` (Next-specific: redirect,
+  guest cookie — deliberately kept out of `lib/services/`).
+- **Verified**: Jest 134/134; `next build` clean (route manifest unchanged);
+  Cypress `dog-nutrition-flow` 3/3 and `bowl-photo-flow` 4/4 against the
+  live project. One bowl spec assertion was stale from Phase 3.6 (gate toast
+  text changed to "Resolve every item…" in `f120ca4` without updating the
+  spec) — fixed; pre-existing, unrelated to this refactor.
+- Next: phasing step 2 — add the REST routes wrapping these services.
+
 ## Next phase (planned)
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
 - Barcode-scan affordance for branded items (design §5); FatSecret still
   deferred on caching terms.
-- Camera capture / bowl flow in the Expo `mobile/` app (web flow done).
+- Native mobile (camera capture / bowl flow) — see "Mobile strategy" below.
+  The Expo `mobile/` app referenced in earlier revisions of this doc was
+  removed (`30df066`, superseded by the monorepo + Capacitor plan below;
+  never shipped a camera flow).
 - Vet review of all AAFCO-sourced `nutrient_requirements` values (25 original
   + 12 new amino-acid/B-vitamin rows).
+
+## Mobile strategy (planned) — monorepo + Capacitor
+
+**Decision:** build native iOS/Android via **Capacitor wrapping a shared
+React codebase**, not the old Expo `mobile/` app (removed) and not "load the
+live Vercel URL in a bare WebView" (rejected — see below). Not started;
+scoping only, on `main` as of 2026-07-13.
+
+### Why not just point a WebView at the hosted site
+Considered and rejected as the primary approach:
+- No offline capability — a network blip is a blank screen, not a degraded
+  app.
+- App-store risk: Apple has a history of rejecting apps that are
+  functionally just a website in a WebView with no native behavior
+  (Review Guideline 4.2/4.7 territory) — this app would have no native
+  plugin usage at all under that approach.
+- Auth fragility: `@supabase/ssr` relies on httpOnly cookies; WKWebView
+  storage is less durable than native keychain storage and can be purged
+  under iOS storage pressure, causing silent logouts that don't happen on
+  web.
+- No perceived-native speed — every navigation round-trips to the server.
+
+### Why the app is a good fit for a shared-codebase approach anyway
+Checked the current `main` codebase to scope this: **every top-level page
+(`dashboard`, `dogs`, `foods`, `bowl`) is already a thin server wrapper
+(metadata only) around a `'use client'` page component** — the actual UI
+(`DogMealBuilder`, `NutrientGapBars`, `BowlConfirmation`, etc.) already runs
+entirely client-side and calls the 7 `lib/*-actions.ts` files as RPCs. That
+means most component/JSX code doesn't need to change for a native build —
+only the transport under the action calls does.
+
+### The real scope: 7 `'use server'` files → REST endpoints
+Server Actions can't run inside a Capacitor-bundled static shell (no Node
+process on-device), so each exported action needs an equivalent API route.
+Inventoried every export and its current call-site count:
+
+- `lib/meal-actions.ts` (4 call sites) — `createDogMeal`,
+  `getDogMealForEdit`, `updateDogMeal`, `getDogDailyGaps`, `getDogMeals`,
+  `deleteDogMeal` → `/api/dogs/:dogId/meals` (GET/POST),
+  `/api/meals/:mealId` (GET/PATCH/DELETE), `/api/dogs/:dogId/gaps`.
+- `lib/dog-actions.ts` (5 call sites) — `createDog`, `getUserDogs`, `getDog`,
+  `updateDog`, `deleteDog` → `/api/dogs` (GET/POST), `/api/dogs/:id`
+  (GET/PATCH/DELETE).
+- `lib/ingredient-actions.ts` (1 call site) — `createManualIngredient`,
+  `acceptBrandedIngredient` → new routes alongside the existing
+  `app/api/ingredients/import` route.
+- `lib/food-actions.ts` (3 call sites) — `searchFoods`, `getTodaysMeals`,
+  `addFoodToMeal`, `updateMealItem`, `deleteMealItem`, `createMeal`,
+  `deleteMeal`. **Needs a look before porting** — this predates the
+  dog-centric pivot (human-meal shape) and may be partially superseded by
+  `meal-actions.ts`; confirm which of the 3 call sites are live UI vs.
+  dead paths before writing routes for it.
+- `lib/recipe-actions.ts` (**0 call sites**) — dead code as of this scoping
+  pass. Skip porting; flag for deletion instead unless a caller turns up.
+- `lib/actions.ts` (`signIn`/`signUp`/`signOut`, form-action pattern) and
+  `lib/auth.ts` (session helpers) — **don't port these to REST at all**.
+  Supabase's client-side JS SDK can call `signInWithPassword` /
+  `signUp` / session management directly over HTTPS from any client,
+  mobile included. Simpler than adding an auth REST layer, and it's the
+  one part of the current design that's already fully portable as-is.
+
+Business logic stays a single source of truth: extract the DB
+query/mutation body of each action into a plain (non-`'use server'`)
+function; the existing Server Action becomes a thin wrapper around it (web
+keeps `revalidatePath`/SSR benefits unchanged), and the new API route
+handler wraps the same function for mobile. No duplicated logic, two thin
+callers.
+
+Auth/guest-route gating currently lives in `middleware.ts`
+(`GUEST_ALLOWED_ROUTES`) — that still runs for the web app unchanged.
+Mobile re-implements the same allow-list as a client-side check (RLS
+remains the actual enforcement boundary either way, per the existing
+comment in `middleware.ts`).
+
+### Monorepo layout (proposed)
+```
+pawplate/                      # pnpm workspaces + Turborepo
+├── apps/
+│   ├── web/                   # current Next.js app, ~unchanged: SSR,
+│   │                          #   Server Actions, middleware, Vercel deploy
+│   └── mobile/                # Next.js (output: 'export') or Vite shell
+│                              #   + Capacitor ios/ and android/ native projects
+├── packages/
+│   ├── ui/                    # components/ui (shadcn/Radix) + Tailwind preset
+│   ├── features/              # DogMealBuilder, NutrientGapBars,
+│   │                          #   BowlConfirmation, etc. — shared as-is
+│   ├── core/                  # lib/canine-nutrition.ts, lib/types.ts, zod schemas
+│   └── api-client/            # typed fetch wrappers matching today's action
+│                              #   signatures (createDogMeal(...), getDogDailyGaps(...))
+│                              #   so call sites barely change
+```
+`apps/web`'s API routes (added per the porting list above) double as the
+REST backend both apps talk to — no separate backend deploy needed.
+
+### Native-only work Capacitor doesn't remove
+- Bowl-photo capture: swap the existing (web `<input type="file">`-based?
+  needs confirming) capture path for the Capacitor `Camera` plugin —
+  this is new native code regardless of monorepo structure, and it's the
+  one piece of genuine native behavior that also helps the app-store-review
+  concern above.
+- Native back-button handling on Android (hardware back → in-app history,
+  not app close).
+- CI matrix roughly doubles (web + iOS + Android build/signing).
+
+### Suggested phasing
+1. Extract shared business-logic functions out of the 5 live action files
+   (skip `recipe-actions.ts`, resolve `food-actions.ts` overlap first).
+2. Add the REST routes wrapping those functions; keep Server Actions as
+   thin wrappers calling the same functions (web unaffected).
+3. Stand up the monorepo (`packages/ui`, `packages/core`,
+   `packages/api-client`) and move `apps/web` into it with no behavior
+   change — proves the restructure alone doesn't regress anything.
+4. Add `apps/mobile` (static export/Vite shell) consuming
+   `packages/features` + `packages/api-client`; wire Capacitor + native
+   Camera plugin for the bowl-photo flow.
+5. Switch `lib/actions.ts` auth call sites (web included, optionally) to
+   the Supabase client SDK directly.
 
 ## Supabase integration (done)
 
