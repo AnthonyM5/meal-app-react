@@ -129,7 +129,7 @@ describe('Bowl photo flow', () => {
         // The unmatched item blocks submission until it's resolved
         cy.contains('no match').should('be.visible')
         cy.contains('button', /Log breakfast from photo/i).click()
-        cy.contains(/Match every item to an ingredient/i).should('be.visible')
+        cy.contains(/Resolve every item/i).should('be.visible')
 
         // Drop the unmatched row, fill in real grams for the matched one
         cy.get('button[aria-label="Remove mystery green"]').click()
