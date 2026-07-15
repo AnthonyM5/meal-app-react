@@ -79,6 +79,7 @@ describe('Bowl photo flow', () => {
             analysis_id: '00000000-0000-4000-8000-000000000abc',
             image_url: '/icon-192.png',
             notes: 'Possible leafy green, could not distinguish spinach vs kale.',
+            scale_basis: 'bowl_diameter',
             items: [
               {
                 label: 'chicken breast',
@@ -86,6 +87,9 @@ describe('Bowl photo flow', () => {
                 confidence: 0.92,
                 normalized_ingredient_id: food.id,
                 ingredient: food,
+                // Photo-derived estimate — must prefill the grams field as
+                // an owner-confirmable estimate, never a fact
+                estimated_grams: 140,
               },
               {
                 label: 'mystery green',
@@ -93,6 +97,7 @@ describe('Bowl photo flow', () => {
                 confidence: 0.41,
                 normalized_ingredient_id: null,
                 ingredient: null,
+                estimated_grams: null,
               },
             ],
           },
@@ -138,6 +143,14 @@ describe('Bowl photo flow', () => {
         cy.contains('~70% of bowl').should('be.visible')
         cy.contains('92% confident').should('be.visible')
 
+        // The photo-derived gram estimate prefills the field, flagged as an
+        // estimate with the scale-basis notice — never presented as fact
+        cy.contains(/pre-estimated using your bowl's measured diameter/i).should(
+          'be.visible'
+        )
+        cy.get('input[aria-label^="Grams of"]').first().should('have.value', '140')
+        cy.contains('estimate').should('be.visible')
+
         // The unmatched item blocks submission until it's resolved
         cy.contains('no match').should('be.visible')
         cy.contains('button', /Log breakfast from photo/i).click()
@@ -150,13 +163,17 @@ describe('Bowl photo flow', () => {
 
         cy.contains('button', /Log breakfast from photo/i).click()
 
-        // Corrections are persisted — the eval signal for Phase 6
+        // Corrections are persisted — the eval signal for Phase 6. The
+        // owner's grams (160) land next to the pipeline's estimate (140):
+        // that delta is the §2.4 calibration signal for the density priors.
         cy.wait('@saveCorrections')
           .its('request.body')
           .then(body => {
             expect(body.analysis_id).to.eq('00000000-0000-4000-8000-000000000abc')
             expect(body.corrected_items).to.have.length(1)
             expect(body.corrected_items[0].ingredient_id).to.eq(food.id)
+            expect(body.corrected_items[0].grams).to.eq(160)
+            expect(body.corrected_items[0].estimated_grams).to.eq(140)
           })
 
         // Lands back on the dashboard with the meal visible

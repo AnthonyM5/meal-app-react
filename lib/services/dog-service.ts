@@ -18,6 +18,8 @@ export interface DogInput {
   neutered?: boolean
   health_conditions?: string[]
   avatar_url?: string | null
+  /** Inner diameter of the dog's usual bowl (cm) — photo-scale reference */
+  bowl_diameter_cm?: number | null
 }
 
 function validateDogInput(input: Partial<DogInput>, requireAll: boolean) {
@@ -33,6 +35,9 @@ function validateDogInput(input: Partial<DogInput>, requireAll: boolean) {
   }
   if (input.ideal_weight_kg != null && input.ideal_weight_kg <= 0) {
     throw new Error('Ideal weight must be greater than 0')
+  }
+  if (input.bowl_diameter_cm != null && input.bowl_diameter_cm <= 0) {
+    throw new Error('Bowl diameter must be greater than 0')
   }
 }
 
@@ -57,6 +62,7 @@ export async function createDog(
       neutered: input.neutered ?? true,
       health_conditions: input.health_conditions ?? [],
       avatar_url: input.avatar_url ?? null,
+      bowl_diameter_cm: input.bowl_diameter_cm ?? null,
     })
     .select()
     .single()
@@ -134,6 +140,9 @@ export async function updateDog(
         health_conditions: updates.health_conditions,
       }),
       ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
+      ...(updates.bowl_diameter_cm !== undefined && {
+        bowl_diameter_cm: updates.bowl_diameter_cm,
+      }),
     })
     .eq('id', dogId)
     .select()

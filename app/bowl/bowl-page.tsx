@@ -3,6 +3,7 @@
 import {
   BowlConfirmation,
   type AnalyzedBowlItem,
+  type ScaleBasis,
 } from '@/components/bowl-confirmation'
 import { GuestBowlResult } from '@/components/guest-bowl-result'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,8 @@ interface AnalysisResponse {
   guest?: boolean
   items: AnalyzedBowlItem[]
   notes: string
+  /** What the gram estimates were scaled against; null = no estimates */
+  scale_basis?: ScaleBasis | null
 }
 
 /** Client-side upload guard. The route re-checks; this just fails faster. */
@@ -360,6 +363,38 @@ function OwnerBowlView() {
         </Button>
       </div>
 
+      {/* §2.2 capture guidance: encourage (never require) the conditions
+          that make the deterministic portion estimator work — top-down
+          angle, and a known-size object in frame for scale. */}
+      {!analysis && (
+        <Card className="border-dashed">
+          <CardContent className="space-y-1.5 p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">
+              Get portion estimates from your photo
+            </p>
+            <ul className="list-disc space-y-1 pl-4">
+              <li>Shoot from directly above the bowl, in good light.</li>
+              <li>
+                Set your dog&apos;s bowl diameter once (edit the dog on the{' '}
+                <Link href="/dogs" className="underline">
+                  Dogs page
+                </Link>
+                ) — the bowl itself then works as the size reference in every
+                photo.
+              </li>
+              <li>
+                Or lay a credit card or a quarter flat next to the bowl,
+                fully visible.
+              </li>
+            </ul>
+            <p className="text-xs">
+              Without a size reference we still identify the food — you just
+              enter the grams yourself.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {analysis?.analysis_id && analysis.image_url && selectedDogId ? (
         <BowlConfirmation
           key={revision}
@@ -368,6 +403,7 @@ function OwnerBowlView() {
           imageUrl={analysis.image_url}
           items={analysis.items}
           notes={analysis.notes}
+          scaleBasis={analysis.scale_basis ?? null}
           onLogged={() => router.push('/dashboard')}
           onReanalyze={handleReanalyze}
         />

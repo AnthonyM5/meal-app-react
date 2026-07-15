@@ -12,8 +12,14 @@ import type { Database, Ingredient } from '@/lib/types'
 import {
   MAX_USER_HINT_LENGTH,
   analyzeBowlImage,
+  type Box2D,
   type NormalizedBowlItem,
 } from '@/lib/vision/analyze-bowl'
+import {
+  estimateItemGrams,
+  resolveScale,
+  type DetectedReferenceObject,
+} from '@/lib/vision/portion-estimate'
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -104,19 +110,23 @@ async function getAuthenticatedUserId(): Promise<string | null> {
   return user?.id ?? null
 }
 
-/** True when `dogId` exists and is owned by `userId`. */
-async function userOwnsDog(
+/**
+ * The dog row (id + bowl calibration) when `dogId` exists and is owned by
+ * `userId`, else null. The diameter rides along so the portion estimator can
+ * use the owner-measured bowl as the photo's scale reference.
+ */
+async function getOwnedDog(
   supabase: ReturnType<typeof createSupabaseClient>,
   dogId: string,
   userId: string
-): Promise<boolean> {
+): Promise<{ id: string; bowl_diameter_cm: number | null } | null> {
   const { data } = await supabase
     .from('dogs')
-    .select('id')
+    .select('id, bowl_diameter_cm')
     .eq('id', dogId)
     .eq('owner_id', userId)
     .maybeSingle()
-  return !!data
+  return data ?? null
 }
 
 /**
@@ -130,17 +140,34 @@ function parseHint(value: FormDataEntryValue | null): string | null {
   return hint.length > 0 ? hint : null
 }
 
-/** Run vision + fuzzy normalization, and hydrate the matched ingredient rows. */
+/**
+ * Run vision + fuzzy normalization, hydrate the matched ingredient rows, and
+ * attach deterministic gram ESTIMATES when the photo contains a usable scale
+ * reference (owner-measured bowl diameter, or a coin/card in frame). The
+ * model never outputs weights — lib/vision/portion-estimate.ts derives them
+ * from the model's bounding boxes, and the UI always presents them as
+ * owner-confirmable estimates.
+ */
 async function identifyBowl(
   supabase: ReturnType<typeof createSupabaseClient>,
   bytes: Buffer,
   mediaType: AcceptedType,
-  userHint: string | null
+  userHint: string | null,
+  bowlDiameterCm: number | null
 ) {
   const { result, modelVersion, raw } = await analyzeBowlImage({
     imageBase64: bytes.toString('base64'),
     mediaType,
     userHint: userHint ?? undefined,
+    bowlDiameterCm,
+  })
+
+  const scale = resolveScale({
+    bowlBox: (result.bowl_box_2d ?? null) as Box2D | null,
+    bowlDiameterCm,
+    referenceObject: (result.reference_object ?? null) as
+      | DetectedReferenceObject
+      | null,
   })
 
   // Local match first (unsafe rows are never auto-matched); items the local
@@ -148,12 +175,21 @@ async function identifyBowl(
   // in parallel — surfaced for the owner to confirm, never auto-committed.
   const identifiedItems: (NormalizedBowlItem & {
     branded_suggestion: BrandedSuggestion | null
+    estimated_grams: number | null
   })[] = []
   for (const item of result.items) {
     identifiedItems.push({
       ...item,
       normalized_ingredient_id: await matchLocalIngredient(supabase, item.label),
       branded_suggestion: null,
+      estimated_grams: scale
+        ? estimateItemGrams({
+            label: item.label,
+            confidence: item.confidence,
+            box: (item.box_2d ?? null) as Box2D | null,
+            scale,
+          })
+        : null,
     })
   }
   await Promise.all(
@@ -188,7 +224,14 @@ async function identifyBowl(
       : null,
   }))
 
-  return { identifiedItems, items, notes: result.notes, modelVersion, raw }
+  return {
+    identifiedItems,
+    items,
+    notes: result.notes,
+    modelVersion,
+    raw,
+    scaleBasis: scale?.basis ?? null,
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -274,16 +317,19 @@ async function handleGuestScan(
 
   // The photo is analyzed in memory and dropped. Nothing is uploaded, so
   // there is no anonymous object to retain, serve, or clean up later.
-  const { items, notes } = await identifyBowl(
+  // Guests have no dog profile, so no bowl calibration — a coin/card in
+  // frame is their only route to gram estimates.
+  const { items, notes, scaleBasis } = await identifyBowl(
     supabase,
     bytes,
     validated.type,
-    hint
+    hint,
+    null
   )
 
   // No analysis_id and no image_url: a guest result is not a persisted
   // analysis, and PATCH must have nothing to aim at.
-  return NextResponse.json({ guest: true, items, notes })
+  return NextResponse.json({ guest: true, items, notes, scale_basis: scaleBasis })
 }
 
 /** Authenticated scan: ownership-checked, photo stored, analysis persisted. */
@@ -302,7 +348,8 @@ async function handleOwnerScan(
 
   const supabase = createSupabaseClient()
 
-  if (!(await userOwnsDog(supabase, dogId, userId))) {
+  const dog = await getOwnedDog(supabase, dogId, userId)
+  if (!dog) {
     return NextResponse.json({ error: 'Dog not found' }, { status: 404 })
   }
 
@@ -324,12 +371,14 @@ async function handleOwnerScan(
   }
   const imageUrl = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
 
-  const { identifiedItems, items, notes, modelVersion, raw } = await identifyBowl(
-    supabase,
-    bytes,
-    validated.type,
-    hint
-  )
+  const { identifiedItems, items, notes, modelVersion, raw, scaleBasis } =
+    await identifyBowl(
+      supabase,
+      bytes,
+      validated.type,
+      hint,
+      dog.bowl_diameter_cm != null ? Number(dog.bowl_diameter_cm) : null
+    )
 
   const { data: analysis, error: insertError } = await supabase
     .from('bowl_analyses')
@@ -356,6 +405,7 @@ async function handleOwnerScan(
     image_url: imageUrl,
     items,
     notes,
+    scale_basis: scaleBasis,
   })
 }
 
@@ -387,10 +437,11 @@ async function handleOwnerReanalyze(
     .select('id, dog_id, image_url')
     .eq('id', analysisId)
     .maybeSingle()
-  if (
-    !analysis?.dog_id ||
-    !(await userOwnsDog(supabase, analysis.dog_id, userId))
-  ) {
+  if (!analysis?.dog_id) {
+    return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
+  }
+  const dog = await getOwnedDog(supabase, analysis.dog_id, userId)
+  if (!dog) {
     return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
   }
 
@@ -422,12 +473,14 @@ async function handleOwnerReanalyze(
     : 'image/jpeg'
   const bytes = Buffer.from(await blob.arrayBuffer())
 
-  const { identifiedItems, items, notes, modelVersion, raw } = await identifyBowl(
-    supabase,
-    bytes,
-    mediaType,
-    hint
-  )
+  const { identifiedItems, items, notes, modelVersion, raw, scaleBasis } =
+    await identifyBowl(
+      supabase,
+      bytes,
+      mediaType,
+      hint,
+      dog.bowl_diameter_cm != null ? Number(dog.bowl_diameter_cm) : null
+    )
 
   const { error: updateError } = await supabase
     .from('bowl_analyses')
@@ -450,6 +503,7 @@ async function handleOwnerReanalyze(
     image_url: analysis.image_url,
     items,
     notes,
+    scale_basis: scaleBasis,
   })
 }
 
@@ -487,7 +541,7 @@ export async function PATCH(request: NextRequest) {
 
     if (
       !analysis?.dog_id ||
-      !(await userOwnsDog(supabase, analysis.dog_id, userId))
+      !(await getOwnedDog(supabase, analysis.dog_id, userId))
     ) {
       return NextResponse.json({ error: 'Analysis not found' }, { status: 404 })
     }

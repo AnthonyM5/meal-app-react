@@ -10,11 +10,13 @@ Supabase Integration below.
 ## Done (tested locally)
 
 ### Phase 0 — Rebrand
+
 - NutriTrack → PawPlate across `app/layout.tsx`, `public/manifest.json`,
   landing page, README, service worker, mobile app. `package.json` name →
   `pawplate`.
 
 ### Phase 1 — Schema
+
 - `scripts/010_pawplate_schema.sql` (mirrored at
   `supabase/migrations/20260706000000_pawplate_schema.sql`): `dogs`,
   `nutrient_requirements`, `bowl_analyses` tables with RLS; canine nutrient
@@ -40,6 +42,7 @@ Supabase Integration below.
     stub.
 
 ### Phase 2 — Deterministic nutrient engine
+
 - `lib/canine-nutrition.ts`: RER (70·kg^0.75), MER factor table, meal totals
   across 25 tracked nutrients, per-1000-kcal target resolution, gap
   classification (deficient / adequate / excess / toxic_risk / informational),
@@ -53,6 +56,7 @@ Supabase Integration below.
   weight-loss energy prescription).
 
 ### Phase 3 — USDA ingredient pipeline
+
 - Nutrient IDs verified against **live FDC data** (fixture:
   `__tests__/fixtures/usda-chicken-liver-171060.json`). Note: the handoff's
   guess "methionine 1090" was wrong — 1090 is magnesium; methionine is 1215.
@@ -68,6 +72,7 @@ Supabase Integration below.
 - 24 Jest tests against the captured fixture.
 
 ### Phase 4 — Vision pipeline (scaffold, live-tested)
+
 - **Provider switched to Google Gemini** (`gemini-2.5-flash`) per project
   decision — `GEMINI_API_KEY` in `.env.local` (never client-side).
 - `lib/vision/analyze-bowl.ts`: structured JSON via Gemini `responseSchema`,
@@ -81,8 +86,10 @@ Supabase Integration below.
 - Confirmation UI + full photo→meal flow shipped 2026-07-08 (see below).
 
 ### Dog-centric UI + first authenticated flow (done, 2026-07-07)
+
 All six planned tasks are complete and verified against the live `pawplate`
 project:
+
 1. **Auth + RLS smoke test** — `scripts/verify-live-auth.ts` (run with
    `set -a && source .env.local && set +a && npx tsx scripts/verify-live-auth.ts`).
    Creates two confirmed users via the admin API (email confirmations are on
@@ -115,6 +122,7 @@ project:
    `env -u ELECTRON_RUN_AS_NODE` when launched from Electron-based shells.)
 
 ### Test/build state
+
 - `npm test`: 107/107 passing. `next build`: compiles (`/dogs` +
   `/dashboard` both in the route manifest). Cypress dog flow: 2/2.
 - Pre-existing (not from this work): tsc errors in `mobile/` (deps not
@@ -125,11 +133,13 @@ project:
   to the generated output (broke `tsc`); removed.
 
 ### Raw vs cooked ingredients (done, 2026-07-07)
+
 Per-100 g values differ materially between preparations (roasted chicken
 breast: 165 kcal / 31 g protein vs raw: 120 / 22.5 — water loss concentrates
 everything, and heat degrades B-vitamins / leaches minerals), so both
 variants now coexist as separate rows. **Values always describe the food as
 fed; no raw→cooked conversion math anywhere.**
+
 - `preparation_state` column (`raw`|`cooked`|NULL) on `foods` —
   `scripts/014` / migration `20260707010000`, with a name-based backfill
   (supplements/dairy stay NULL). Live counts after import: raw 21,
@@ -148,17 +158,19 @@ fed; no raw→cooked conversion math anywhere.**
   results couldn't power the unsafe-ingredient warning at all. Now verified
   live: onion search returns `safe=False` + note; meal-builder shows
   raw/cooked badges.
-- If a cooked FDC analog ever doesn't exist: USDA's *Nutrient Retention
-  Factors* (Release 6) + *Cooking Yields for Meat and Poultry* tables are
+- If a cooked FDC analog ever doesn't exist: USDA's _Nutrient Retention
+  Factors_ (Release 6) + _Cooking Yields for Meat and Poultry_ tables are
   the deterministic fallback — but measured entries always win.
 
 ### Meal editing + food browse/search (done, 2026-07-07)
+
 Two user-requested capabilities plus a canine rebuild of the old food
 detail page.
+
 - **Edit logged meals** — `getDogMealForEdit` (loads a meal's items with
   full ingredient rows; ownership checked via the `dogs!inner` join) and
   `updateDogMeal` (replaces items/grams/meal type, recomputes and returns
-  fresh gaps; deletes-then-reinserts `meal_items` with the *old* items kept
+  fresh gaps; deletes-then-reinserts `meal_items` with the _old_ items kept
   and re-inserted on failure so a meal is never left empty). `DogMealBuilder`
   gained an `editingMeal` mode (prefilled items, "Save changes" / cancel);
   dashboard "Today's meals" cards got an edit (pencil) button that reopens
@@ -184,7 +196,7 @@ detail page.
   route proxies through the service role (same pattern as the search
   routes). `/foods` + `/food-details` added to the middleware guest allowlist.
 - **Fixed another pre-existing app-wide bug**: sonner's `<Toaster>` was
-  never mounted in any layout, so *every* `toast()` call in the app was
+  never mounted in any layout, so _every_ `toast()` call in the app was
   silently dropped (no "meal logged" / error feedback anywhere). Mounted it
   in `app/layout.tsx`.
 - `NUTRIENT_LABELS` + a new `nutrientUnit()` helper moved to
@@ -196,8 +208,10 @@ detail page.
   and logs from a detail page.
 
 ### Phase 4 UI — bowl photo → confirmation → meal (done, 2026-07-08)
+
 The vision backend finally has a user surface; live-verified against real
 Gemini (7.9 s, correct identification, confirmation UI rendered).
+
 - **`/bowl` route** (`app/bowl/`) — dog selector + a single file input with
   `capture="environment"` (rear camera on mobile, file picker on desktop).
   Uploads to `POST /api/bowl/analyze`, then hands the result to the
@@ -216,7 +230,7 @@ Gemini (7.9 s, correct identification, confirmation UI rendered).
   confirmation picker use it now.
 - **Security hardening of `/api/bowl/analyze`** (the route was
   service-role + unauthenticated at the app layer): now requires a session,
-  verifies the caller **owns the `dog_id`** on POST (checked *before* reading
+  verifies the caller **owns the `dog_id`** on POST (checked _before_ reading
   the upload or calling Gemini — no spend on a foreign dog), and verifies
   **analysis ownership** on PATCH. `dog_id` is now required (a dogless
   analysis couldn't be ownership-checked). POST response is enriched with the
@@ -235,10 +249,12 @@ Gemini (7.9 s, correct identification, confirmation UI rendered).
   a throwaway spec, since removed.
 
 ### USDA nutrient coverage audit + fix (done, 2026-07-08)
+
 Per `NUTRIENT_API_SOURCING_AND_AUDIT.md` §3. Live-audited the 34-ID extractor
 in `lib/usda-canine.ts` against a real 8-food `format=full` sample (chicken
 breast/liver, beef, salmon, egg, spinach, broccoli, sweet potato) spanning
 meats, organs, and produce.
+
 - **Found**: 8 of AAFCO's 10 essential amino acids (threonine, isoleucine,
   leucine, phenylalanine, tyrosine, valine, arginine, histidine) and 5
   B-vitamins (thiamin, riboflavin, niacin, pantothenic acid, B6) were present
@@ -329,13 +345,13 @@ Hardening of the Phase 3 USDA pipeline plus the first slice of the branded
 ### Phase 3.6 — Broad coverage: filtered bulk import, OFF resolver, manual fallback (2026-07-12)
 
 Prompted by a real bowl (macaroni + red cabbage + broth) whose items could be
-*detected* but not *tagged*: the trace showed nothing is filtered at vision
+_detected_ but not _tagged_: the trace showed nothing is filtered at vision
 time — items failed at fuzzy-match (no such `foods` rows) and the confirm
 gate then forced deleting them, silently under-counting the meal.
 
 - **Two-tier coverage model** (decided with user): `foods` stays the curated
   deterministic table, broadened by a **filtered bulk import** of USDA
-  Foundation + SR Legacy; USDA Branded (456k) and OFF (3.9M) are *never*
+  Foundation + SR Legacy; USDA Branded (456k) and OFF (3.9M) are _never_
   bulk-loaded — branded items resolve on demand and cache on accept.
 - **Bulk import** — `scripts/022_bulk_import_usda_wholefoods.ts`: enumerates
   the whole corpus via `/foods/search?query=*` (search results carry
@@ -383,12 +399,13 @@ gate then forced deleting them, silently under-counting the meal.
 ### Mobile phasing step 1 — service extraction + dead-action cleanup (done, 2026-07-13)
 
 First step of the mobile plan below, executed on `main`:
+
 - **`food-actions.ts` overlap resolved: it was entirely dead.** Its only
   page-level consumer (`app/dashboard/food-diary-view.tsx`) was imported by
   nothing, and the whole human-era chain hung off it. Deleted rather than
   ported: `lib/food-actions.ts`, `lib/recipe-actions.ts` (0 importers, as
   scoped), `food-diary-view.tsx`, `components/{meal-section,meal-item-card,
-  unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
+unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   their two test files. Grep-verified zero residual references.
 - **Business logic extracted** into plain modules with no Next.js imports —
   each function takes `(supabase, userId, ...)` so a REST route can call it
@@ -417,7 +434,195 @@ Implemented per the plan below. **Blocked on one manual step: the migration
 authenticated owner scan will fail (the insert now includes `user_hint`).
 Run `supabase db push`, then smoke-test.
 
+### Mobile phasing step 2 — REST routes over the services (done, 2026-07-14)
+
+- **Framework decision for `apps/mobile` (Step 4): Vite + React Router, not
+  Next.js `output: 'export'`.** Grepped the feature components that would
+  move to `packages/features` (`DogMealBuilder`, `NutrientGapBars`,
+  `BowlConfirmation`, `DogForm`, `FoodSearch`) — zero `next/navigation` /
+  `next/link` / `next/image` imports; the Next-coupling is confined to the
+  route-level `*-page.tsx` shells and a few chrome components
+  (`app-header`, `guest-mode-button`, `explore-foods-section`). Since a
+  static Capacitor shell can't run Next's SSR/middleware/Server Actions
+  anyway (the reason raw WebView was rejected in the first place), keeping
+  Next for mobile would mean running it with almost none of what it's for.
+  Vite is what Capacitor's own React templates use — lighter, faster
+  dev/build, no fighting SSR assumptions the shell doesn't need.
+- **New REST layer**, all thin wrappers over `lib/services/*` (added last
+  session) mirroring the Server Actions one-for-one:
+  - `/api/dogs` (GET/POST), `/api/dogs/[dogId]` (GET/PATCH/DELETE)
+  - `/api/dogs/[dogId]/meals` (GET/POST), `/api/dogs/[dogId]/gaps` (GET)
+  - `/api/meals/[mealId]` (GET/PATCH/DELETE)
+  - `/api/ingredients/manual` (POST), `/api/ingredients/branded` (POST)
+  - `recipe-actions.ts`/`lib/actions.ts`/`lib/auth.ts` intentionally NOT
+    ported, per the original phasing plan (dead code / Supabase client SDK
+    covers auth directly).
+- **Auth transport**: `lib/server/rest-auth.ts` — these routes read
+  `Authorization: Bearer <access_token>` (no browser cookie exists on a
+  native client) and validate it via a service-role client's
+  `auth.getUser(token)`; ownership is then checked explicitly inside each
+  `lib/services/*` call, same pattern `app/api/bowl/analyze` already used.
+  `lib/server/service-client.ts` centralizes the service-role client
+  construction that was previously ad-hoc per route.
+- **Found and fixed a real middleware bug, not just a test artifact**:
+  `middleware.ts` gated every non-public/non-guest path on a **cookie**
+  session, so any Bearer-token request to the new routes was 307-redirected
+  to the HTML `/auth/login` page before reaching the route handler —
+  silently defeating the entire point of a REST layer for a client with no
+  cookies. Fixed by adding `BEARER_AUTH_ROUTES` (exact prefixes:
+  `/api/dogs`, `/api/meals`, `/api/ingredients/manual`,
+  `/api/ingredients/branded` — deliberately NOT a blanket
+  `/api/ingredients`, since that would have also exposed
+  `/api/ingredients/import`, which has no auth check of its own and
+  currently relies entirely on this middleware's cookie gate to stay
+  non-public).
+- **Found and fixed a second real bug, in `lib/services/dog-service.ts` and
+  `lib/services/meal-service.ts`**: every existence/ownership-check query
+  used `.single()`, which throws Postgrest's raw "no rows" error on a
+  genuine miss instead of returning `null` — so the `if (!data) throw new
+Error('...not found')` lines right below every one of them were dead
+  code. This was invisible on the web Server Actions (which had no
+  HTTP-status mapping to expose the wrong error shape) but surfaced
+  immediately as a 500 instead of 404/403 once the REST layer added
+  `errorResponse()`'s message-based status mapping. Fixed by switching
+  9 existence-check queries (3 in dog-service, 6 in meal-service) to
+  `.maybeSingle()`; left the insert/update-returning `.single()` calls
+  alone (those always return exactly one row on success). Web behavior is
+  unaffected — only the error object shape changed, not the thrown message.
+- **`foods.created_by` FK gap — FIXED (2026-07-15)**: it had no `ON DELETE`
+  action on its `auth.users` FK (from the original `20250620030000`
+  human-nutrition schema, predates PawPlate), so a user who had ever
+  created a manual ingredient could never have their auth account deleted —
+  Postgres blocked it with a foreign-key violation. Discovered via the new
+  Cypress spec's teardown. Migration `20260714010000` re-creates the
+  constraint as `ON DELETE SET NULL` (matching `recipes.created_by`;
+  CASCADE would be wrong — shared branded/manual rows can be referenced by
+  _other_ users' `meal_items`, so the ingredient must outlive its creator).
+  Applied live and verified end-to-end: created a throwaway user + a
+  `foods` row they own, deleted the user with the row still present →
+  succeeds, row survives with `created_by = null`. This was the exact
+  failure mode behind the stranded e2e test users. Audited the other
+  `auth.users` FKs — all already CASCADE or SET NULL; this was the only gap.
+  The Cypress `deleteFood` task is kept anyway (keeps orphaned custom-
+  ingredient rows from accumulating in the live table), with comments
+  updated. `scripts/cleanup-stale-e2e-users.ts` added (dry-run by default,
+  `--delete` to act) for the 6 stranded `pawplate.e2e.*` users still in the
+  live project — bulk deletion stays a manual, user-run step.
+- **Verified**: Jest 138/138; `next build` clean (7 new routes in the
+  manifest); new `cypress/e2e/mobile-rest-api.cy.ts` (4/4) covers the full
+  dog+meal CRUD lifecycle over Bearer-token REST, manual-ingredient
+  creation, a 401 with no token, and cross-user ownership (404 on
+  owner-filtered reads, 403 on fetch-then-compare updates/deletes — the two
+  services differ in exactly _why_, see the fix above). Existing
+  `dog-nutrition-flow` (3/3) and `bowl-photo-flow` (6/6) re-verified
+  unaffected by the `.maybeSingle()` change.
+- Stale `pawplate.e2e.*@example.com` test users from failed runs (their
+  cleanup step never ran, blocked by the FK bug above): 6 remain in the
+  live project. The FK fix unblocks their deletion, but the bulk delete
+  itself is left as a manual step — run
+  `set -a && source .env.local && set +a && npx tsx scripts/cleanup-stale-e2e-users.ts --delete`.
+- **Review hardening (PR #15 follow-up, 2026-07-15):** two issues from the
+  code review, both addressed:
+  - _Request-body validation at the boundary._ Added `lib/server/rest-schemas.ts`
+    (zod schemas mirroring the service input types) and a `readJson()` helper
+    in `rest-auth.ts`. Every body-bearing route now parses through it, so a
+    malformed/empty body and a well-typed-but-wrong-shape body (e.g.
+    `weight_kg: "abc"`, which slipped past the service's `<= 0` check —
+    `NaN <= 0` is false — and would have 500'd at Postgres) both return a
+    clean 400 instead of a 500. Schemas gate types only; the business rules
+    (non-empty name, weight > 0, kcal ≥ 0) stay the single source of truth
+    in `lib/services/*`. The parsed type is passed straight into the service,
+    so tsc fails the build if a schema drifts from its interface.
+  - _404/403 consistency._ Foreign user-owned resources now return 404
+    everywhere (was: dogs 404 via `getDog` but PATCH/DELETE + all meal/gaps
+    routes 403). 404-for-foreign is the security-conscious default (a
+    non-owner can't confirm an id exists) and gives the mobile client one
+    predictable code. `dog-service` update/deleteDog are owner-filtered
+    (matching getDog); `meal-service`'s 6 ownership checks changed from
+    throwing `'Unauthorized'` to `'not found'` (message-only, no query
+    change — lowest risk to the shared web query/compute paths; the row is
+    still fetched server-side but never returned). Web behavior is unchanged
+    in practice — legitimate web flows never touch foreign resources.
+  - Tests: `mobile-rest-api.cy.ts` updated (dog cross-user now asserts 404
+    across GET/PATCH/DELETE/gaps/meals) and extended with a meal-level
+    cross-user test and a malformed/wrong-type body → 400 test. 6/6 live;
+    web `dog-nutrition-flow` 3/3 and `bowl-photo-flow` 6/6 re-verified
+    unaffected. Jest 138/138, `next build` clean.
+- Next: Step 3 (stand up the monorepo — `packages/ui`/`core`/`api-client`,
+  move `apps/web` in with no behavior change) or Step 4 (scaffold
+  `apps/mobile` with Vite, per the decision above) — whichever the user
+  wants to tackle next.
+
+## Bowl analysis — photo portion estimation (built 2026-07-15, per VISION_MODELS_AND_ESTIMATION.md)
+
+Implements §2.1/2.2 (reference-object + fixed-bowl calibration), §2.4
+(correction loop now captures grams), and §2.6 (prompt shoring) from
+`VISION_MODELS_AND_ESTIMATION.md`. The model still never outputs weights —
+it now LOCALIZES (bounding boxes); grams come from deterministic,
+auditable math on our side, and every number the owner sees is flagged as
+an estimate to confirm.
+
+- **Fixed-bowl calibration**: `dogs.bowl_diameter_cm` (migration
+  `20260715000000`, applied live) — owner measures the bowl's inner rim
+  once in the dog form; the bowl then serves as a known-size circular
+  reference in every photo. Plumbed through `Dog`/`DogInput`,
+  `dog-service`, the REST `DogCreateSchema`, and `components/dog-form.tsx`.
+- **Vision schema** (`lib/vision/analyze-bowl.ts`): per-item `box_2d`
+  (Gemini convention: [ymin,xmin,ymax,xmax] normalized 0–1000),
+  `bowl_box_2d`, and optional `reference_object` (enum `card`|`coin`, with
+  real-world sizes STATED in the system prompt — 85.6×54.0 mm card,
+  24.26 mm US quarter — per §2.6: models use a stated scale far better
+  than an inferred one). `buildUserPrompt` also states the owner-measured
+  bowl diameter. Old stored `raw_output` payloads (no boxes) still parse —
+  localization fields are optional in the Zod schema.
+- **Deterministic estimator** (`lib/vision/portion-estimate.ts`):
+  scale resolution prefers owner-measured bowl > coin > card (circular
+  references get per-axis cm/unit factors, which cancels the unknown image
+  aspect ratio out of area math); box → footprint (×0.75 fill factor) →
+  volume (per-category pile-height heuristic) → grams (per-category
+  as-served bulk density). Honesty gates: no estimate below 0.6
+  identification confidence (§2.6 — route uncertain items to manual
+  entry), none for liquids (no visible depth), none outside a 5–1500 g
+  sanity clamp; results round to 5 g. The density/height tables are
+  authored priors to be recalibrated from correction data.
+- **Route** (`app/api/bowl/analyze`): fetches the dog's diameter
+  (ownership check upgraded to `getOwnedDog`), attaches `estimated_grams`
+  per item and `scale_basis` to all three paths (owner scan, guest scan —
+  reference-object only, re-analysis). Estimates persist in
+  `identified_items` for the eval story.
+- **UI**: estimates prefill the grams inputs in the amber
+  owner-confirmable "estimate" state (the total-weight anchor still
+  overrides untouched rows — owner-measured total beats photo estimate);
+  a notice names the scale source. `/bowl` gained §2.2 capture guidance
+  (top-down, set bowl diameter once, or lay a card/quarter flat in frame).
+- **Correction loop (§2.4)**: `user_corrected` items now carry `grams`
+  (owner ground truth) AND `estimated_grams` (our prediction) — the
+  per-category deltas are the calibration signal for refining the density
+  tables. No migration needed (jsonb).
+- **Verified**: Jest 173/173 (35 new: scale math, categorization, gram
+  estimates, schema); Cypress bowl-photo 6/6 (prefill + estimate flag +
+  correction-payload grams asserted), dog-nutrition 3/3, mobile-rest-api
+  6/6; `next build` clean. Live Gemini smoke against a real 2096²
+  dog-bowl photo: new responseSchema accepted, bowl box returned, kibble
+  estimated at a plausible 115 g under a 20 cm bowl assumption, 7.4 s.
+- **Deliberately deferred**:
+  - _Model comparison (doc §1/§4-step-4)_: needs ~20–30 labeled photos
+    (now accumulating via the grams-carrying correction loop) AND
+    Claude/OpenAI API keys — only Gemini is available today.
+  - _V2 stretch goals, explicitly_: LiDAR/depth capture (§2.3 — the
+    "correct" long-term fix, fits the Capacitor mobile app phase) and
+    ensemble/multi-model voting (§2.5 — doubles inference cost; only if
+    the eval set shows single-model identification is the bottleneck).
+
+## Bowl analysis — user-guided/corrective hints (built 2026-07-14)
+
+Implemented per the plan below. The `20260714000000_add_bowl_user_hint.sql`
+migration is applied to the live project (confirmed via
+`supabase migration list`, 2026-07-15) — the earlier "blocked on manual
+push" caveat no longer applies.
+
 What shipped:
+
 - `lib/vision/analyze-bowl.ts` — `AnalyzeBowlInput.userHint` (capped at
   `MAX_USER_HINT_LENGTH` = 500 chars, trimmed) folded into the user turn via
   a new exported `buildUserPrompt()`; system prompt gained a rule: the note
@@ -435,14 +640,14 @@ What shipped:
   with the upload; `BowlConfirmation` remounts via a `revision` key after
   re-analysis so the row state reseeds from the new items.
 - `components/bowl-confirmation.tsx` — "Re-analyze with this note" textarea
-  + button inside the "Missed something?" box (parent owns the fetch via an
-  `onReanalyze` prop; warns that entered grams reset).
+  - button inside the "Missed something?" box (parent owns the fetch via an
+    `onReanalyze` prop; warns that entered grams reset).
 - Tests: 4 new Jest tests for `buildUserPrompt` (138/138 total); Cypress
   `bowl-photo-flow` now 6/6 — happy path asserts the multipart `hint` field
   is sent, plus a stubbed re-analyze flow (asserts `analysis_id` + hint in
   the request and the remounted 2-item list) and a foreign-analysis
   re-analyze → 404 authz test. `next build` clean.
-- Eval note: `user_hint` records only the *latest* hint; the first-pass raw
+- Eval note: `user_hint` records only the _latest_ hint; the first-pass raw
   output is overwritten on re-analysis. If Phase 6 wants both passes,
   archive to `source_payloads` before update — deferred.
 
@@ -452,12 +657,13 @@ Motivating case (2026-07-14): a real bowl of macaroni + red cabbage + broth
 with ground beef and shredded chicken mixed in — Gemini's `analyzeBowlImage`
 (`lib/vision/analyze-bowl.ts`) only surfaced the macaroni and cabbage; both
 meats were visually indistinct (shredded, submerged in broth) and never
-appeared as `items` at all, so the owner had no way to correct an *omission*
+appeared as `items` at all, so the owner had no way to correct an _omission_
 — only to fix a wrong label on an item the model did detect.
 
 **Plan:** let the owner attach a short free-text hint alongside the photo,
 before or after the first pass, e.g. "there's also ground beef and shredded
 chicken in there." Scope:
+
 - **Input UI**: an optional text field on `/bowl` (`app/bowl/`) near the
   photo upload — "Anything the photo might miss? (optional)" — passed
   through `POST /api/bowl/analyze` alongside the image.
@@ -480,9 +686,10 @@ chicken in there." Scope:
   items) hints are compensating for, distinct from ordinary mis-labeling.
 - Out of scope: the hint never supplies grams or nutrient values — same
   physics-limitation boundary as the rest of the vision pipeline; it only
-  helps *identification*, confirmed grams are still owner-entered.
+  helps _identification_, confirmed grams are still owner-entered.
 
 ## Next phase (planned)
+
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
 - Barcode-scan affordance for branded items (design §5); FatSecret still
@@ -492,7 +699,7 @@ chicken in there." Scope:
   removed (`30df066`, superseded by the monorepo + Capacitor plan below;
   never shipped a camera flow).
 - Vet review of all AAFCO-sourced `nutrient_requirements` values (25 original
-  + 12 new amino-acid/B-vitamin rows).
+  - 12 new amino-acid/B-vitamin rows).
 
 ## Mobile strategy (planned) — monorepo + Capacitor
 
@@ -502,7 +709,9 @@ live Vercel URL in a bare WebView" (rejected — see below). Not started;
 scoping only, on `main` as of 2026-07-13.
 
 ### Why not just point a WebView at the hosted site
+
 Considered and rejected as the primary approach:
+
 - No offline capability — a network blip is a blank screen, not a degraded
   app.
 - App-store risk: Apple has a history of rejecting apps that are
@@ -516,6 +725,7 @@ Considered and rejected as the primary approach:
 - No perceived-native speed — every navigation round-trips to the server.
 
 ### Why the app is a good fit for a shared-codebase approach anyway
+
 Checked the current `main` codebase to scope this: **every top-level page
 (`dashboard`, `dogs`, `foods`, `bowl`) is already a thin server wrapper
 (metadata only) around a `'use client'` page component** — the actual UI
@@ -525,6 +735,7 @@ means most component/JSX code doesn't need to change for a native build —
 only the transport under the action calls does.
 
 ### The real scope: 7 `'use server'` files → REST endpoints
+
 Server Actions can't run inside a Capacitor-bundled static shell (no Node
 process on-device), so each exported action needs an equivalent API route.
 Inventoried every export and its current call-site count:
@@ -568,6 +779,7 @@ remains the actual enforcement boundary either way, per the existing
 comment in `middleware.ts`).
 
 ### Monorepo layout (proposed)
+
 ```
 pawplate/                      # pnpm workspaces + Turborepo
 ├── apps/
@@ -584,10 +796,12 @@ pawplate/                      # pnpm workspaces + Turborepo
 │                              #   signatures (createDogMeal(...), getDogDailyGaps(...))
 │                              #   so call sites barely change
 ```
+
 `apps/web`'s API routes (added per the porting list above) double as the
 REST backend both apps talk to — no separate backend deploy needed.
 
 ### Native-only work Capacitor doesn't remove
+
 - Bowl-photo capture: swap the existing (web `<input type="file">`-based?
   needs confirming) capture path for the Capacitor `Camera` plugin —
   this is new native code regardless of monorepo structure, and it's the
@@ -598,6 +812,7 @@ REST backend both apps talk to — no separate backend deploy needed.
 - CI matrix roughly doubles (web + iOS + Android build/signing).
 
 ### Suggested phasing
+
 1. Extract shared business-logic functions out of the 5 live action files
    (skip `recipe-actions.ts`, resolve `food-actions.ts` overlap first).
 2. Add the REST routes wrapping those functions; keep Server Actions as
@@ -618,11 +833,13 @@ org `AnthonyM5's Org` (`psogkumezbgjobnjozlp`). Created and configured via
 the Supabase CLI (v2.26.9, already authenticated in this environment).
 
 1. **Created the project:**
+
    ```sh
    supabase projects create pawplate --org-id psogkumezbgjobnjozlp \
      --region us-east-1 --db-password <generated>
    supabase link --project-ref stdqdzvhexqgodpuriaw
    ```
+
    (`us-east-2`, the old project's region, is no longer offered for new
    projects — valid regions are listed by `supabase projects create --help`.)
 
@@ -633,7 +850,7 @@ the Supabase CLI (v2.26.9, already authenticated in this environment).
    manually-run scripts. They're now proper timestamped migrations:
    `20250620030100_add_extended_nutrients.sql`,
    `20250620030200_add_fuzzy_search.sql`. Separately,
-   `20250119000000_add_recipes.sql` was timestamped *before* the base schema
+   `20250119000000_add_recipes.sql` was timestamped _before_ the base schema
    migration that creates the `foods`/`meal_items` tables it has foreign
    keys into — on a truly empty database (unlike the old project, which had
    these tables from manual application) this ordering fails outright. Fixed
@@ -642,6 +859,7 @@ the Supabase CLI (v2.26.9, already authenticated in this environment).
    `20250620030000_create_nutrition_schema.sql.backup` file that isn't a
    valid migration filename and was being silently skipped by the CLI.
    Full applied order:
+
    ```
    20250620030000_create_nutrition_schema.sql
    20250620030100_add_extended_nutrients.sql
@@ -670,7 +888,7 @@ the Supabase CLI (v2.26.9, already authenticated in this environment).
    valid, unrelated to the Supabase migration).
 
 6. **Types regenerated:** `supabase gen types typescript --linked >
-   lib/database.types.ts`. This file is **not currently imported anywhere**
+lib/database.types.ts`. This file is **not currently imported anywhere**
    — the app's hand-maintained `Database` type lives in `lib/types.ts` and
    is what `lib/supabase/{client,server}.ts` actually use. Spot-checked the
    generated shapes for `dogs`, `nutrient_requirements`, `bowl_analyses`,
@@ -682,7 +900,7 @@ the Supabase CLI (v2.26.9, already authenticated in this environment).
    - `psql` via the pooler connection: all 10 expected tables present, RLS
      enabled on every one, 50 nutrient-requirement rows (25 adult + 25
      puppy), 38 ingredients (7 toxic-flagged), `fuzzy_search_foods('chiken
-     liver', 3)` returns the right matches despite the typo.
+liver', 3)` returns the right matches despite the typo.
    - `npm run dev` boots clean against the new project (no connection/auth
      errors in the server log).
    - `GET /api/foods/unified-search?q=chicken` (with the `guestMode` cookie
@@ -692,6 +910,7 @@ the Supabase CLI (v2.26.9, already authenticated in this environment).
      `psql`.
 
 ### Remaining production steps (not yet done)
+
 - Set the same env vars in Vercel (or wherever this deploys) — currently
   only local `.env.local`/`.env` were updated.
 - Add `NEXT_PUBLIC_SUPABASE_URL`/keys and `GEMINI_API_KEY` to CI if tests
@@ -707,6 +926,7 @@ the Supabase CLI (v2.26.9, already authenticated in this environment).
   plaintext during this session's chat, so treat it as exposed.
 
 ## Key caveats
+
 - Gram estimation from photos is out of scope for v1 — owners enter weights.
 - USDA taurine/amino coverage is incomplete; affected ingredients carry
   `is_verified = false`.

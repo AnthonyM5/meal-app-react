@@ -117,6 +117,8 @@ export interface Dog {
   neutered: boolean
   health_conditions: string[]
   avatar_url?: string | null
+  /** Inner diameter of the dog's usual bowl (cm) — photo-scale reference */
+  bowl_diameter_cm?: number | null
   created_at: string
   updated_at: string
 }
@@ -139,6 +141,10 @@ export interface BowlAnalysisItem {
   name: string
   proportion: number
   confidence: number
+  /** Grams the owner actually confirmed — §2.4's calibration ground truth */
+  grams?: number | null
+  /** What the photo pipeline predicted, so correction deltas are computable */
+  estimated_grams?: number | null
 }
 
 export interface BowlAnalysis {
