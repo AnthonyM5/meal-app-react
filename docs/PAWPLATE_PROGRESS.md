@@ -408,6 +408,80 @@ First step of the mobile plan below, executed on `main`:
   spec) — fixed; pre-existing, unrelated to this refactor.
 - Next: phasing step 2 — add the REST routes wrapping these services.
 
+## Bowl analysis — user-guided/corrective hints (built 2026-07-14, pending live verification)
+
+Implemented per the plan below. **Blocked on one manual step: the migration
+(`supabase/migrations/20260714000000_add_bowl_user_hint.sql`, adds
+`bowl_analyses.user_hint`) has NOT been applied to the live project** — the
+`supabase db push` was permission-gated in-session. Until it's pushed, every
+authenticated owner scan will fail (the insert now includes `user_hint`).
+Run `supabase db push`, then smoke-test.
+
+What shipped:
+- `lib/vision/analyze-bowl.ts` — `AnalyzeBowlInput.userHint` (capped at
+  `MAX_USER_HINT_LENGTH` = 500 chars, trimmed) folded into the user turn via
+  a new exported `buildUserPrompt()`; system prompt gained a rule: the note
+  is ground truth for WHAT is in the bowl (include named items even if
+  invisible — low confidence, best-guess proportion), never a source of
+  grams/calories.
+- `POST /api/bowl/analyze` — optional `hint` form field on both guest and
+  owner scans (persisted as `bowl_analyses.user_hint` on the owner path).
+  Same POST also now handles **re-analysis**: `analysis_id` + `hint` (no
+  image) → ownership check (same rule as PATCH), download the original
+  photo from the `bowl-photos` bucket (never trusts client-resupplied
+  bytes), re-run the model, update the row in place (latest pass + latest
+  hint win). Guests get 401 on this path.
+- `/bowl` page — optional "Anything the photo might miss?" textarea sent
+  with the upload; `BowlConfirmation` remounts via a `revision` key after
+  re-analysis so the row state reseeds from the new items.
+- `components/bowl-confirmation.tsx` — "Re-analyze with this note" textarea
+  + button inside the "Missed something?" box (parent owns the fetch via an
+  `onReanalyze` prop; warns that entered grams reset).
+- Tests: 4 new Jest tests for `buildUserPrompt` (138/138 total); Cypress
+  `bowl-photo-flow` now 6/6 — happy path asserts the multipart `hint` field
+  is sent, plus a stubbed re-analyze flow (asserts `analysis_id` + hint in
+  the request and the remounted 2-item list) and a foreign-analysis
+  re-analyze → 404 authz test. `next build` clean.
+- Eval note: `user_hint` records only the *latest* hint; the first-pass raw
+  output is overwritten on re-analysis. If Phase 6 wants both passes,
+  archive to `source_payloads` before update — deferred.
+
+### Original plan (kept for context)
+
+Motivating case (2026-07-14): a real bowl of macaroni + red cabbage + broth
+with ground beef and shredded chicken mixed in — Gemini's `analyzeBowlImage`
+(`lib/vision/analyze-bowl.ts`) only surfaced the macaroni and cabbage; both
+meats were visually indistinct (shredded, submerged in broth) and never
+appeared as `items` at all, so the owner had no way to correct an *omission*
+— only to fix a wrong label on an item the model did detect.
+
+**Plan:** let the owner attach a short free-text hint alongside the photo,
+before or after the first pass, e.g. "there's also ground beef and shredded
+chicken in there." Scope:
+- **Input UI**: an optional text field on `/bowl` (`app/bowl/`) near the
+  photo upload — "Anything the photo might miss? (optional)" — passed
+  through `POST /api/bowl/analyze` alongside the image.
+- **Prompt wiring**: `analyzeBowlImage` (`lib/vision/analyze-bowl.ts`) gains
+  an optional `userHint` param appended to the request's `text` part (same
+  pattern as the existing corrective-retry `extraNudge`), instructing Gemini
+  to treat the hint as ground truth for items it may have missed and to
+  reconcile proportions across the now-complete item set.
+- **Post-hoc revision**: since the owner may only notice a miss after seeing
+  the confirmation UI (`components/bowl-confirmation.tsx`), also support a
+  "re-analyze with a note" action from that screen — re-runs
+  `analyzeBowlImage` on the already-uploaded photo with the hint, rather than
+  requiring a re-upload. Needs the original image bytes retained (already
+  persisted to the `bowl-photos` Storage bucket) or re-fetched by the stored
+  `bowl_analyses` row's photo URL.
+- **Eval signal**: worth recording whether a hint was used and what it said
+  (new nullable column on `bowl_analyses`, or fold into the existing
+  `user_corrected` JSON) — feeds Phase 6 (evals/monitoring) as a signal for
+  which failure modes (occlusion, mixed/shredded textures, broth-submerged
+  items) hints are compensating for, distinct from ordinary mis-labeling.
+- Out of scope: the hint never supplies grams or nutrient values — same
+  physics-limitation boundary as the rest of the vision pipeline; it only
+  helps *identification*, confirmed grams are still owner-entered.
+
 ## Next phase (planned)
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).

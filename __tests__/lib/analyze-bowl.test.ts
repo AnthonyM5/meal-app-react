@@ -1,6 +1,8 @@
 import { describe, expect, test } from '@jest/globals'
 import {
   BOWL_VISION_MODEL,
+  MAX_USER_HINT_LENGTH,
+  buildUserPrompt,
   parseBowlAnalysis,
 } from '@/lib/vision/analyze-bowl'
 
@@ -53,5 +55,34 @@ describe('parseBowlAnalysis', () => {
 
   test('model version is pinned and explicit', () => {
     expect(BOWL_VISION_MODEL).toBe('gemini-2.5-flash')
+  })
+})
+
+describe('buildUserPrompt', () => {
+  test('without a hint, asks only for identification', () => {
+    const prompt = buildUserPrompt()
+    expect(prompt).toContain('Identify the food items')
+    expect(prompt).not.toContain("Owner's note")
+  })
+
+  test('folds a hint into the prompt', () => {
+    const prompt = buildUserPrompt(
+      "there's also ground beef and shredded chicken mixed in"
+    )
+    expect(prompt).toContain('Identify the food items')
+    expect(prompt).toContain(
+      "Owner's note about this bowl: there's also ground beef and shredded chicken mixed in"
+    )
+  })
+
+  test('blank or whitespace hints are ignored', () => {
+    expect(buildUserPrompt('   ')).toBe(buildUserPrompt())
+    expect(buildUserPrompt('')).toBe(buildUserPrompt())
+  })
+
+  test('hints are trimmed and capped at the max length', () => {
+    const prompt = buildUserPrompt(`  ${'x'.repeat(MAX_USER_HINT_LENGTH + 50)}  `)
+    expect(prompt).toContain(`Owner's note about this bowl: ${'x'.repeat(MAX_USER_HINT_LENGTH)}`)
+    expect(prompt).not.toContain('x'.repeat(MAX_USER_HINT_LENGTH + 1))
   })
 })

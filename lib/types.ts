@@ -149,6 +149,8 @@ export interface BowlAnalysis {
   raw_output: unknown
   identified_items: BowlAnalysisItem[]
   user_corrected: BowlAnalysisItem[] | null
+  /** Owner's free-text hint to the vision model; latest hint wins on re-analysis */
+  user_hint: string | null
   created_at: string
 }
 export interface Recipe {

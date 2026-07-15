@@ -113,12 +113,24 @@ describe('Bowl photo flow', () => {
             expect(dogId).to.be.a('string').and.not.be.empty
           })
 
+        // An owner note rides along with the upload to guide identification
+        cy.get('#bowl-hint').type('the protein is chicken breast')
+
         // The hidden input is driven by the visible "Take or choose a photo" button
         cy.get('[data-testid="bowl-photo-input"]').selectFile(
           'cypress/fixtures/bowl.png',
           { force: true }
         )
-        cy.wait('@analyze')
+        cy.wait('@analyze').then(({ request }) => {
+          // Multipart body arrives as an ArrayBuffer — decode to assert the
+          // hint field was actually sent.
+          const raw =
+            typeof request.body === 'string'
+              ? request.body
+              : new TextDecoder().decode(request.body)
+          expect(raw).to.contain('name="hint"')
+          expect(raw).to.contain('the protein is chicken breast')
+        })
 
         cy.contains('Confirm this bowl', { timeout: 10000 }).should('be.visible')
 
@@ -163,6 +175,118 @@ describe('Bowl photo flow', () => {
         expect(meal!.source).to.eq('photo')
         expect(meal!.meal_type).to.eq('breakfast')
       })
+    })
+  })
+
+  it('re-analyzes the same photo when the owner adds a corrective note', () => {
+    cy.login(owner.email, owner.password)
+    cy.url().should('include', '/dashboard')
+
+    // Reuse the dog created in the first test; grab a real ingredient for
+    // believable stubbed matches.
+    cy.request('/api/foods/unified-search?q=chicken%20breast')
+      .its('body.foods')
+      .should('have.length.greaterThan', 0)
+      .then((foods: Food[]) => {
+        const food = foods[0]
+        const analysisId = '00000000-0000-4000-8000-000000000def'
+
+        // First pass: the model only sees macaroni — the meats are submerged.
+        cy.intercept('POST', '/api/bowl/analyze', {
+          statusCode: 200,
+          body: {
+            analysis_id: analysisId,
+            image_url: '/icon-192.png',
+            notes: '',
+            items: [
+              {
+                label: 'macaroni',
+                estimated_proportion: 1,
+                confidence: 0.9,
+                normalized_ingredient_id: food.id,
+                ingredient: food,
+              },
+            ],
+          },
+        }).as('analyze')
+
+        cy.visit('/bowl')
+        cy.get('[data-testid="bowl-photo-input"]').selectFile(
+          'cypress/fixtures/bowl.png',
+          { force: true }
+        )
+        cy.wait('@analyze')
+        cy.contains('Confirm this bowl', { timeout: 10000 }).should('be.visible')
+        cy.get('[data-testid="bowl-items"] li').should('have.length', 1)
+
+        // Second pass: registered after the first so it takes precedence.
+        // The hint surfaces the missed item.
+        cy.intercept('POST', '/api/bowl/analyze', {
+          statusCode: 200,
+          body: {
+            analysis_id: analysisId,
+            image_url: '/icon-192.png',
+            notes: 'Included ground beef per the owner note.',
+            items: [
+              {
+                label: 'macaroni',
+                estimated_proportion: 0.6,
+                confidence: 0.9,
+                normalized_ingredient_id: food.id,
+                ingredient: food,
+              },
+              {
+                label: 'ground beef',
+                estimated_proportion: 0.4,
+                confidence: 0.5,
+                normalized_ingredient_id: null,
+                ingredient: null,
+              },
+            ],
+          },
+        }).as('reanalyze')
+
+        cy.get('textarea[aria-label="Note for re-analysis"]').type(
+          'there is also ground beef mixed in'
+        )
+        cy.contains('button', /Re-analyze with this note/i).click()
+
+        cy.wait('@reanalyze').then(({ request }) => {
+          const raw =
+            typeof request.body === 'string'
+              ? request.body
+              : new TextDecoder().decode(request.body)
+          expect(raw).to.contain('name="analysis_id"')
+          expect(raw).to.contain(analysisId)
+          expect(raw).to.contain('there is also ground beef mixed in')
+        })
+
+        // The confirmation remounts with the model's revised item list
+        cy.get('[data-testid="bowl-items"] li', { timeout: 10000 }).should(
+          'have.length',
+          2
+        )
+        cy.contains('ground beef').should('be.visible')
+      })
+  })
+
+  it("refuses to re-analyze an analysis the caller doesn't own", () => {
+    cy.login(owner.email, owner.password)
+    cy.url().should('include', '/dashboard')
+
+    cy.window().then(async win => {
+      const form = new win.FormData()
+      form.append('analysis_id', '00000000-0000-4000-8000-000000000abc')
+      form.append('hint', 'there is also ground beef')
+
+      const response = await win.fetch('/api/bowl/analyze', {
+        method: 'POST',
+        body: form,
+      })
+      const body = await response.json()
+
+      expect(response.status).to.eq(404)
+      expect(body.error).to.match(/not found/i)
     })
   })
 

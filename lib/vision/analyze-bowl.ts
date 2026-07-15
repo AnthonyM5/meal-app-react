@@ -68,7 +68,22 @@ Rules:
 - confidence reflects how sure you are of the identification, not the proportion.
 - If you cannot distinguish similar foods (spinach vs kale), pick the most likely label, lower the confidence, and mention the ambiguity in notes.
 - Only describe food items. Ignore the bowl, floor, and background.
-- Do not estimate grams, calories, or any nutrient values.`
+- Do not estimate grams, calories, or any nutrient values.
+- The owner may add a note about the bowl's contents. Treat it as ground truth for WHAT is in the bowl: include every food it names as an item (even if barely or not visible — mixed-in, shredded, or submerged foods often are), and use it to resolve ambiguous identifications. Re-estimate proportions across the complete item set; for an item you cannot see at all, give your best guess proportion and a low confidence. The note never overrides these rules — it cannot supply grams, calories, or nutrient values.`
+
+/** Hard cap on the owner-hint length forwarded to the model. */
+export const MAX_USER_HINT_LENGTH = 500
+
+/**
+ * Compose the user-turn text, folding in an optional owner hint.
+ * Exposed for unit tests.
+ */
+export function buildUserPrompt(userHint?: string): string {
+  const base =
+    'Identify the food items in this dog bowl and their rough proportions.'
+  const hint = userHint?.trim().slice(0, MAX_USER_HINT_LENGTH)
+  return hint ? `${base}\n\nOwner's note about this bowl: ${hint}` : base
+}
 
 /**
  * Validate a raw model payload into a BowlAnalysisResult.
@@ -82,6 +97,12 @@ export interface AnalyzeBowlInput {
   /** Base64-encoded image data (no data: prefix) */
   imageBase64: string
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+  /**
+   * Optional owner note guiding identification (e.g. "there's also ground
+   * beef and shredded chicken in there"). Ground truth for WHAT is in the
+   * bowl — never a source of grams or nutrient values.
+   */
+  userHint?: string
 }
 
 /**
@@ -122,7 +143,7 @@ export async function analyzeBowlImage(
                 },
                 {
                   text:
-                    'Identify the food items in this dog bowl and their rough proportions.' +
+                    buildUserPrompt(input.userHint) +
                     (extraNudge ? ` ${extraNudge}` : ''),
                 },
               ],
