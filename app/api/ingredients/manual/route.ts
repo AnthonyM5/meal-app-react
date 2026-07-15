@@ -1,4 +1,5 @@
-import { authenticateRequest, errorResponse } from '@/lib/server/rest-auth'
+import { authenticateRequest, errorResponse, readJson } from '@/lib/server/rest-auth'
+import { ManualIngredientSchema } from '@/lib/server/rest-schemas'
 import * as ingredientService from '@/lib/services/ingredient-service'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -11,8 +12,8 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth
 
   try {
-    const input =
-      (await request.json()) as ingredientService.ManualIngredientInput
+    const input = await readJson(request, ManualIngredientSchema)
+    if (input instanceof NextResponse) return input
     const food = await ingredientService.createManualIngredient(
       auth.supabase,
       auth.userId,

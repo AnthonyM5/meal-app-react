@@ -1,6 +1,6 @@
-import { authenticateRequest, errorResponse } from '@/lib/server/rest-auth'
+import { authenticateRequest, errorResponse, readJson } from '@/lib/server/rest-auth'
+import { MealUpdateSchema } from '@/lib/server/rest-schemas'
 import * as mealService from '@/lib/services/meal-service'
-import type { MealType } from '@/lib/types'
 import { type NextRequest, NextResponse } from 'next/server'
 
 // Mobile-facing REST wrapper over lib/services/meal-service.ts — mirrors
@@ -27,12 +27,6 @@ export async function GET(
   }
 }
 
-interface UpdateMealBody {
-  meal_type: MealType
-  items: mealService.DogMealItemInput[]
-  name?: string
-}
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ mealId: string }> }
@@ -42,7 +36,8 @@ export async function PATCH(
 
   try {
     const { mealId } = await params
-    const body = (await request.json()) as UpdateMealBody
+    const body = await readJson(request, MealUpdateSchema)
+    if (body instanceof NextResponse) return body
     const result = await mealService.updateDogMeal(
       auth.supabase,
       auth.userId,

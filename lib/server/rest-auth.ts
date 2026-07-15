@@ -2,6 +2,7 @@ import { getServiceClient, isSupabaseConfigured } from '@/lib/server/service-cli
 import type { Database } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
+import type { z } from 'zod'
 
 /**
  * Resolve the calling user from an `Authorization: Bearer <access_token>`
@@ -36,6 +37,43 @@ export async function authenticateRequest(
   }
 
   return { supabase, userId: data.user.id }
+}
+
+/**
+ * Parse and validate a JSON request body at the REST boundary. Returns the
+ * typed, validated value, or a ready-to-return NextResponse (400). Callers
+ * narrow with `instanceof NextResponse`, same as authenticateRequest.
+ *
+ * Both failure modes a native client can trigger become a clean 400 instead
+ * of a 500: a malformed/empty body (request.json() throws a SyntaxError) and
+ * a well-formed body with the wrong shape/types (schema rejects it — e.g.
+ * `weight_kg: "abc"`, which the service's `<= 0` check would let through).
+ */
+export async function readJson<S extends z.ZodTypeAny>(
+  request: NextRequest,
+  schema: S
+): Promise<z.infer<S> | NextResponse> {
+  let raw: unknown
+  try {
+    raw = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: 'Request body must be valid JSON' },
+      { status: 400 }
+    )
+  }
+
+  const parsed = schema.safeParse(raw)
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
+    const path = issue.path.join('.')
+    return NextResponse.json(
+      { error: path ? `${path}: ${issue.message}` : issue.message },
+      { status: 400 }
+    )
+  }
+
+  return parsed.data
 }
 
 /**

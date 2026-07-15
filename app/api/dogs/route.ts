@@ -1,4 +1,5 @@
-import { authenticateRequest, errorResponse } from '@/lib/server/rest-auth'
+import { authenticateRequest, errorResponse, readJson } from '@/lib/server/rest-auth'
+import { DogCreateSchema } from '@/lib/server/rest-schemas'
 import * as dogService from '@/lib/services/dog-service'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -23,7 +24,8 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth
 
   try {
-    const input = (await request.json()) as dogService.DogInput
+    const input = await readJson(request, DogCreateSchema)
+    if (input instanceof NextResponse) return input
     const dog = await dogService.createDog(auth.supabase, auth.userId, input)
     return NextResponse.json({ dog }, { status: 201 })
   } catch (error) {

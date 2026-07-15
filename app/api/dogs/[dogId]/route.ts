@@ -1,4 +1,5 @@
-import { authenticateRequest, errorResponse } from '@/lib/server/rest-auth'
+import { authenticateRequest, errorResponse, readJson } from '@/lib/server/rest-auth'
+import { DogUpdateSchema } from '@/lib/server/rest-schemas'
 import * as dogService from '@/lib/services/dog-service'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -30,7 +31,8 @@ export async function PATCH(
 
   try {
     const { dogId } = await params
-    const updates = (await request.json()) as Partial<dogService.DogInput>
+    const updates = await readJson(request, DogUpdateSchema)
+    if (updates instanceof NextResponse) return updates
     const dog = await dogService.updateDog(
       auth.supabase,
       auth.userId,

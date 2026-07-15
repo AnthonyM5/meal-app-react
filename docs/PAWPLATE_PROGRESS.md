@@ -495,6 +495,33 @@ First step of the mobile plan below, executed on `main`:
   live project. The FK fix unblocks their deletion, but the bulk delete
   itself is left as a manual step — run
   `set -a && source .env.local && set +a && npx tsx scripts/cleanup-stale-e2e-users.ts --delete`.
+- **Review hardening (PR #15 follow-up, 2026-07-15):** two issues from the
+  code review, both addressed:
+  - *Request-body validation at the boundary.* Added `lib/server/rest-schemas.ts`
+    (zod schemas mirroring the service input types) and a `readJson()` helper
+    in `rest-auth.ts`. Every body-bearing route now parses through it, so a
+    malformed/empty body and a well-typed-but-wrong-shape body (e.g.
+    `weight_kg: "abc"`, which slipped past the service's `<= 0` check —
+    `NaN <= 0` is false — and would have 500'd at Postgres) both return a
+    clean 400 instead of a 500. Schemas gate types only; the business rules
+    (non-empty name, weight > 0, kcal ≥ 0) stay the single source of truth
+    in `lib/services/*`. The parsed type is passed straight into the service,
+    so tsc fails the build if a schema drifts from its interface.
+  - *404/403 consistency.* Foreign user-owned resources now return 404
+    everywhere (was: dogs 404 via `getDog` but PATCH/DELETE + all meal/gaps
+    routes 403). 404-for-foreign is the security-conscious default (a
+    non-owner can't confirm an id exists) and gives the mobile client one
+    predictable code. `dog-service` update/deleteDog are owner-filtered
+    (matching getDog); `meal-service`'s 6 ownership checks changed from
+    throwing `'Unauthorized'` to `'not found'` (message-only, no query
+    change — lowest risk to the shared web query/compute paths; the row is
+    still fetched server-side but never returned). Web behavior is unchanged
+    in practice — legitimate web flows never touch foreign resources.
+  - Tests: `mobile-rest-api.cy.ts` updated (dog cross-user now asserts 404
+    across GET/PATCH/DELETE/gaps/meals) and extended with a meal-level
+    cross-user test and a malformed/wrong-type body → 400 test. 6/6 live;
+    web `dog-nutrition-flow` 3/3 and `bowl-photo-flow` 6/6 re-verified
+    unaffected. Jest 138/138, `next build` clean.
 - Next: Step 3 (stand up the monorepo — `packages/ui`/`core`/`api-client`,
   move `apps/web` in with no behavior change) or Step 4 (scaffold
   `apps/mobile` with Vite, per the decision above) — whichever the user

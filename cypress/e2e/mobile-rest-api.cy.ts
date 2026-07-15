@@ -220,37 +220,34 @@ describe('Mobile REST API', () => {
     }).then(({ body }) => {
       const dogId = body.dog.id as string
 
-      // getDog's query is filtered by owner_id, so a stranger's dog_id gets
-      // treated as nonexistent rather than found-but-forbidden.
-      cy.request({
-        url: `/api/dogs/${dogId}`,
-        headers: auth(strangerToken),
-        failOnStatusCode: false,
-      }).then(({ status }) => {
-        expect(status).to.eq(404)
-      })
+      // Every foreign-resource access returns 404 (not 403) so a non-owner
+      // can't confirm the id exists — GET, PATCH, DELETE, and gaps all agree.
+      const foreign = (
+        method: string,
+        url: string,
+        reqBody?: Record<string, unknown>
+      ) =>
+        cy
+          .request({
+            method,
+            url,
+            headers: auth(strangerToken),
+            failOnStatusCode: false,
+            ...(reqBody ? { body: reqBody } : {}),
+          })
+          .then(({ status }) => {
+            expect(status, `${method} ${url}`).to.eq(404)
+          })
 
-      // updateDog/deleteDog fetch by id first, then compare owner_id — a
-      // stranger's dogId resolves to a real row, so this is "Unauthorized"
-      // (403), not "not found" (404).
-      cy.request({
-        method: 'PATCH',
-        url: `/api/dogs/${dogId}`,
-        headers: auth(strangerToken),
-        failOnStatusCode: false,
-        body: { weight_kg: 99 },
-      }).then(({ status }) => {
-        expect(status).to.eq(403)
+      foreign('GET', `/api/dogs/${dogId}`)
+      foreign('PATCH', `/api/dogs/${dogId}`, { weight_kg: 99 })
+      foreign('GET', `/api/dogs/${dogId}/gaps`)
+      foreign('GET', `/api/dogs/${dogId}/meals`)
+      foreign('POST', `/api/dogs/${dogId}/meals`, {
+        meal_type: 'breakfast',
+        items: [{ ingredient_id: food.id, grams: 100 }],
       })
-
-      cy.request({
-        method: 'DELETE',
-        url: `/api/dogs/${dogId}`,
-        headers: auth(strangerToken),
-        failOnStatusCode: false,
-      }).then(({ status }) => {
-        expect(status).to.eq(403)
-      })
+      foreign('DELETE', `/api/dogs/${dogId}`)
 
       // Cleanup as the real owner
       cy.request({
@@ -258,6 +255,99 @@ describe('Mobile REST API', () => {
         url: `/api/dogs/${dogId}`,
         headers: auth(ownerToken),
       })
+    })
+  })
+
+  it("refuses to let one user touch another user's meal", () => {
+    // Owner creates a dog and logs a meal; the stranger must not reach it
+    // through the meal-scoped routes.
+    cy.request({
+      method: 'POST',
+      url: '/api/dogs',
+      headers: auth(ownerToken),
+      body: { name: 'Meal Owner Dog', weight_kg: 15 },
+    }).then(({ body }) => {
+      const dogId = body.dog.id as string
+      cy.request({
+        method: 'POST',
+        url: `/api/dogs/${dogId}/meals`,
+        headers: auth(ownerToken),
+        body: {
+          meal_type: 'breakfast',
+          items: [{ ingredient_id: food.id, grams: 120 }],
+        },
+      }).then(({ body }) => {
+        const mealId = body.result.mealId as string
+
+        cy.request({
+          url: `/api/meals/${mealId}`,
+          headers: auth(strangerToken),
+          failOnStatusCode: false,
+        }).then(({ status }) => expect(status).to.eq(404))
+
+        cy.request({
+          method: 'PATCH',
+          url: `/api/meals/${mealId}`,
+          headers: auth(strangerToken),
+          failOnStatusCode: false,
+          body: {
+            meal_type: 'dinner',
+            items: [{ ingredient_id: food.id, grams: 200 }],
+          },
+        }).then(({ status }) => expect(status).to.eq(404))
+
+        cy.request({
+          method: 'DELETE',
+          url: `/api/meals/${mealId}`,
+          headers: auth(strangerToken),
+          failOnStatusCode: false,
+        }).then(({ status }) => expect(status).to.eq(404))
+
+        // Cleanup as the real owner
+        cy.request({
+          method: 'DELETE',
+          url: `/api/dogs/${dogId}`,
+          headers: auth(ownerToken),
+        })
+      })
+    })
+  })
+
+  it('rejects malformed and wrongly-typed request bodies with 400, not 500', () => {
+    // Malformed JSON (not an object at all)
+    cy.request({
+      method: 'POST',
+      url: '/api/dogs',
+      headers: { ...auth(ownerToken), 'Content-Type': 'application/json' },
+      body: 'this is not json{',
+      failOnStatusCode: false,
+    }).then(({ status, body }) => {
+      expect(status).to.eq(400)
+      expect(body.error).to.match(/valid json/i)
+    })
+
+    // Well-formed JSON, wrong field type: weight_kg as a string would slip
+    // past the service's `<= 0` check (NaN compares false) and 500 at Postgres.
+    cy.request({
+      method: 'POST',
+      url: '/api/dogs',
+      headers: auth(ownerToken),
+      body: { name: 'Bad Type Dog', weight_kg: 'heavy' },
+      failOnStatusCode: false,
+    }).then(({ status, body }) => {
+      expect(status).to.eq(400)
+      expect(body.error).to.match(/weight_kg/i)
+    })
+
+    // Unknown enum value is also a 400, not a downstream error.
+    cy.request({
+      method: 'POST',
+      url: '/api/dogs',
+      headers: auth(ownerToken),
+      body: { name: 'Bad Enum Dog', weight_kg: 10, life_stage: 'kitten' },
+      failOnStatusCode: false,
+    }).then(({ status }) => {
+      expect(status).to.eq(400)
     })
   })
 })

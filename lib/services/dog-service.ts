@@ -109,16 +109,20 @@ export async function updateDog(
 ): Promise<Dog> {
   validateDogInput(updates, false)
 
+  // Owner-filtered, like getDog: a foreign or nonexistent dog both yield
+  // zero rows → 'Dog not found' (404). We deliberately do NOT distinguish
+  // "someone else's dog" with a 403 — that would confirm the id exists to a
+  // non-owner (and it kept getDog and update/deleteDog on different status
+  // codes for the same resource).
   const { data: existing, error: fetchError } = await supabase
     .from('dogs')
-    .select('owner_id')
+    .select('id')
     .eq('id', dogId)
-    // maybeSingle: see the comment on getDog above.
+    .eq('owner_id', ownerId)
     .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!existing) throw new Error('Dog not found')
-  if (existing.owner_id !== ownerId) throw new Error('Unauthorized')
 
   const { data, error } = await supabase
     .from('dogs')
@@ -141,6 +145,7 @@ export async function updateDog(
       ...(updates.avatar_url !== undefined && { avatar_url: updates.avatar_url }),
     })
     .eq('id', dogId)
+    .eq('owner_id', ownerId)
     .select()
     .single()
 
@@ -154,17 +159,21 @@ export async function deleteDog(
   ownerId: string,
   dogId: string
 ): Promise<void> {
+  // Owner-filtered, like getDog/updateDog: foreign or nonexistent → 404.
   const { data: existing, error: fetchError } = await supabase
     .from('dogs')
-    .select('owner_id')
+    .select('id')
     .eq('id', dogId)
-    // maybeSingle: see the comment on getDog above.
+    .eq('owner_id', ownerId)
     .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!existing) throw new Error('Dog not found')
-  if (existing.owner_id !== ownerId) throw new Error('Unauthorized')
 
-  const { error } = await supabase.from('dogs').delete().eq('id', dogId)
+  const { error } = await supabase
+    .from('dogs')
+    .delete()
+    .eq('id', dogId)
+    .eq('owner_id', ownerId)
   if (error) throw error
 }

@@ -124,7 +124,9 @@ export async function createDogMeal(
 
   if (dogError) throw dogError
   if (!dog) throw new Error('Dog not found')
-  if ((dog as Dog).owner_id !== userId) throw new Error('Unauthorized')
+  // Foreign dog → 'not found' (404), not 403: don't confirm the id exists to
+  // a non-owner, and keep every ownership check in this layer on one status.
+  if ((dog as Dog).owner_id !== userId) throw new Error('Dog not found')
 
   const mealItems = await loadIngredients(supabase, items)
   const { totals, coverage } = computeMealNutrients(mealItems)
@@ -211,7 +213,8 @@ export async function getDogMealForEdit(
     meal_items?: Array<{ quantity: number; food: Ingredient | null }>
   }
 
-  if (typed.dogs.owner_id !== userId) throw new Error('Unauthorized')
+  // Foreign meal → 'not found' (404), not 403 (see createDogMeal).
+  if (typed.dogs.owner_id !== userId) throw new Error('Meal not found')
   if (!typed.dog_id) throw new Error('Meal has no associated dog')
 
   return {
@@ -258,7 +261,8 @@ export async function updateDogMeal(
     dog_id: string | null
     dogs: Dog
   }
-  if (typedMeal.user_id !== userId) throw new Error('Unauthorized')
+  // Foreign meal → 'not found' (404), not 403 (see createDogMeal).
+  if (typedMeal.user_id !== userId) throw new Error('Meal not found')
   if (!typedMeal.dog_id) throw new Error('Meal has no associated dog')
 
   const dog = typedMeal.dogs
@@ -332,7 +336,8 @@ export async function getDogDailyGaps(
 
   if (dogError) throw dogError
   if (!dog) throw new Error('Dog not found')
-  if ((dog as Dog).owner_id !== userId) throw new Error('Unauthorized')
+  // Foreign dog → 'not found' (404), not 403 (see createDogMeal).
+  if ((dog as Dog).owner_id !== userId) throw new Error('Dog not found')
 
   const targetDate = date ?? new Date().toISOString().split('T')[0]
 
@@ -393,7 +398,8 @@ export async function getDogMeals(
     .maybeSingle()
 
   if (dogError) throw dogError
-  if (!dog || dog.owner_id !== userId) throw new Error('Unauthorized')
+  // Foreign or missing dog → 'not found' (404), not 403 (see createDogMeal).
+  if (!dog || dog.owner_id !== userId) throw new Error('Dog not found')
 
   const targetDate = date ?? new Date().toISOString().split('T')[0]
 
@@ -445,7 +451,8 @@ export async function deleteDogMeal(
 
   if (fetchError) throw fetchError
   if (!meal) throw new Error('Meal not found')
-  if (meal.user_id !== userId) throw new Error('Unauthorized')
+  // Foreign meal → 'not found' (404), not 403 (see createDogMeal).
+  if (meal.user_id !== userId) throw new Error('Meal not found')
 
   const { error } = await supabase.from('meals').delete().eq('id', mealId)
   if (error) throw error
