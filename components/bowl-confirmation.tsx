@@ -47,6 +47,18 @@ export interface AnalyzedBowlItem {
   ingredient: Food | null
   /** OFF candidate for an unmatched label — owner must accept it explicitly */
   branded_suggestion?: BrandedSuggestion | null
+  /** Photo-derived gram ESTIMATE (bounding box × scale reference × density
+   *  priors) — prefills the grams field, always owner-confirmable */
+  estimated_grams?: number | null
+}
+
+/** What the photo's gram estimates were scaled against, for the UI notice. */
+export type ScaleBasis = 'bowl_diameter' | 'reference_coin' | 'reference_card'
+
+const SCALE_BASIS_LABEL: Record<ScaleBasis, string> = {
+  bowl_diameter: "your bowl's measured diameter",
+  reference_coin: 'the coin visible in the photo',
+  reference_card: 'the card visible in the photo',
 }
 
 interface ConfirmRow {
@@ -58,6 +70,8 @@ interface ConfirmRow {
   proportion: number
   ingredient: Food | null
   suggestion: BrandedSuggestion | null
+  /** Photo-derived prediction, kept for the §2.4 correction delta */
+  estimatedGrams: number | null
   grams: string
   /**
    * True while the owner has a non-empty value typed in this row's grams.
@@ -291,6 +305,9 @@ interface BowlConfirmationProps {
   imageUrl: string
   items: AnalyzedBowlItem[]
   notes: string
+  /** Set when the photo had a usable scale reference — enables the
+   *  gram-estimate prefill notice */
+  scaleBasis?: ScaleBasis | null
   onLogged?: () => void
   /**
    * Re-run the vision model on the already-uploaded photo with a corrective
@@ -306,6 +323,7 @@ export function BowlConfirmation({
   imageUrl,
   items,
   notes,
+  scaleBasis,
   onLogged,
   onReanalyze,
 }: BowlConfirmationProps) {
@@ -318,7 +336,11 @@ export function BowlConfirmation({
       proportion: item.estimated_proportion,
       ingredient: item.ingredient,
       suggestion: item.branded_suggestion ?? null,
-      grams: '',
+      estimatedGrams: item.estimated_grams ?? null,
+      // Photo-derived estimates prefill the field but stay in the untouched
+      // "estimate" state (amber) — the owner confirms or overwrites them,
+      // and the total-weight anchor below is still free to replace them.
+      grams: item.estimated_grams != null ? String(item.estimated_grams) : '',
       gramsTouched: false,
     }))
   )
@@ -399,6 +421,7 @@ export function BowlConfirmation({
         proportion: 0,
         ingredient: food,
         suggestion: null,
+        estimatedGrams: null,
         grams: '',
         gramsTouched: false,
       },
@@ -440,11 +463,15 @@ export function BowlConfirmation({
 
       // Persist what the owner actually confirmed. This is the gold data for
       // vision evals (Phase 6) — best effort, never block the logged meal.
+      // grams vs estimated_grams is the §2.4 calibration signal: consistent
+      // deltas per food category mean the density/height priors need tuning.
       const correctedItems: BowlAnalysisItem[] = rows.map(row => ({
         ingredient_id: row.ingredient!.id,
         name: row.ingredient!.name,
         proportion: row.proportion,
         confidence: row.confidence,
+        grams: Number(row.grams),
+        estimated_grams: row.estimatedGrams,
       }))
       try {
         await fetch('/api/bowl/analyze', {
@@ -529,6 +556,14 @@ export function BowlConfirmation({
             Percentages are the model&apos;s rough visual estimate of the bowl,
             not weights.
           </p>
+
+          {scaleBasis && (
+            <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+              Gram amounts below were pre-estimated using{' '}
+              {SCALE_BASIS_LABEL[scaleBasis]} as a size reference. They&apos;re
+              starting points, not measurements — confirm or adjust each one.
+            </p>
+          )}
 
           {notes && (
             <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
