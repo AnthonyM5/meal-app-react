@@ -51,6 +51,34 @@ export default defineConfig({
           if (error) throw error
           return null
         },
+        // Password sign-in as an anon-key client, for exercising the mobile
+        // REST routes (Authorization: Bearer <access_token>, no cookies —
+        // that's the whole point of those routes).
+        async signInTestUser({
+          email,
+          password,
+        }: {
+          email: string
+          password: string
+        }) {
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+          const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+          if (!url || !anonKey) {
+            throw new Error(
+              'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set'
+            )
+          }
+          const client = createClient(url, anonKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+          const { data, error } = await client.auth.signInWithPassword({
+            email,
+            password,
+          })
+          if (error) throw error
+          if (!data.session) throw new Error('Sign-in produced no session')
+          return { accessToken: data.session.access_token }
+        },
         // Insert a dog owned by an arbitrary user. Used to prove that one
         // user cannot analyze/patch a bowl against another user's dog.
         async createDogForUser({
@@ -68,6 +96,17 @@ export default defineConfig({
             .single()
           if (error) throw error
           return data.id
+        },
+        // Cleanup for tests that create a foods row via /api/ingredients/*.
+        // Since migration 20260714010000, foods.created_by is ON DELETE SET
+        // NULL, so deleteTestUser no longer *needs* this — but without it
+        // every run would leave an orphaned custom-ingredient row in the
+        // live table, so delete explicitly anyway.
+        async deleteFood(foodId: string) {
+          const admin = adminClient()
+          const { error } = await admin.from('foods').delete().eq('id', foodId)
+          if (error) throw error
+          return null
         },
         // Read back the most recent meal for a dog so tests can assert the
         // persisted `source` (e.g. 'photo') rather than just the UI text.

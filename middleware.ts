@@ -23,6 +23,24 @@ const GUEST_ALLOWED_ROUTES = [
   '/api/bowl',
 ]
 
+// Mobile-facing REST routes (see docs/PAWPLATE_PROGRESS.md, mobile phasing
+// step 2) authenticate via `Authorization: Bearer <access_token>` instead of
+// the browser session cookie this middleware otherwise gates on — a native
+// client has no cookie to send. These routes do their own auth (see
+// lib/server/rest-auth.ts) and return a JSON 401, so middleware must not
+// intercept them and redirect to the HTML login page first.
+//
+// Listed as exact prefixes, NOT a blanket '/api/ingredients' — that prefix
+// would also match /api/ingredients/import, which (unlike these) has no
+// route-level auth check of its own and currently relies entirely on this
+// middleware's cookie gate to stay non-public.
+const BEARER_AUTH_ROUTES = [
+  '/api/dogs',
+  '/api/meals',
+  '/api/ingredients/manual',
+  '/api/ingredients/branded',
+]
+
 // Check if Supabase is configured
 function isSupabaseConfigured(): boolean {
   return !!(
@@ -38,6 +56,11 @@ export async function middleware(request: NextRequest) {
 
   // Allow public routes
   if (PUBLIC_ROUTES.includes(path)) {
+    return response
+  }
+
+  // Bearer-token REST routes authenticate themselves; skip the cookie gate.
+  if (BEARER_AUTH_ROUTES.some(route => path.startsWith(route))) {
     return response
   }
 

@@ -90,7 +90,11 @@ export async function getDog(
     .select('*')
     .eq('id', dogId)
     .eq('owner_id', ownerId)
-    .single()
+    // maybeSingle, not single: zero rows (nonexistent id, or someone else's
+    // dog since owner_id is filtered above) is an expected "not found"
+    // outcome here, not a query error — single() would throw a raw
+    // Postgrest "no rows" error instead of reaching the check below.
+    .maybeSingle()
 
   if (error) throw error
   if (!data) throw new Error('Dog not found')
@@ -109,7 +113,8 @@ export async function updateDog(
     .from('dogs')
     .select('owner_id')
     .eq('id', dogId)
-    .single()
+    // maybeSingle: see the comment on getDog above.
+    .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!existing) throw new Error('Dog not found')
@@ -153,7 +158,8 @@ export async function deleteDog(
     .from('dogs')
     .select('owner_id')
     .eq('id', dogId)
-    .single()
+    // maybeSingle: see the comment on getDog above.
+    .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!existing) throw new Error('Dog not found')

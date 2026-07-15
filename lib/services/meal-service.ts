@@ -112,12 +112,15 @@ export async function createDogMeal(
     throw new Error('Meal must have at least one ingredient')
   }
 
-  // Verify dog ownership
+  // Verify dog ownership. maybeSingle, not single: zero rows (nonexistent
+  // dogId) is an expected "not found" outcome, not a query error — single()
+  // would throw a raw Postgrest "no rows" error before reaching the check
+  // below and never produce the friendly 'Dog not found' message.
   const { data: dog, error: dogError } = await supabase
     .from('dogs')
     .select('*')
     .eq('id', dogId)
-    .single()
+    .maybeSingle()
 
   if (dogError) throw dogError
   if (!dog) throw new Error('Dog not found')
@@ -185,13 +188,14 @@ export async function getDogMealForEdit(
   userId: string,
   mealId: string
 ): Promise<DogMealForEdit> {
+  // maybeSingle: see the ownership-check comment in createDogMeal above.
   const { data: meal, error } = await supabase
     .from('meals')
     .select(
       'id, dog_id, meal_type, name, date, dogs!inner ( owner_id ), meal_items ( quantity, food:foods (*) )'
     )
     .eq('id', mealId)
-    .single()
+    .maybeSingle()
 
   if (error) throw error
   if (!meal) throw new Error('Meal not found')
@@ -238,11 +242,12 @@ export async function updateDogMeal(
     throw new Error('Meal must have at least one ingredient')
   }
 
+  // maybeSingle: see the ownership-check comment in createDogMeal above.
   const { data: meal, error: mealError } = await supabase
     .from('meals')
     .select('id, user_id, dog_id, dogs!inner ( * )')
     .eq('id', mealId)
-    .single()
+    .maybeSingle()
 
   if (mealError) throw mealError
   if (!meal) throw new Error('Meal not found')
@@ -318,11 +323,12 @@ export async function getDogDailyGaps(
   dogId: string,
   date?: string
 ): Promise<Omit<DogMealResult, 'mealId' | 'mealKcal'> & { totalKcal: number }> {
+  // maybeSingle: see the ownership-check comment in createDogMeal above.
   const { data: dog, error: dogError } = await supabase
     .from('dogs')
     .select('*')
     .eq('id', dogId)
-    .single()
+    .maybeSingle()
 
   if (dogError) throw dogError
   if (!dog) throw new Error('Dog not found')
@@ -379,11 +385,12 @@ export async function getDogMeals(
   dogId: string,
   date?: string
 ): Promise<DogMealSummary[]> {
+  // maybeSingle: see the ownership-check comment in createDogMeal above.
   const { data: dog, error: dogError } = await supabase
     .from('dogs')
     .select('owner_id')
     .eq('id', dogId)
-    .single()
+    .maybeSingle()
 
   if (dogError) throw dogError
   if (!dog || dog.owner_id !== userId) throw new Error('Unauthorized')
@@ -429,11 +436,12 @@ export async function deleteDogMeal(
   userId: string,
   mealId: string
 ): Promise<void> {
+  // maybeSingle: see the ownership-check comment in createDogMeal above.
   const { data: meal, error: fetchError } = await supabase
     .from('meals')
     .select('user_id')
     .eq('id', mealId)
-    .single()
+    .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!meal) throw new Error('Meal not found')
