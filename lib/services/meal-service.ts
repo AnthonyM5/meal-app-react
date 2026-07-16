@@ -424,6 +424,38 @@ export async function getDogMeals(
   }))
 }
 
+/**
+ * Distinct dates (YYYY-MM-DD) within [from, to] that have at least one meal
+ * logged for the dog — used to mark days on the history calendar.
+ */
+export async function getDogMealDates(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  dogId: string,
+  from: string,
+  to: string
+): Promise<string[]> {
+  const { data: dog, error: dogError } = await supabase
+    .from('dogs')
+    .select('owner_id')
+    .eq('id', dogId)
+    .single()
+
+  if (dogError) throw dogError
+  if (!dog || dog.owner_id !== userId) throw new Error('Unauthorized')
+
+  const { data, error } = await supabase
+    .from('meals')
+    .select('date')
+    .eq('dog_id', dogId)
+    .gte('date', from)
+    .lte('date', to)
+
+  if (error) throw error
+
+  return Array.from(new Set((data || []).map(meal => meal.date)))
+}
+
 export async function deleteDogMeal(
   supabase: SupabaseClient<Database>,
   userId: string,

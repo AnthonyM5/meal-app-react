@@ -3,6 +3,7 @@
 import { DogForm } from '@/components/dog-form'
 import { DogMealBuilder } from '@/components/dog-meal-builder'
 import { ExploreFoodsSection } from '@/components/explore-foods-section'
+import { MealCalendar } from '@/components/meal-calendar'
 import { NutrientGapBars } from '@/components/nutrient-gap-bars'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -32,6 +33,7 @@ import {
 } from '@/lib/meal-actions'
 import { supabase } from '@/lib/supabase/client'
 import type { Dog } from '@/lib/types'
+import { format, isToday } from 'date-fns'
 import {
   AlertTriangle,
   Camera,
@@ -60,6 +62,9 @@ export default function DashboardPage() {
   const [selectedDogId, setSelectedDogId] = useState<string | null>(null)
   const [dailyGaps, setDailyGaps] = useState<DailyGaps | null>(null)
   const [meals, setMeals] = useState<DogMealSummary[]>([])
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
+  // Bumped after log/delete so the calendar's day markers refresh
+  const [mealsVersion, setMealsVersion] = useState(0)
   const [isLoadingDay, setIsLoadingDay] = useState(false)
   const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
   const [editingMeal, setEditingMeal] = useState<DogMealForEdit | null>(null)
@@ -134,20 +139,22 @@ export default function DashboardPage() {
       return
     }
     setIsLoadingDay(true)
+    // Send the local calendar date; the server's default "today" is UTC-based
+    const dateStr = format(selectedDate, 'yyyy-MM-dd')
     try {
       const [gaps, dogMeals] = await Promise.all([
-        getDogDailyGaps(selectedDogId),
-        getDogMeals(selectedDogId),
+        getDogDailyGaps(selectedDogId, dateStr),
+        getDogMeals(selectedDogId, dateStr),
       ])
       setDailyGaps(gaps)
       setMeals(dogMeals)
     } catch (error) {
       console.error('Error loading daily gaps:', error)
-      toast.error("Failed to load today's nutrition")
+      toast.error("Failed to load the day's nutrition")
     } finally {
       setIsLoadingDay(false)
     }
-  }, [selectedDogId])
+  }, [selectedDogId, selectedDate])
 
   useEffect(() => {
     loadDay()
@@ -160,6 +167,7 @@ export default function DashboardPage() {
       await deleteDogMeal(mealId)
       toast.success('Meal removed')
       if (editingMeal?.id === mealId) setEditingMeal(null)
+      setMealsVersion(v => v + 1)
       await loadDay()
     } catch (error) {
       console.error('Delete meal error:', error)
@@ -184,6 +192,7 @@ export default function DashboardPage() {
 
   const handleMealSaved = async (_result: DogMealResult) => {
     setEditingMeal(null)
+    setMealsVersion(v => v + 1)
     await loadDay()
   }
 
@@ -274,6 +283,10 @@ export default function DashboardPage() {
   }
 
   const selectedDog = dogs.find(dog => dog.id === selectedDogId) ?? null
+  const viewingToday = isToday(selectedDate)
+  const dayLabel = viewingToday
+    ? 'today'
+    : `on ${format(selectedDate, 'MMMM d')}`
 
   if (dogs.length === 0) {
     return (
@@ -351,7 +364,7 @@ export default function DashboardPage() {
       {dailyGaps && dailyGaps.unsafeIngredients.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Unsafe ingredients logged today</AlertTitle>
+          <AlertTitle>Unsafe ingredients logged {dayLabel}</AlertTitle>
           <AlertDescription>
             <ul className="mt-1 list-disc pl-4">
               {dailyGaps.unsafeIngredients.map(ing => (
@@ -387,7 +400,8 @@ export default function DashboardPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">
-                  {selectedDog.name}&apos;s day
+                  {selectedDog.name}&apos;s{' '}
+                  {viewingToday ? 'day' : format(selectedDate, 'MMMM d')}
                 </CardTitle>
                 <CardDescription>
                   {Math.round(dailyGaps.totalKcal)} of{' '}
@@ -416,15 +430,27 @@ export default function DashboardPage() {
               onMealLogged={handleMealSaved}
               editingMeal={editingMeal ?? undefined}
               onCancelEdit={() => setEditingMeal(null)}
+              date={format(selectedDate, 'yyyy-MM-dd')}
             />
           )}
 
-          {meals.length > 0 && (
+          {selectedDogId && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Today&apos;s meals</CardTitle>
+                <CardTitle className="text-lg">
+                  {viewingToday
+                    ? "Today's meals"
+                    : `Meals on ${format(selectedDate, 'MMMM d, yyyy')}`}
+                </CardTitle>
               </CardHeader>
               <CardContent>
+                {meals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {isLoadingDay
+                      ? 'Loading…'
+                      : `No meals logged ${dayLabel}.`}
+                  </p>
+                ) : (
                 <ul className="space-y-2">
                   {meals.map(meal => (
                     <li
@@ -475,29 +501,47 @@ export default function DashboardPage() {
                     </li>
                   ))}
                 </ul>
+                )}
               </CardContent>
             </Card>
           )}
         </div>
 
-        <Card className="h-fit">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Nutrient coverage</CardTitle>
-            <CardDescription>
-              Today&apos;s intake vs. AAFCO daily targets
-              {selectedDog ? ` for ${selectedDog.name}` : ''}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dailyGaps ? (
-              <NutrientGapBars gaps={dailyGaps.gaps} />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {isLoadingDay ? 'Loading…' : 'Select a dog to see coverage.'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          {selectedDogId && (
+            <MealCalendar
+              dogId={selectedDogId}
+              selected={selectedDate}
+              onSelect={date => {
+                setSelectedDate(date)
+                setEditingMeal(null)
+              }}
+              refreshKey={mealsVersion}
+            />
+          )}
+
+          <Card className="h-fit">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Nutrient coverage</CardTitle>
+              <CardDescription>
+                {viewingToday
+                  ? "Today's"
+                  : `${format(selectedDate, 'MMMM d')}'s`}{' '}
+                intake vs. AAFCO daily targets
+                {selectedDog ? ` for ${selectedDog.name}` : ''}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {dailyGaps ? (
+                <NutrientGapBars gaps={dailyGaps.gaps} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {isLoadingDay ? 'Loading…' : 'Select a dog to see coverage.'}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
