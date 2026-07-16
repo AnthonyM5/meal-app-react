@@ -88,6 +88,15 @@ export async function getDogMeals(
   return mealService.getDogMeals(supabase, user.id, dogId, date)
 }
 
+export async function getDogMealDates(
+  dogId: string,
+  from: string,
+  to: string
+): Promise<string[]> {
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
+  return mealService.getDogMealDates(supabase, user.id, dogId, from, to)
+}
+
 export async function deleteDogMeal(mealId: string): Promise<void> {
   if (await isGuestMode()) {
     throw new Error('Please sign in to delete meals')
