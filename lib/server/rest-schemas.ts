@@ -40,6 +40,7 @@ export const DogCreateSchema = z.object({
   neutered: z.boolean().optional(),
   health_conditions: z.array(z.string()).optional(),
   avatar_url: z.string().nullable().optional(),
+  bowl_diameter_cm: z.number().nullable().optional(),
 })
 
 export const DogUpdateSchema = DogCreateSchema.partial()

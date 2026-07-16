@@ -58,6 +58,69 @@ describe('parseBowlAnalysis', () => {
   })
 })
 
+describe('parseBowlAnalysis with localization fields', () => {
+  test('accepts boxes, a bowl box, and a reference object', () => {
+    const result = parseBowlAnalysis({
+      items: [
+        {
+          label: 'kibble',
+          estimated_proportion: 1,
+          confidence: 0.95,
+          box_2d: [300, 250, 700, 750],
+        },
+      ],
+      notes: '',
+      bowl_box_2d: [250, 200, 750, 800],
+      reference_object: {
+        kind: 'coin',
+        box_2d: [100, 100, 150, 150],
+        confidence: 0.8,
+      },
+    })
+    expect(result.items[0].box_2d).toEqual([300, 250, 700, 750])
+    expect(result.bowl_box_2d).toEqual([250, 200, 750, 800])
+    expect(result.reference_object?.kind).toBe('coin')
+  })
+
+  test('localization fields are optional — the pre-box payload still parses', () => {
+    // validFixture predates boxes entirely; older stored raw_output must
+    // stay parseable.
+    const result = parseBowlAnalysis(validFixture)
+    expect(result.bowl_box_2d ?? null).toBeNull()
+    expect(result.reference_object ?? null).toBeNull()
+  })
+
+  test('rejects a malformed box (wrong length)', () => {
+    expect(() =>
+      parseBowlAnalysis({
+        items: [
+          {
+            label: 'kibble',
+            estimated_proportion: 1,
+            confidence: 0.9,
+            box_2d: [1, 2, 3],
+          },
+        ],
+        notes: '',
+      })
+    ).toThrow()
+  })
+
+  test('rejects an unknown reference object kind', () => {
+    expect(() =>
+      parseBowlAnalysis({
+        items: [],
+        notes: '',
+        reference_object: {
+          kind: 'banana',
+          box_2d: [0, 0, 10, 10],
+          confidence: 0.9,
+        },
+      })
+    ).toThrow()
+  })
+})
+
 describe('buildUserPrompt', () => {
   test('without a hint, asks only for identification', () => {
     const prompt = buildUserPrompt()
@@ -84,5 +147,21 @@ describe('buildUserPrompt', () => {
     const prompt = buildUserPrompt(`  ${'x'.repeat(MAX_USER_HINT_LENGTH + 50)}  `)
     expect(prompt).toContain(`Owner's note about this bowl: ${'x'.repeat(MAX_USER_HINT_LENGTH)}`)
     expect(prompt).not.toContain('x'.repeat(MAX_USER_HINT_LENGTH + 1))
+  })
+
+  test('states the owner-measured bowl diameter as scale context', () => {
+    const prompt = buildUserPrompt(undefined, 20)
+    expect(prompt).toContain("bowl's inner diameter as 20 cm")
+  })
+
+  test('omits the scale line without a valid diameter', () => {
+    expect(buildUserPrompt(undefined, null)).not.toContain('diameter')
+    expect(buildUserPrompt(undefined, 0)).not.toContain('diameter')
+  })
+
+  test('combines diameter and hint', () => {
+    const prompt = buildUserPrompt('there is ground beef mixed in', 18.5)
+    expect(prompt).toContain('18.5 cm')
+    expect(prompt).toContain("Owner's note about this bowl: there is ground beef mixed in")
   })
 })

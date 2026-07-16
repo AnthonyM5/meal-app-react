@@ -36,6 +36,8 @@ interface DogMealBuilderProps {
   /** When set, the builder edits this existing meal instead of creating one */
   editingMeal?: DogMealForEdit
   onCancelEdit?: () => void
+  /** YYYY-MM-DD to log new meals under; defaults to today on the server */
+  date?: string
 }
 
 export function DogMealBuilder({
@@ -43,6 +45,7 @@ export function DogMealBuilder({
   onMealLogged,
   editingMeal,
   onCancelEdit,
+  date,
 }: DogMealBuilderProps) {
   const isEditing = !!editingMeal
   const [mealType, setMealType] = useState<MealType>(
@@ -123,7 +126,7 @@ export function DogMealBuilder({
     try {
       const result = isEditing
         ? await updateDogMeal(editingMeal!.id, mealType, itemInputs)
-        : await createDogMeal(dogId, mealType, itemInputs)
+        : await createDogMeal(dogId, mealType, itemInputs, { date })
 
       toast.success(
         `${isEditing ? 'Updated' : 'Logged'} ${mealType} — ${Math.round(

@@ -68,6 +68,9 @@ export function DogForm({ dog, trigger, onSaved }: DogFormProps) {
   const [healthConditions, setHealthConditions] = useState(
     (dog?.health_conditions ?? []).join(', ')
   )
+  const [bowlDiameterCm, setBowlDiameterCm] = useState(
+    dog?.bowl_diameter_cm != null ? String(dog.bowl_diameter_cm) : ''
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,6 +98,7 @@ export function DogForm({ dog, trigger, onSaved }: DogFormProps) {
         .split(',')
         .map(s => s.trim())
         .filter(Boolean),
+      bowl_diameter_cm: bowlDiameterCm ? Number(bowlDiameterCm) : null,
     }
 
     setIsSaving(true)
@@ -222,6 +226,22 @@ export function DogForm({ dog, trigger, onSaved }: DogFormProps) {
               checked={neutered}
               onCheckedChange={setNeutered}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dog-bowl-diameter">Bowl diameter (cm, optional)</Label>
+            <Input
+              id="dog-bowl-diameter"
+              type="number"
+              min="1"
+              step="0.5"
+              value={bowlDiameterCm}
+              onChange={e => setBowlDiameterCm(e.target.value)}
+              placeholder="e.g. 20"
+            />
+            <p className="text-xs text-muted-foreground">
+              Measure the bowl&apos;s inner rim once — photo scans use it as a
+              size reference to pre-estimate portion grams.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="dog-health">
