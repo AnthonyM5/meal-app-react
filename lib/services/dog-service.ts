@@ -96,7 +96,11 @@ export async function getDog(
     .select('*')
     .eq('id', dogId)
     .eq('owner_id', ownerId)
-    .single()
+    // maybeSingle, not single: zero rows (nonexistent id, or someone else's
+    // dog since owner_id is filtered above) is an expected "not found"
+    // outcome here, not a query error — single() would throw a raw
+    // Postgrest "no rows" error instead of reaching the check below.
+    .maybeSingle()
 
   if (error) throw error
   if (!data) throw new Error('Dog not found')
@@ -111,15 +115,20 @@ export async function updateDog(
 ): Promise<Dog> {
   validateDogInput(updates, false)
 
+  // Owner-filtered, like getDog: a foreign or nonexistent dog both yield
+  // zero rows → 'Dog not found' (404). We deliberately do NOT distinguish
+  // "someone else's dog" with a 403 — that would confirm the id exists to a
+  // non-owner (and it kept getDog and update/deleteDog on different status
+  // codes for the same resource).
   const { data: existing, error: fetchError } = await supabase
     .from('dogs')
-    .select('owner_id')
+    .select('id')
     .eq('id', dogId)
-    .single()
+    .eq('owner_id', ownerId)
+    .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!existing) throw new Error('Dog not found')
-  if (existing.owner_id !== ownerId) throw new Error('Unauthorized')
 
   const { data, error } = await supabase
     .from('dogs')
@@ -145,6 +154,7 @@ export async function updateDog(
       }),
     })
     .eq('id', dogId)
+    .eq('owner_id', ownerId)
     .select()
     .single()
 
@@ -158,16 +168,21 @@ export async function deleteDog(
   ownerId: string,
   dogId: string
 ): Promise<void> {
+  // Owner-filtered, like getDog/updateDog: foreign or nonexistent → 404.
   const { data: existing, error: fetchError } = await supabase
     .from('dogs')
-    .select('owner_id')
+    .select('id')
     .eq('id', dogId)
-    .single()
+    .eq('owner_id', ownerId)
+    .maybeSingle()
 
   if (fetchError) throw fetchError
   if (!existing) throw new Error('Dog not found')
-  if (existing.owner_id !== ownerId) throw new Error('Unauthorized')
 
-  const { error } = await supabase.from('dogs').delete().eq('id', dogId)
+  const { error } = await supabase
+    .from('dogs')
+    .delete()
+    .eq('id', dogId)
+    .eq('owner_id', ownerId)
   if (error) throw error
 }
