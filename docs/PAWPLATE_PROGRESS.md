@@ -1,6 +1,6 @@
 # PawPlate — Implementation Progress & Production Plan
 
-Status as of 2026-07-07, branch `feat/pawplate`. Tracks the phases from the
+Status as of 2026-07-17, branch `feat/calendar-view`. Tracks the phases from the
 PawPlate handoff plan. The old Supabase instance (`nutrition-app`,
 `alrdvdblyiwaptbsnjxh`) is `INACTIVE` (free-tier auto-pause) and was
 abandoned rather than restored. A **new Supabase project is live and
@@ -26,8 +26,9 @@ Supabase Integration below.
 - **Decision:** the physical table stays named `foods`; the TS layer exposes it
   as `Ingredient` (avoids breaking the USDA importer and `fuzzy_search_foods`).
 - Seeds: `011_seed_nutrient_requirements.sql` (50 rows, AAFCO 2016 per-1000-kcal
-  values, adult + puppy; **transcribed values — needs veterinary review before
-  production claims**) and `012_seed_dog_ingredients.sql` (38 ingredients incl.
+  values, adult + puppy; **transcribed reference values — the app presents all
+  guidance behind a generic informational disclaimer, see Key caveats**) and
+  `012_seed_dog_ingredients.sql` (38 ingredients incl.
   7 toxic items flagged with `is_safe_for_dogs = FALSE`).
 - Verified against the live hosted `pawplate` project (see Supabase
   Integration below): full migration chain applies cleanly via
@@ -268,7 +269,7 @@ meats, organs, and produce.
   in `lib/canine-nutrition.ts`. Migrations `20260708000000` (12 new `foods`
   columns) and `20260708000100` (AAFCO 2016 requirement rows for the new
   nutrients, adult + puppy — **same transcribed-value caveat as
-  `011_seed_nutrient_requirements.sql`, needs vet review**) applied live.
+  `011_seed_nutrient_requirements.sql`**) applied live.
   `__tests__/lib/usda-canine.test.ts` extended against the existing chicken-
   liver fixture (36/36 passing).
 - **Backfilled** the 12 already-imported USDA ingredients via
@@ -497,8 +498,8 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   The Cypress `deleteFood` task is kept anyway (keeps orphaned custom-
   ingredient rows from accumulating in the live table), with comments
   updated. `scripts/cleanup-stale-e2e-users.ts` added (dry-run by default,
-  `--delete` to act) for the 6 stranded `pawplate.e2e.*` users still in the
-  live project — bulk deletion stays a manual, user-run step.
+  `--delete` to act) for the 6 stranded `pawplate.e2e.*` users that were
+  still in the live project (since deleted — see below).
 - **Verified**: Jest 138/138; `next build` clean (7 new routes in the
   manifest); new `cypress/e2e/mobile-rest-api.cy.ts` (4/4) covers the full
   dog+meal CRUD lifecycle over Bearer-token REST, manual-ingredient
@@ -508,10 +509,9 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   `dog-nutrition-flow` (3/3) and `bowl-photo-flow` (6/6) re-verified
   unaffected by the `.maybeSingle()` change.
 - Stale `pawplate.e2e.*@example.com` test users from failed runs (their
-  cleanup step never ran, blocked by the FK bug above): 6 remain in the
-  live project. The FK fix unblocks their deletion, but the bulk delete
-  itself is left as a manual step — run
-  `set -a && source .env.local && set +a && npx tsx scripts/cleanup-stale-e2e-users.ts --delete`.
+  cleanup step never ran, blocked by the FK bug above): **deleted from the
+  live project (confirmed 2026-07-17)** via
+  `scripts/cleanup-stale-e2e-users.ts --delete`.
 - **Review hardening (PR #15 follow-up, 2026-07-15):** two issues from the
   code review, both addressed:
   - *Request-body validation at the boundary.* Added `lib/server/rest-schemas.ts`
@@ -544,133 +544,65 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   `apps/mobile` with Vite, per the decision above) — whichever the user
   wants to tackle next.
 
-## Bowl analysis — user-guided/corrective hints (built 2026-07-14, pending live verification)
+### Mobile phasing step 3 — pnpm/Turborepo monorepo (done, 2026-07-17)
 
-Implemented per the plan below. **Blocked on one manual step: the migration
-(`supabase/migrations/20260714000000_add_bowl_user_hint.sql`, adds
-`bowl_analyses.user_hint`) has NOT been applied to the live project** — the
-`supabase db push` was permission-gated in-session. Until it's pushed, every
-authenticated owner scan will fail (the insert now includes `user_hint`).
-Run `supabase db push`, then smoke-test.
+Repo restructured per the "Monorepo layout" plan below, on branch
+`feat/monorepo`. No behavior change — verified by the full gate (below).
 
-### Mobile phasing step 2 — REST routes over the services (done, 2026-07-14)
-
-- **Framework decision for `apps/mobile` (Step 4): Vite + React Router, not
-  Next.js `output: 'export'`.** Grepped the feature components that would
-  move to `packages/features` (`DogMealBuilder`, `NutrientGapBars`,
-  `BowlConfirmation`, `DogForm`, `FoodSearch`) — zero `next/navigation` /
-  `next/link` / `next/image` imports; the Next-coupling is confined to the
-  route-level `*-page.tsx` shells and a few chrome components
-  (`app-header`, `guest-mode-button`, `explore-foods-section`). Since a
-  static Capacitor shell can't run Next's SSR/middleware/Server Actions
-  anyway (the reason raw WebView was rejected in the first place), keeping
-  Next for mobile would mean running it with almost none of what it's for.
-  Vite is what Capacitor's own React templates use — lighter, faster
-  dev/build, no fighting SSR assumptions the shell doesn't need.
-- **New REST layer**, all thin wrappers over `lib/services/*` (added last
-  session) mirroring the Server Actions one-for-one:
-  - `/api/dogs` (GET/POST), `/api/dogs/[dogId]` (GET/PATCH/DELETE)
-  - `/api/dogs/[dogId]/meals` (GET/POST), `/api/dogs/[dogId]/gaps` (GET)
-  - `/api/meals/[mealId]` (GET/PATCH/DELETE)
-  - `/api/ingredients/manual` (POST), `/api/ingredients/branded` (POST)
-  - `recipe-actions.ts`/`lib/actions.ts`/`lib/auth.ts` intentionally NOT
-    ported, per the original phasing plan (dead code / Supabase client SDK
-    covers auth directly).
-- **Auth transport**: `lib/server/rest-auth.ts` — these routes read
-  `Authorization: Bearer <access_token>` (no browser cookie exists on a
-  native client) and validate it via a service-role client's
-  `auth.getUser(token)`; ownership is then checked explicitly inside each
-  `lib/services/*` call, same pattern `app/api/bowl/analyze` already used.
-  `lib/server/service-client.ts` centralizes the service-role client
-  construction that was previously ad-hoc per route.
-- **Found and fixed a real middleware bug, not just a test artifact**:
-  `middleware.ts` gated every non-public/non-guest path on a **cookie**
-  session, so any Bearer-token request to the new routes was 307-redirected
-  to the HTML `/auth/login` page before reaching the route handler —
-  silently defeating the entire point of a REST layer for a client with no
-  cookies. Fixed by adding `BEARER_AUTH_ROUTES` (exact prefixes:
-  `/api/dogs`, `/api/meals`, `/api/ingredients/manual`,
-  `/api/ingredients/branded` — deliberately NOT a blanket
-  `/api/ingredients`, since that would have also exposed
-  `/api/ingredients/import`, which has no auth check of its own and
-  currently relies entirely on this middleware's cookie gate to stay
-  non-public).
-- **Found and fixed a second real bug, in `lib/services/dog-service.ts` and
-  `lib/services/meal-service.ts`**: every existence/ownership-check query
-  used `.single()`, which throws Postgrest's raw "no rows" error on a
-  genuine miss instead of returning `null` — so the `if (!data) throw new
-Error('...not found')` lines right below every one of them were dead
-  code. This was invisible on the web Server Actions (which had no
-  HTTP-status mapping to expose the wrong error shape) but surfaced
-  immediately as a 500 instead of 404/403 once the REST layer added
-  `errorResponse()`'s message-based status mapping. Fixed by switching
-  9 existence-check queries (3 in dog-service, 6 in meal-service) to
-  `.maybeSingle()`; left the insert/update-returning `.single()` calls
-  alone (those always return exactly one row on success). Web behavior is
-  unaffected — only the error object shape changed, not the thrown message.
-- **`foods.created_by` FK gap — FIXED (2026-07-15)**: it had no `ON DELETE`
-  action on its `auth.users` FK (from the original `20250620030000`
-  human-nutrition schema, predates PawPlate), so a user who had ever
-  created a manual ingredient could never have their auth account deleted —
-  Postgres blocked it with a foreign-key violation. Discovered via the new
-  Cypress spec's teardown. Migration `20260714010000` re-creates the
-  constraint as `ON DELETE SET NULL` (matching `recipes.created_by`;
-  CASCADE would be wrong — shared branded/manual rows can be referenced by
-  _other_ users' `meal_items`, so the ingredient must outlive its creator).
-  Applied live and verified end-to-end: created a throwaway user + a
-  `foods` row they own, deleted the user with the row still present →
-  succeeds, row survives with `created_by = null`. This was the exact
-  failure mode behind the stranded e2e test users. Audited the other
-  `auth.users` FKs — all already CASCADE or SET NULL; this was the only gap.
-  The Cypress `deleteFood` task is kept anyway (keeps orphaned custom-
-  ingredient rows from accumulating in the live table), with comments
-  updated. `scripts/cleanup-stale-e2e-users.ts` added (dry-run by default,
-  `--delete` to act) for the 6 stranded `pawplate.e2e.*` users still in the
-  live project — bulk deletion stays a manual, user-run step.
-- **Verified**: Jest 138/138; `next build` clean (7 new routes in the
-  manifest); new `cypress/e2e/mobile-rest-api.cy.ts` (4/4) covers the full
-  dog+meal CRUD lifecycle over Bearer-token REST, manual-ingredient
-  creation, a 401 with no token, and cross-user ownership (404 on
-  owner-filtered reads, 403 on fetch-then-compare updates/deletes — the two
-  services differ in exactly _why_, see the fix above). Existing
-  `dog-nutrition-flow` (3/3) and `bowl-photo-flow` (6/6) re-verified
-  unaffected by the `.maybeSingle()` change.
-- Stale `pawplate.e2e.*@example.com` test users from failed runs (their
-  cleanup step never ran, blocked by the FK bug above): 6 remain in the
-  live project. The FK fix unblocks their deletion, but the bulk delete
-  itself is left as a manual step — run
-  `set -a && source .env.local && set +a && npx tsx scripts/cleanup-stale-e2e-users.ts --delete`.
-- **Review hardening (PR #15 follow-up, 2026-07-15):** two issues from the
-  code review, both addressed:
-  - _Request-body validation at the boundary._ Added `lib/server/rest-schemas.ts`
-    (zod schemas mirroring the service input types) and a `readJson()` helper
-    in `rest-auth.ts`. Every body-bearing route now parses through it, so a
-    malformed/empty body and a well-typed-but-wrong-shape body (e.g.
-    `weight_kg: "abc"`, which slipped past the service's `<= 0` check —
-    `NaN <= 0` is false — and would have 500'd at Postgres) both return a
-    clean 400 instead of a 500. Schemas gate types only; the business rules
-    (non-empty name, weight > 0, kcal ≥ 0) stay the single source of truth
-    in `lib/services/*`. The parsed type is passed straight into the service,
-    so tsc fails the build if a schema drifts from its interface.
-  - _404/403 consistency._ Foreign user-owned resources now return 404
-    everywhere (was: dogs 404 via `getDog` but PATCH/DELETE + all meal/gaps
-    routes 403). 404-for-foreign is the security-conscious default (a
-    non-owner can't confirm an id exists) and gives the mobile client one
-    predictable code. `dog-service` update/deleteDog are owner-filtered
-    (matching getDog); `meal-service`'s 6 ownership checks changed from
-    throwing `'Unauthorized'` to `'not found'` (message-only, no query
-    change — lowest risk to the shared web query/compute paths; the row is
-    still fetched server-side but never returned). Web behavior is unchanged
-    in practice — legitimate web flows never touch foreign resources.
-  - Tests: `mobile-rest-api.cy.ts` updated (dog cross-user now asserts 404
-    across GET/PATCH/DELETE/gaps/meals) and extended with a meal-level
-    cross-user test and a malformed/wrong-type body → 400 test. 6/6 live;
-    web `dog-nutrition-flow` 3/3 and `bowl-photo-flow` 6/6 re-verified
-    unaffected. Jest 138/138, `next build` clean.
-- Next: Step 3 (stand up the monorepo — `packages/ui`/`core`/`api-client`,
-  move `apps/web` in with no behavior change) or Step 4 (scaffold
-  `apps/mobile` with Vite, per the decision above) — whichever the user
-  wants to tackle next.
+- **Layout**: pnpm workspaces + Turborepo (root `pnpm-workspace.yaml`,
+  `turbo.json`, thin root `package.json`). The entire Next app moved to
+  `apps/web/` via `git mv` (history preserved): `app/`, `components/`,
+  `hooks/`, `lib/`, `styles/`, `public/`, `scripts/`, `__tests__/`,
+  `cypress/`, all configs, and the untracked `.env`/`.env.local`.
+  `supabase/` (CLI link + migrations), `docs/`, `audits/` stay at the root.
+  The empty `test-utils/` dir was dropped.
+- **`packages/core`** — `canine-nutrition.ts`, `types.ts`,
+  `dog-toxic-foods.ts` moved in as TS source (Turborepo just-in-time
+  style: consumed via `exports` + `transpilePackages`, no build step).
+  `apps/web/lib/` keeps three one-line re-export shims, so all ~44
+  `@/lib/*` consumer imports are untouched.
+- **`packages/ui`** — all 48 `components/ui/*` files plus `lib/utils.ts`
+  (`cn`) and the `use-toast`/`use-mobile` hooks; same shim pattern (48
+  generated shims in `apps/web/components/ui/`). Package-internal imports
+  rewritten to relative. The dead duplicate `use-toast.ts`/`use-mobile.tsx`
+  copies that sat inside `components/ui/` (zero importers) were deleted.
+  `apps/web/tailwind.config.ts` content globs now include
+  `../../packages/ui/src/**` (checked: package-only classes survive the
+  production CSS purge).
+- **`packages/api-client`** — new typed fetch client over the step-2 REST
+  routes (`createPawPlateClient({ baseUrl, getAccessToken })`), method
+  shapes mirroring the Server Actions; for `apps/mobile` in step 4.
+  Input/result types transcribed locally pending a later move into core.
+- **npm→pnpm drift control**: every `"latest"` and range dependency in
+  `apps/web/package.json` is now pinned to the exact version the old
+  `package-lock.json` had resolved (the switch had silently floated
+  `@supabase/supabase-js` 2.50.0→2.110.7, which broke the hand-rolled
+  `Database` generic — caught by `tsc`, pinned back). `@jest/globals` is
+  now a declared devDep (pnpm's strict layout doesn't hoist it).
+- **Real regression found and fixed by the e2e gate**: `packages/ui`'s
+  `react: ^19` peer made pnpm materialize a *second* React (19.2.7) peer
+  context; Next dedupes React itself via webpack alias, but sonner isn't
+  aliased — `toast()` published to one sonner instance while `<Toaster>`
+  subscribed on the other, so every toast in the app silently vanished
+  (both toast-asserting Cypress tests failed; a `main` worktree run against
+  the same live DB passed, proving it was the restructure). Fix: root
+  `pnpm.overrides` pins `react`/`react-dom` to 19.1.0 workspace-wide, plus
+  a clean reinstall to purge stale webpack-cache resolutions.
+- **CI/Vercel**: `ci-cd.yml` switched to pnpm/action-setup + turbo scripts.
+  `vercel.json` (now in `apps/web/`) reduced to `{"framework": "nextjs"}` —
+  the old `installCommand: "npm install"` would have broken pnpm installs.
+  **Manual step required before the next deploy: set Root Directory =
+  `apps/web` in the Vercel dashboard** (not expressible in `vercel.json`).
+- **Verified**: Jest 173/173, `next lint` clean, `next build` clean (18/18
+  pages), `tsc` error set identical to pre-move (only the known
+  `nutrition-calculator`/`signup-form` legacy errors), Cypress
+  `dog-nutrition-flow` 3/3 + `bowl-photo-flow` 6/6 + `mobile-rest-api` 6/6
+  against the live project. The other 6 spec files in `cypress/e2e` are
+  legacy NutriTrack-era suites that fail on `main` too — not part of the
+  gate; candidates for deletion.
+- Next: phasing step 4 — scaffold `apps/mobile` (Vite + React Router +
+  Capacitor) consuming `packages/ui`/`core`/`api-client`; optionally move
+  shared feature components into a `packages/features`.
 
 ## Bowl analysis — photo portion estimation (built 2026-07-15, per VISION_MODELS_AND_ESTIMATION.md)
 
@@ -807,6 +739,39 @@ chicken in there." Scope:
   physics-limitation boundary as the rest of the vision pipeline; it only
   helps _identification_, confirmed grams are still owner-entered.
 
+## Calendar view — past-meal history (done, 2026-07-17, branch `feat/calendar-view`)
+
+The dashboard now has a month calendar of each dog's meal history: pick any
+past day to view or edit its meals; dot markers indicate days with entries.
+
+- **`components/meal-calendar.tsx`** (new) — "Meal history" card in the
+  dashboard's right column. Fetches which days have meals per visible month
+  via the new `getDogMealDates(dogId, from, to)`
+  (`lib/services/meal-service.ts`, distinct `meals.date` values in range,
+  ownership-checked; thin wrapper in `lib/meal-actions.ts`). Future dates
+  disabled; markers refresh after a meal is logged or deleted
+  (`mealsVersion` counter on the dashboard).
+- **Dashboard is date-aware** (`app/dashboard/dashboard-page.tsx`): a
+  `selectedDate` state now drives `getDogMeals` / `getDogDailyGaps`, the
+  kcal-progress card, nutrient coverage, and the unsafe-ingredient alert.
+  Headings switch from "Today's meals" to "Meals on July 12, 2026" when
+  off-today, and the meals card shows a "No meals logged…" empty state
+  instead of unmounting. Edit/delete of past entries works exactly as for
+  today.
+- **Backfill logging**: `DogMealBuilder` gained a `date` prop →
+  `createDogMeal(..., { date })`, so logging while viewing a past day
+  records the meal on that day, not today.
+- **`components/ui/calendar.tsx` rewritten for react-day-picker v9**: the
+  checked-in shadcn template used the v8 classNames API against the
+  installed 9.7.0 and would have rendered unstyled. The component had zero
+  importers before this, so nothing else was affected.
+- **Timezone fix (latent bug)**: the dashboard previously let the server
+  default the date to UTC "today" (`toISOString()`), which flips to
+  tomorrow during US evenings; it now always sends the local calendar date
+  (`date-fns format`).
+- Verified: Jest 173/173, `next lint` clean on all touched files,
+  `next build` clean (`/dashboard` in manifest).
+
 ## Next phase (planned)
 
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
@@ -817,8 +782,6 @@ chicken in there." Scope:
   The Expo `mobile/` app referenced in earlier revisions of this doc was
   removed (`30df066`, superseded by the monorepo + Capacitor plan below;
   never shipped a camera flow).
-- Vet review of all AAFCO-sourced `nutrient_requirements` values (25 original
-  - 12 new amino-acid/B-vitamin rows).
 
 ## Mobile strategy (planned) — monorepo + Capacitor
 
@@ -1028,26 +991,26 @@ liver', 3)` returns the right matches despite the typo.
      app's actual query path works against the new database, not just raw
      `psql`.
 
-### Remaining production steps (not yet done)
+### Production status (updated 2026-07-17)
 
-- Set the same env vars in Vercel (or wherever this deploys) — currently
-  only local `.env.local`/`.env` were updated.
-- Add `NEXT_PUBLIC_SUPABASE_URL`/keys and `GEMINI_API_KEY` to CI if tests
-  ever need live Supabase (current Jest suite doesn't hit the network).
-- Create a real test user and exercise `dog-actions.ts`/`meal-actions.ts`
-  through actual sign-up + login, not just guest-mode/service-role paths.
-- Import more ingredients beyond the 38 seeded ones via
-  `POST /api/ingredients/import` (needs `USDA_API_KEY` + service role).
-- **Before any public claim:** veterinary review of
-  `011_seed_nutrient_requirements.sql` values; keep the consult-your-vet
-  notice (`requiresVetNotice`) wired into every recommendation surface.
-- Rotate the `GEMINI_API_KEY` currently in `.env.local` — it was shared in
-  plaintext during this session's chat, so treat it as exposed.
+- **Done**: env vars set in Vercel — production deploys and runs properly
+  against the live `pawplate` project.
+- **Done**: `GEMINI_API_KEY` rotated (the earlier chat-exposed key is dead).
+- **Done**: stale `pawplate.e2e.*` test users deleted from the live project.
+- Remaining: add `NEXT_PUBLIC_SUPABASE_URL`/keys and `GEMINI_API_KEY` to CI
+  if tests ever need live Supabase (current Jest suite doesn't hit the
+  network).
+- Nutrition guidance is presented with generic informational disclaimers
+  rather than any claim of professional review: a global
+  not-veterinary-advice footer (`app/layout.tsx`) plus the per-dog
+  consult-your-vet notice (`requiresVetNotice`) on recommendation surfaces.
 
 ## Key caveats
 
 - Gram estimation from photos is out of scope for v1 — owners enter weights.
 - USDA taurine/amino coverage is incomplete; affected ingredients carry
   `is_verified = false`.
-- Requirement values are a reference model (AAFCO 2016 transcription), not a
-  substitute for a board-certified veterinary nutritionist.
+- Requirement values are a reference model (AAFCO 2016 transcription). All
+  guidance is informational only — not veterinary advice, diagnosis, or
+  treatment. The UI carries a global disclaimer footer and the
+  consult-your-vet notice on every recommendation surface.
