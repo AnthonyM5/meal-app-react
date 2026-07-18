@@ -1,0 +1,15 @@
+{
+  "name": "@pawplate/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic canine-nutrition engine, shared types, and dog-safety data. Pure TypeScript — no Next.js, no Supabase client, no network.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./canine-nutrition": "./src/canine-nutrition.ts",
+    "./types": "./src/types.ts",
+    "./dog-toxic-foods": "./src/dog-toxic-foods.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}
