@@ -190,6 +190,11 @@ export function createPawPlateClient(options: PawPlateClientOptions) {
         request<DogDailyGaps>('GET', withDate(`/api/dogs/${dogId}/gaps`, date)),
     },
     ingredients: {
+      search: (query: string) =>
+        request<{ foods: Ingredient[] }>(
+          'GET',
+          `/api/ingredients/search?q=${encodeURIComponent(query)}`
+        ).then(r => r.foods),
       createManual: (input: ManualIngredientInput) =>
         request<{ food: Ingredient }>(
           'POST',

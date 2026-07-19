@@ -604,6 +604,75 @@ Repo restructured per the "Monorepo layout" plan below, on branch
   Capacitor) consuming `packages/ui`/`core`/`api-client`; optionally move
   shared feature components into a `packages/features`.
 
+### Mobile phasing step 4 — apps/mobile scaffold (2026-07-19)
+
+Branch `feat/mobile-scaffold` (off `main` 8a39fdc, post-monorepo-merge).
+First functional slice of the native app: Vite + React 19 + React Router 7
++ Tailwind (same brand tokens as web) + Capacitor 7, consuming
+`@pawplate/ui`/`core`/`api-client`.
+
+- **New REST route on the web side: `GET /api/ingredients/search?q=`**
+  (`app/api/ingredients/search/route.ts`, + `BEARER_AUTH_ROUTES` entry).
+  The web meal builder searches via `/api/foods/unified-search`, which has
+  no route-level auth (it relies on middleware's cookie/guest gate), so a
+  Bearer-token native client could never reach it. The new route wraps the
+  same `fuzzy_search_foods` RPC behind `authenticateRequest()`.
+  `@pawplate/api-client` gained `ingredients.search(query)`.
+- **`apps/mobile` app structure**: `src/lib/supabase.ts` (client SDK
+  session, localStorage persistence — auth deliberately does NOT go through
+  the REST layer, per the mobile-strategy notes above), `src/lib/api.ts`
+  (`createPawPlateClient` with the session's access token), `AuthProvider`/
+  `RequireAuth`, and screens: login, signup, dogs list, dog form
+  (create/edit/delete, incl. `bowl_diameter_cm`), dog detail (per-day meals
+  + daily kcal + `GapBars` nutrient bars + unsafe-ingredient banner, date
+  paging), and a meal builder (debounced ingredient search, gram editing,
+  live kcal preview + client-side `findUnsafeIngredients` warning via
+  `@pawplate/core` — the server result stays authoritative on save).
+- **Theme parity**: `tailwind.config.ts`/`globals.css` mirror apps/web
+  (same HSL tokens; keep in sync manually until a shared preset package
+  exists). Fonts bundled via `@fontsource/{inter,fraunces}` instead of
+  `next/font` — offline-safe inside the Capacitor shell.
+- **Capacitor**: `capacitor.config.ts` (`com.pawplate.app`, webDir `dist`),
+  `ios/` + `android/` native projects generated and synced (CocoaPods
+  1.17.0 installed via Homebrew for iOS; both projects ship Capacitor's
+  stock .gitignores, so Pods/build outputs/copied web assets stay out of
+  git). Camera plugin NOT wired yet — that's step 4b (bowl-photo flow),
+  which also needs the analyze endpoint consumed from the client.
+- **Workspace plumbing**: `esbuild` added to `pnpm-workspace.yaml`
+  `onlyBuiltDependencies` (vite needs its postinstall); turbo `build` task
+  outputs now include `dist/**` and the `VITE_*` env vars. Mobile `lint`
+  script is `tsc --noEmit` (no eslint config yet).
+- **Env**: `apps/mobile/.env.local` (gitignored) holds `VITE_SUPABASE_URL`
+  / `VITE_SUPABASE_ANON_KEY` (same project as web) and `VITE_API_BASE_URL`
+  (localhost:3000 for dev; a device needs the LAN IP or the Vercel URL —
+  see `.env.example`).
+- **Verified**: `turbo run build lint test` 5/5 green (web build/lint/test
+  unaffected, mobile build + tsc clean); `mobile-rest-api.cy.ts` extended
+  with a search-route test (200 with results, empty-list under 2 chars,
+  401 JSON with no token) — 7/7 live; vite dev server serves the app
+  (HTTP 200 + module transform OK).
+- **CORS for the Bearer routes (added while wiring the simulators)**: the
+  shell's WebView origin is `capacitor://localhost` (iOS) /
+  `https://localhost` (Android) / `http://localhost:5173` (vite dev), so
+  every REST call is cross-origin and the Authorization header forces a
+  preflight — which the route handlers (no OPTIONS export) never answered.
+  `middleware.ts` now answers OPTIONS with 204 + wildcard CORS headers on
+  exactly the `BEARER_AUTH_ROUTES` and stamps the same headers on their
+  responses. Wildcard is safe here: these routes carry no cookie auth
+  (wildcard forbids credentialed requests anyway), so a foreign page can
+  only use them with a token it already holds. Covered by a preflight test
+  in `mobile-rest-api.cy.ts` (now 8/8 live).
+- **Simulator wiring**: `src/lib/api.ts` rewrites `localhost` →
+  `10.0.2.2` at runtime on Android (one dist/ serves both shells);
+  `capacitor.config.ts` sets `server.cleartext` +
+  `android.allowMixedContent` (dev-only — drop for store builds);
+  `android/local.properties` (gitignored) points at `~/Library/Android/sdk`.
+- Next: step 4b — bowl-photo flow on mobile (`@capacitor/camera`, consume
+  `/api/bowl/analyze` with Bearer auth, port the confirmation UI), then
+  step 5 (optionally switch web auth call sites to the client SDK). A
+  `packages/features` extraction (sharing DogMealBuilder etc. with
+  injected transport) remains optional/deferred.
+
 ## Bowl analysis — photo portion estimation (built 2026-07-15, per VISION_MODELS_AND_ESTIMATION.md)
 
 Implements §2.1/2.2 (reference-object + fixed-bowl calibration), §2.4
