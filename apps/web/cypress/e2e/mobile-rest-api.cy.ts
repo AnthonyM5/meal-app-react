@@ -201,6 +201,55 @@ describe('Mobile REST API', () => {
     })
   })
 
+  it('searches ingredients over Bearer-token REST (mobile meal builder)', () => {
+    // Same fuzzy_search_foods RPC as /api/foods/unified-search, but behind
+    // Bearer auth (added in mobile phasing step 4 for apps/mobile).
+    cy.request({
+      url: '/api/ingredients/search?q=chicken%20breast',
+      headers: auth(ownerToken),
+    }).then(({ status, body }) => {
+      expect(status).to.eq(200)
+      expect(body.foods).to.be.an('array').and.not.be.empty
+      expect(body.foods[0].name).to.match(/chicken/i)
+    })
+
+    // Sub-2-char queries return an empty list, mirroring unified-search.
+    cy.request({
+      url: '/api/ingredients/search?q=a',
+      headers: auth(ownerToken),
+    }).then(({ body }) => {
+      expect(body.foods).to.deep.eq([])
+    })
+
+    // Unlike unified-search, no token means 401 JSON — not an HTML redirect.
+    cy.request({
+      url: '/api/ingredients/search?q=chicken',
+      failOnStatusCode: false,
+    }).then(({ status, body }) => {
+      expect(status).to.eq(401)
+      expect(body.error).to.match(/not authenticated/i)
+    })
+  })
+
+  it('answers CORS preflight for the native WebView origins', () => {
+    // The Capacitor shell calls from capacitor://localhost (iOS) /
+    // https://localhost (Android); the Authorization header forces a
+    // preflight, which middleware answers (route handlers have no OPTIONS).
+    cy.request({
+      method: 'OPTIONS',
+      url: '/api/dogs',
+      headers: {
+        Origin: 'capacitor://localhost',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization',
+      },
+    }).then(({ status, headers }) => {
+      expect(status).to.eq(204)
+      expect(headers['access-control-allow-origin']).to.eq('*')
+      expect(headers['access-control-allow-headers']).to.match(/authorization/i)
+    })
+  })
+
   it('rejects requests with no Bearer token', () => {
     cy.request({
       url: '/api/dogs',
