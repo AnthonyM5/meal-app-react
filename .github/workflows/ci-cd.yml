@@ -97,6 +97,3 @@ jobs:
       # Delete throwaway pawplate.e2e.* users from the live project. The specs
       # clean up after themselves, but a run that dies before its after() hook
       # leaks users — always() ensures they're swept even when tests fail.
-      - name: Clean up stale e2e users
-        if: always()
-        run: pnpm --filter web test:e2e:cleanup -- --delete
