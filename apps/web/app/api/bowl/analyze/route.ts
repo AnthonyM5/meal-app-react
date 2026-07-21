@@ -99,8 +99,30 @@ function createSupabaseClient() {
   )
 }
 
-/** Resolve the calling user from the session cookie, or null. */
-async function getAuthenticatedUserId(): Promise<string | null> {
+/**
+ * Resolve the calling user, or null. Prefers an `Authorization: Bearer
+ * <access_token>` header (the native shell holds its own Supabase session and
+ * has no cookie, per the mobile-strategy auth notes) and falls back to the
+ * session cookie for the web app. Guest mode is handled earlier via the
+ * `guestMode` cookie, so a caller here with neither a valid token nor a
+ * session is simply unauthenticated.
+ */
+async function getAuthenticatedUserId(
+  request: NextRequest
+): Promise<string | null> {
+  const match = (request.headers.get('authorization') ?? '').match(
+    /^Bearer\s+(.+)$/i
+  )
+  if (match) {
+    // Native Bearer path: verify the access token with the service client.
+    // getUser(jwt) validates the token server-side regardless of the client's
+    // own key — same pattern as lib/server/rest-auth.ts.
+    const {
+      data: { user },
+    } = await createSupabaseClient().auth.getUser(match[1])
+    return user?.id ?? null
+  }
+
   const client = await createUserClient()
   // The guest/unconfigured DummyClient has `auth` but no `from`
   if (!('from' in client)) return null
@@ -255,7 +277,7 @@ export async function POST(request: NextRequest) {
     // caller to the reduced, metered, write-nothing path. Nothing is granted by
     // presenting it, so a forged cookie buys an attacker strictly less.
     const isGuestMode = request.cookies.get('guestMode')?.value === 'true'
-    const userId = isGuestMode ? null : await getAuthenticatedUserId()
+    const userId = isGuestMode ? null : await getAuthenticatedUserId(request)
 
     const formData = await request.formData()
     const file = formData.get('image')
@@ -517,7 +539,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     }
 
-    const userId = await getAuthenticatedUserId()
+    const userId = await getAuthenticatedUserId(request)
     if (!userId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }

@@ -46,6 +46,13 @@ const BEARER_AUTH_ROUTES = [
   '/api/ingredients/manual',
   '/api/ingredients/branded',
   '/api/ingredients/search',
+  // The bowl-analyze route self-authenticates (Bearer token for the native
+  // shell, session/guest cookie for web — see its getAuthenticatedUserId).
+  // Listed here so the Authorization-header preflight gets a CORS answer and
+  // the cookie gate is skipped; the wildcard is safe because it can't be
+  // combined with credentials, so a cross-origin caller only ever reaches the
+  // route's already-public, rate-limited guest path.
+  '/api/bowl/analyze',
 ]
 
 // CORS for the Bearer-token routes. The mobile shell runs from a WebView

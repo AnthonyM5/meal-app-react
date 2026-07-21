@@ -673,6 +673,36 @@ First functional slice of the native app: Vite + React 19 + React Router 7
   `packages/features` extraction (sharing DogMealBuilder etc. with
   injected transport) remains optional/deferred.
 
+#### Step 4b checklist — bowl-photo flow on mobile
+
+- [ ] **Backend Bearer auth on `/api/bowl/analyze`.** The route today
+      authenticates cookie-only (`getAuthenticatedUserId` reads the session
+      cookie) and is NOT in `middleware.ts` `BEARER_AUTH_ROUTES`, so a native
+      Bearer caller can't reach it. Add a Bearer fallback to
+      `getAuthenticatedUserId` (resolve `data.user` from the
+      `Authorization: Bearer` token via the service client, same as
+      `authenticateRequest`) and add `/api/bowl/analyze` to
+      `BEARER_AUTH_ROUTES` for CORS/preflight. Web cookie + guest flows stay
+      untouched (the guest cookie still wins first).
+- [ ] **`@pawplate/api-client`: `bowl.analyze()` / `bowl.saveCorrections()`.**
+      The existing `request()` helper is JSON-only; analyze is multipart
+      (`FormData` with the image), so add a FormData-capable path (no
+      `Content-Type` header — let the runtime set the multipart boundary).
+- [ ] **Native permission strings** (required before the camera plugin will
+      run, and for store review):
+  - iOS `apps/mobile/ios/App/App/Info.plist`: `NSCameraUsageDescription`
+    AND `NSPhotoLibraryUsageDescription` (the flow allows library pick too).
+  - Android `apps/mobile/android/app/src/main/AndroidManifest.xml`:
+    `<uses-permission android:name="android.permission.CAMERA" />`.
+  - `pnpm add @capacitor/camera` in `apps/mobile`, then `npx cap sync`.
+- [ ] **Mobile capture + confirmation UI.** Capture screen (Camera plugin,
+      with a library-pick option) → POST to analyze → ported
+      `BowlConfirmation` screen (ingredient search, gram confirm, unmatched
+      resolve, PATCH corrections). Router entry + a "Log from photo" action
+      on the dog-detail screen.
+- [ ] **Test:** extend `cypress/e2e/mobile-rest-api.cy.ts` with a Bearer
+      analyze case (dog-ownership 404 pre-vision path keeps it Gemini-free).
+
 ## Bowl analysis — photo portion estimation (built 2026-07-15, per VISION_MODELS_AND_ESTIMATION.md)
 
 Implements §2.1/2.2 (reference-object + fixed-bowl calibration), §2.4
@@ -961,6 +991,22 @@ REST backend both apps talk to — no separate backend deploy needed.
 - Native back-button handling on Android (hardware back → in-app history,
   not app close).
 - CI matrix roughly doubles (web + iOS + Android build/signing).
+
+### Pre-release hardening (not blockers for the MVP)
+
+- **Token storage.** The mobile app already uses the Supabase JS SDK with
+  the default WebView `localStorage` (`apps/mobile/src/lib/supabase.ts`) —
+  it never used cookies, so there is no cookie→native "swap" to do. Not
+  necessary for a functional build; it's a reliability/security hardening:
+  - _Durability:_ iOS (WKWebView) can evict website data under storage
+    pressure → silent logout. Fixed by passing a custom `auth.storage`
+    adapter backed by `@capacitor/preferences` (survives eviction).
+  - _Security at rest:_ the refresh token in `localStorage` is app-sandboxed
+    but not encrypted. `@capacitor/preferences` does NOT fix this (plain
+    UserDefaults on iOS); real at-rest encryption needs a Keychain/Keystore
+    plugin (e.g. `@aparajita/capacitor-secure-storage`).
+  - Either way it's a ~1-file change (custom `storage` object on
+    `createClient`'s `auth` options); schedule before store submission.
 
 ### Suggested phasing
 
