@@ -7,7 +7,7 @@ describe('Authentication Flow', () => {
 
   it('should display landing page with auth options', () => {
     // Should show landing page with auth options
-    cy.contains('Welcome to NutriTrack').should('be.visible')
+    cy.contains('h1', 'PawPlate').should('be.visible')
     cy.get('a[href="/auth/login"]').should('be.visible')
     cy.get('a[href="/auth/sign-up"]').should('be.visible')
     cy.get('[data-testid="guest-mode-button"]').should('be.visible')
@@ -69,7 +69,10 @@ describe('Authentication Flow', () => {
 
   it('should navigate from login to sign-up and back', () => {
     cy.get('a[href="/auth/login"]').click()
-    
+    // Wait for the login page to settle before querying its links, otherwise
+    // the still-hydrating page can detach the element mid-click.
+    cy.url().should('include', '/auth/login')
+
     // Should have link to sign-up
     cy.get('a[href="/auth/sign-up"]').should('be.visible').click()
     cy.url().should('include', '/auth/sign-up')

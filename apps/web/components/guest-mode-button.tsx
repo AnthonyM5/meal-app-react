@@ -30,6 +30,7 @@ export function GuestModeButton({ className }: { className?: string }) {
   return (
     <Button
       variant="ghost"
+      data-testid="guest-mode-button"
       className={cn('w-full', className)}
       onClick={handleGuestMode}
       disabled={isLoading}

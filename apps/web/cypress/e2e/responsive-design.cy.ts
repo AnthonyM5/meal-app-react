@@ -16,7 +16,7 @@ describe('Responsive Design and Mobile Compatibility', () => {
 
       it('should display landing page correctly', () => {
         // Title should be visible
-        cy.contains('Welcome to NutriTrack').should('be.visible')
+        cy.contains('h1', 'PawPlate').should('be.visible')
         
         // Auth buttons should be accessible
         cy.get('a[href="/auth/login"]').should('be.visible')

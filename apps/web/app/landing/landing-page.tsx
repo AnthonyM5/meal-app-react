@@ -42,21 +42,17 @@ export default async function Home() {
 
     const {
       data: { user },
-      error,
     } = await client.auth.getUser()
 
-    // If there's an error checking auth, show login page
-    if (error) {
-      console.error('Auth error:', error.message)
-      return redirect('/auth/login')
-    }
-
-    // If we have a user, redirect to dashboard
+    // If we have a signed-in user, send them to the dashboard.
     if (user) {
       return redirect('/dashboard')
     }
 
-    // If no user but no error, show landing page content
+    // Otherwise render the public landing page. A signed-out visitor has no
+    // session, so getUser() returns an "Auth session missing" error — that's
+    // the normal case for this page, NOT a reason to bounce to /auth/login.
+    // (This is the entry point that offers sign-in / sign-up / guest mode.)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#1B5E20] p-6 text-center text-white">
         <span className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-white p-1.5 shadow-lg ring-1 ring-white/20">

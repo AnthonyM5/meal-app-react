@@ -88,7 +88,7 @@ export function ExploreFoodsSection() {
   }
 
   return (
-    <Card>
+    <Card data-testid="explore-foods-section">
       <CardHeader>
         <CardTitle>Explore Foods</CardTitle>
       </CardHeader>
@@ -101,7 +101,8 @@ export function ExploreFoodsSection() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
-            placeholder="Search foods and explore nutrition info..."
+            type="text"
+            placeholder="Search for foods and explore nutrition info..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="pl-10"
@@ -110,6 +111,11 @@ export function ExploreFoodsSection() {
             <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
           )}
         </div>
+        {isSearching && (
+          <p className="text-sm text-muted-foreground" role="status">
+            Searching…
+          </p>
+        )}
 
         {foods.length > 0 && (
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
@@ -120,6 +126,7 @@ export function ExploreFoodsSection() {
                   key={food.id}
                   href={`/food-details/${food.id}`}
                   className="block"
+                  data-testid="food-item"
                 >
                   <Card className="hover:shadow-md transition-shadow hover:bg-accent">
                     <CardContent className="p-4">
