@@ -72,8 +72,8 @@ function PhotoPicker({
         ref={fileInputRef}
         type="file"
         accept={ACCEPTED_TYPES.join(',')}
-        // Opens the rear camera on mobile; a normal file picker elsewhere
-        capture="environment"
+        // No `capture` attr: lets mobile show the native chooser (take a
+        // photo OR pick from the library); a normal file picker on desktop
         className="hidden"
         data-testid="bowl-photo-input"
         onChange={e => {

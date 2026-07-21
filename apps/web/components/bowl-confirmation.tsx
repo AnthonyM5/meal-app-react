@@ -22,6 +22,7 @@ import { createDogMeal } from '@/lib/meal-actions'
 import type { BrandedSuggestion } from '@/lib/resolve-ingredient'
 import type { BowlAnalysisItem, Food, MealType } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { format } from 'date-fns'
 import {
   AlertTriangle,
   Check,
@@ -458,7 +459,10 @@ export function BowlConfirmation({
           ingredient_id: row.ingredient!.id,
           grams: Number(row.grams),
         })),
-        { source: 'photo' }
+        // Log under the owner's local calendar day. Without this the service
+        // falls back to the UTC date, so a meal photographed in the evening
+        // (US timezones) lands on tomorrow and vanishes from today's dashboard.
+        { source: 'photo', date: format(new Date(), 'yyyy-MM-dd') }
       )
 
       // Persist what the owner actually confirmed. This is the gold data for

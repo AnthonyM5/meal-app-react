@@ -58,5 +58,45 @@ jobs:
 
       - name: Build
         run: pnpm build
+  cypress:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
 
-      # Add deployment steps here if needed
+      # Cypress downloads its ~200 MB binary to ~/.cache/Cypress during
+      # `pnpm install` (approved in onlyBuiltDependencies). Restore it before
+      # install so reruns skip the download.
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Boots `next dev` on :3000, waits for it, then runs `cypress run`
+      # (bundled Electron, headless). The e2e specs create/delete throwaway
+      # confirmed users against the live Supabase project via the three
+      # secrets above.
+      - name: Run Cypress e2e tests
+        run: pnpm --filter web test:e2e:headless
+
+      # Delete throwaway pawplate.e2e.* users from the live project. The specs
+      # clean up after themselves, but a run that dies before its after() hook
+      # leaks users — always() ensures they're swept even when tests fail.
+      - name: Clean up stale e2e users
+        if: always()
+        run: pnpm --filter web test:e2e:cleanup -- --delete

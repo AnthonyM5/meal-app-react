@@ -14,7 +14,8 @@
     "cypress": "cypress open",
     "cypress:headless": "cypress run",
     "test:e2e": "start-server-and-test dev 3000 cypress",
-    "test:e2e:headless": "start-server-and-test dev 3000 cypress:headless"
+    "test:e2e:headless": "start-server-and-test dev 3000 cypress:headless",
+    "test:e2e:cleanup": "tsx scripts/cleanup-stale-e2e-users.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",
