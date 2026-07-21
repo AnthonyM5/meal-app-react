@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from './auth/AuthProvider'
 import { RequireAuth } from './auth/RequireAuth'
 import { AppShell } from './components/AppShell'
+import { BowlPhotoScreen } from './screens/BowlPhotoScreen'
 import { DogDetailScreen } from './screens/DogDetailScreen'
 import { DogFormScreen } from './screens/DogFormScreen'
 import { DogsScreen } from './screens/DogsScreen'
@@ -26,6 +27,7 @@ export function App() {
               path="/dogs/:dogId/meals/new"
               element={<MealFormScreen />}
             />
+            <Route path="/dogs/:dogId/bowl" element={<BowlPhotoScreen />} />
             <Route path="/meals/:mealId/edit" element={<MealFormScreen />} />
             <Route path="*" element={<Navigate to="/dogs" replace />} />
           </Route>

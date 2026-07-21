@@ -10,6 +10,7 @@ import {
 import {
   AlertTriangle,
   ArrowLeft,
+  Camera,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -215,11 +216,18 @@ export function DogDetailScreen() {
 
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Meals</h2>
-            <Button asChild size="sm">
-              <Link to={`/dogs/${dog.id}/meals/new?date=${date}`}>
-                <Plus className="mr-1 h-4 w-4" /> Add meal
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button asChild size="sm" variant="outline">
+                <Link to={`/dogs/${dog.id}/bowl`}>
+                  <Camera className="mr-1 h-4 w-4" /> Photo
+                </Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to={`/dogs/${dog.id}/meals/new?date=${date}`}>
+                  <Plus className="mr-1 h-4 w-4" /> Add meal
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {meals.length === 0 ? (
