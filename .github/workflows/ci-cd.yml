@@ -104,12 +104,19 @@ jobs:
       - name: Install Cypress binary
         run: pnpm --filter web exec cypress install
 
-      # Boots `next dev` on :3000, waits for it, then runs `cypress run`
+      # Build a PRODUCTION bundle so the e2e run serves pre-compiled routes.
+      # `next dev` compiles each route on first request (a cold /dashboard took
+      # ~17s in CI), which blows past Cypress's 10s assertion timeout and makes
+      # the first test to hit a route flake. `next start` responds in ms.
+      - name: Build web app
+        run: pnpm --filter web build
+
+      # Boots `next start` on :3000, waits for it, then runs `cypress run`
       # (bundled Electron, headless). The e2e specs create/delete throwaway
       # confirmed users against the live Supabase project via the three
       # secrets above.
       - name: Run Cypress e2e tests
-        run: pnpm --filter web test:e2e:headless
+        run: pnpm --filter web test:e2e:ci
 
       # Delete throwaway pawplate.e2e.* users from the live project. The specs
       # clean up after themselves, but a run that dies before its after() hook
