@@ -82,10 +82,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          # Key on the web app's manifest (which pins the cypress version),
+          # not the whole lockfile — an unrelated dep bump shouldn't force a
+          # ~200 MB re-download. restore-keys lets a stale-but-usable binary
+          # be restored; the explicit `cypress install` step reconciles it.
+          key: cypress-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+          restore-keys: |
+            cypress-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Guarantee the Cypress binary is present. pnpm may skip cypress's
+      # postinstall on a store cache hit (side-effects cache), so the binary
+      # can be absent even though the npm package is installed. `cypress
+      # install` is idempotent — a no-op when ~/.cache/Cypress is already
+      # populated (restored above), a download otherwise.
+      - name: Install Cypress binary
+        run: pnpm --filter web exec cypress install
 
       # Boots `next dev` on :3000, waits for it, then runs `cypress run`
       # (bundled Electron, headless). The e2e specs create/delete throwaway
