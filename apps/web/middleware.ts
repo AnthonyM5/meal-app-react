@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
 // Routes that don't require auth
-const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up']
+const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up', '/landing']
 
 // Routes that allow guest access.
 //
@@ -39,12 +39,28 @@ const BEARER_AUTH_ROUTES = [
   '/api/meals',
   '/api/ingredients/manual',
   '/api/ingredients/branded',
+  '/api/ingredients/search',
 ]
+
+// CORS for the Bearer-token routes. The mobile shell runs from a WebView
+// origin (capacitor://localhost on iOS, https://localhost on Android;
+// http://localhost:5173 in vite dev), so every call here is cross-origin and
+// the Authorization header triggers a preflight. A wildcard origin is safe on
+// exactly these routes: they carry no cookie auth (wildcard forbids
+// credentialed requests anyway), so a foreign page can only use them with an
+// access token it already holds — same trust model as calling Supabase's own
+// CORS-open REST API.
+const BEARER_CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Max-Age': '86400',
+}
 
 // Check if Supabase is configured
 function isSupabaseConfigured(): boolean {
   return !!(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && 
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   )
 }
@@ -61,6 +77,16 @@ export async function middleware(request: NextRequest) {
 
   // Bearer-token REST routes authenticate themselves; skip the cookie gate.
   if (BEARER_AUTH_ROUTES.some(route => path.startsWith(route))) {
+    if (request.method === 'OPTIONS') {
+      // Preflight — the route handlers have no OPTIONS export, so answer here.
+      return new NextResponse(null, {
+        status: 204,
+        headers: BEARER_CORS_HEADERS,
+      })
+    }
+    for (const [key, value] of Object.entries(BEARER_CORS_HEADERS)) {
+      response.headers.set(key, value)
+    }
     return response
   }
 
@@ -98,7 +124,7 @@ export async function middleware(request: NextRequest) {
         },
       }
     )
-    
+
     const {
       data: { session },
     } = await supabase.auth.getSession()

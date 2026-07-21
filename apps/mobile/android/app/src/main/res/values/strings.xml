@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PawPlate</string>
+    <string name="title_activity_main">PawPlate</string>
+    <string name="package_name">com.pawplate.app</string>
+    <string name="custom_url_scheme">com.pawplate.app</string>
+</resources>

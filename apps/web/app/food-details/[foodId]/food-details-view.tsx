@@ -208,7 +208,10 @@ export function FoodDetailsView({ foodId }: { foodId: string }) {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div
+        data-testid="nutrient-info"
+        className="grid grid-cols-1 gap-6 md:grid-cols-2"
+      >
         {NUTRIENT_GROUPS.map(group => {
           const rows = group.keys
             .map(key => ({ key, value: food[key] as number | undefined }))

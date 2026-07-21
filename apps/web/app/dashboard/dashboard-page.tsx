@@ -208,14 +208,22 @@ export default function DashboardPage() {
   if (isGuestUser) {
     return (
       <div className="space-y-8 pb-8">
-        <Card className="border-yellow-500/50 bg-yellow-500/10">
+        <Card
+          data-testid="guest-banner"
+          className="border-yellow-500/50 bg-yellow-500/10"
+        >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-yellow-500">
-                You&apos;re viewing in guest mode. Sign in to add your dogs and
-                track their meals.
+                Guest Mode — you can search and view nutrition information. Sign
+                in to add your dogs and track their meals.
               </p>
-              <Button variant="outline" size="sm" onClick={exitGuestMode}>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="exit-guest-mode"
+                onClick={exitGuestMode}
+              >
                 Sign In
               </Button>
             </div>

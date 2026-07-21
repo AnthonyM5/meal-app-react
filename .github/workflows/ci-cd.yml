@@ -58,5 +58,66 @@ jobs:
 
       - name: Build
         run: pnpm build
+  cypress:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # The e2e specs exercise /api/bowl/analyze, which 503s without this
+      # (see route.ts: the GEMINI_API_KEY guard runs before dog validation).
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
 
-      # Add deployment steps here if needed
+      # Cypress downloads its ~200 MB binary to ~/.cache/Cypress during
+      # `pnpm install` (approved in onlyBuiltDependencies). Restore it before
+      # install so reruns skip the download.
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          # Key on the web app's manifest (which pins the cypress version),
+          # not the whole lockfile — an unrelated dep bump shouldn't force a
+          # ~200 MB re-download. restore-keys lets a stale-but-usable binary
+          # be restored; the explicit `cypress install` step reconciles it.
+          key: cypress-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+          restore-keys: |
+            cypress-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Guarantee the Cypress binary is present. pnpm may skip cypress's
+      # postinstall on a store cache hit (side-effects cache), so the binary
+      # can be absent even though the npm package is installed. `cypress
+      # install` is idempotent — a no-op when ~/.cache/Cypress is already
+      # populated (restored above), a download otherwise.
+      - name: Install Cypress binary
+        run: pnpm --filter web exec cypress install
+
+      # Build a PRODUCTION bundle so the e2e run serves pre-compiled routes.
+      # `next dev` compiles each route on first request (a cold /dashboard took
+      # ~17s in CI), which blows past Cypress's 10s assertion timeout and makes
+      # the first test to hit a route flake. `next start` responds in ms.
+      - name: Build web app
+        run: pnpm --filter web build
+
+      # Boots `next start` on :3000, waits for it, then runs `cypress run`
+      # (bundled Electron, headless). The e2e specs create/delete throwaway
+      # confirmed users against the live Supabase project via the three
+      # secrets above.
+      - name: Run Cypress e2e tests
+        run: pnpm --filter web test:e2e:ci
+
+      # Delete throwaway pawplate.e2e.* users from the live project. The specs
+      # clean up after themselves, but a run that dies before its after() hook
+      # leaks users — always() ensures they're swept even when tests fail.
