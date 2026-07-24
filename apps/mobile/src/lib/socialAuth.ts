@@ -36,9 +36,13 @@ export async function signInWithGoogle(): Promise<string | null> {
   }
   try {
     await initSocialAuth()
+    // No `scopes` here: default Google sign-in already returns profile+email in
+    // the ID token. Passing custom scopes triggers the plugin's authorization-
+    // code flow, which on Android requires extra MainActivity wiring and errors
+    // out ("You CANNOT use scopes without modifying the main activity").
     const { result } = await SocialLogin.login({
       provider: 'google',
-      options: { scopes: ['profile', 'email'] },
+      options: {},
     })
 
     const idToken = 'idToken' in result ? result.idToken : null
