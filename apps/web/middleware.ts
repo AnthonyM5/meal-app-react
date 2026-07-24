@@ -4,7 +4,13 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
 // Routes that don't require auth
-const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/sign-up', '/landing']
+const PUBLIC_ROUTES = [
+  '/',
+  '/auth/login',
+  '/auth/sign-up',
+  '/auth/callback',
+  '/landing',
+]
 
 // Routes that allow guest access.
 //

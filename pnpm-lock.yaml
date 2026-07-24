@@ -27,6 +27,9 @@ importers:
       '@capacitor/ios':
         specifier: ^7.4.0
         version: 7.6.8(@capacitor/core@7.6.8)
+      '@capgo/capacitor-social-login':
+        specifier: 7.9.0
+        version: 7.9.0(@capacitor/core@7.6.8)
       '@fontsource/fraunces':
         specifier: ^5.2.5
         version: 5.3.0
@@ -692,6 +695,11 @@ packages:
     resolution: {integrity: sha512-TAM1FdI1Cfl8e/wLBo7x5m61V/J1fMEpyxU2psZzHzsa436k2pwEME6CQoBRYdw6Q6gud0jZSPwOVrNn+MI7Ag==}
     peerDependencies:
       '@capacitor/core': ^7.6.0
+
+  '@capgo/capacitor-social-login@7.9.0':
+    resolution: {integrity: sha512-efbGCskW24b4Du3mu6Cjjo1o7E+gvCaGgAiLLKcvtCfffhBS1TN/fdK4MSjC0jnghXwSi2ksgxgcnjjaB4Q1NQ==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
 
   '@csstools/color-helpers@5.1.0':
     resolution: {integrity: sha512-S11EXWJyy0Mz5SYvRmY8nJYTFFd1LCNV+7cXyAgQtOOuzb4EsgfqDufL+9esx72/eLhsRdGZwaldu/h+E4t4BA==}
@@ -5863,6 +5871,10 @@ snapshots:
       tslib: 2.8.1
 
   '@capacitor/ios@7.6.8(@capacitor/core@7.6.8)':
+    dependencies:
+      '@capacitor/core': 7.6.8
+
+  '@capgo/capacitor-social-login@7.9.0(@capacitor/core@7.6.8)':
     dependencies:
       '@capacitor/core': 7.6.8
 

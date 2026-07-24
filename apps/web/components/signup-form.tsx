@@ -2,8 +2,10 @@
 
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
+import GoogleSignInButton from "@/components/google-sign-in-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
 import { Loader2 } from "lucide-react"
 import Link from "next/link"
 import { signUp } from "@/lib/actions"
@@ -76,6 +78,14 @@ export default function SignUpForm() {
       </div>
 
       <SubmitButton />
+
+      <div className="flex items-center space-x-2">
+        <Separator className="flex-1" />
+        <span className="text-xs text-muted-foreground">OR</span>
+        <Separator className="flex-1" />
+      </div>
+
+      <GoogleSignInButton />
 
       <div className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
