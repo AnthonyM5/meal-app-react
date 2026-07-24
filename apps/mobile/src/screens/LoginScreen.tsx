@@ -13,6 +13,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthProvider'
+import { GoogleSignInButton } from '../components/GoogleSignInButton'
 import { supabase } from '../lib/supabase'
 
 export function LoginScreen() {
@@ -78,6 +79,12 @@ export function LoginScreen() {
               Sign in
             </Button>
           </form>
+          <div className="my-4 flex items-center gap-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <GoogleSignInButton />
           <p className="mt-4 text-center text-sm text-muted-foreground">
             No account?{' '}
             <Link to="/signup" className="text-primary underline">

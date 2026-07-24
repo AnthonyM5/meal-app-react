@@ -22,6 +22,18 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // @capgo/capacitor-social-login bundles androidbrowserhelper 2.6.2, which
+    // transitively pulls androidx.browser:1.9.0-alpha04 — an alpha that demands
+    // compileSdk 36 + AGP 8.9.1. We only use native Google sign-in (not the
+    // custom-tab/TWA path that needs androidx.browser), so pin it back to the
+    // last stable release, which builds fine on this project's SDK 35 / AGP
+    // 8.7.2. Revisit if we ever bump compileSdk to 36.
+    configurations.all {
+        resolutionStrategy {
+            force 'androidx.browser:browser:1.8.0'
+        }
+    }
 }
 
 task clean(type: Delete) {

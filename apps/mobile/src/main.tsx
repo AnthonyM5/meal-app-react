@@ -11,6 +11,10 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import { App } from './App'
+import { initSocialAuth } from './lib/socialAuth'
+
+// Fire-and-forget: configure native Google sign-in. No-op when unconfigured.
+void initSocialAuth()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

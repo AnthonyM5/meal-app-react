@@ -45,5 +45,17 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Google Sign-In callback: replace the string below with your iOS OAuth
+	     client's REVERSED client ID (Google Cloud console -> iOS client ->
+	     "iOS URL scheme", e.g. com.googleusercontent.apps.1234567890-abcdef). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.326034172026-7hts01pv3ipoku2fstgipl4taf65jv7r</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

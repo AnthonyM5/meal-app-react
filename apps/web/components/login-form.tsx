@@ -1,7 +1,9 @@
 "use client"
 
+import GoogleSignInButton from "@/components/google-sign-in-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
 import { signIn } from "@/lib/actions"
 import { Loader2 } from "lucide-react"
 import Link from "next/link"
@@ -87,6 +89,14 @@ export default function LoginForm() {
       </div>
 
       <SubmitButton />
+
+      <div className="flex items-center space-x-2">
+        <Separator className="flex-1" />
+        <span className="text-xs text-muted-foreground">OR</span>
+        <Separator className="flex-1" />
+      </div>
+
+      <GoogleSignInButton />
 
       <div className="text-center text-sm text-muted-foreground">
         Don't have an account?{" "}

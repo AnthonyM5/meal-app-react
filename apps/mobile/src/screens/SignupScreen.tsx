@@ -12,6 +12,7 @@ import { Loader2, PawPrint } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
+import { GoogleSignInButton } from '../components/GoogleSignInButton'
 import { supabase } from '../lib/supabase'
 
 export function SignupScreen() {
@@ -95,6 +96,12 @@ export function SignupScreen() {
               Sign up
             </Button>
           </form>
+          <div className="my-4 flex items-center gap-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <GoogleSignInButton />
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Already have an account?{' '}
             <Link to="/login" className="text-primary underline">
