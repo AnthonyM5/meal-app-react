@@ -45,6 +45,28 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Dev convenience: allow cleartext HTTP to the localhost dev API
+	     (http://localhost:3000). App Transport Security blocks plain http by
+	     default, which is why the iOS WebView reports "access control checks" /
+	     "could not connect" for the REST calls. NSAllowsLocalNetworking permits
+	     loopback/.local only — it does NOT weaken ATS for the public internet.
+	     For a physical device on a LAN IP, add an NSExceptionDomains entry; for
+	     store builds, point VITE_API_BASE_URL at the https deployment and drop
+	     this (mirrors the cleartext note in capacitor.config.ts). -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Capacitor's UI runs in a WKWebView, and fetch() from web content is
+		     governed by NSAllowsArbitraryLoadsInWebContent — the direct parallel
+		     to Android's allowMixedContent (capacitor.config.ts). This is what
+		     lets the WebView reach the cleartext localhost dev API;
+		     NSAllowsLocalNetworking / NSExceptionDomains alone don't cover
+		     WebView-originated loads. Drop for store builds (point
+		     VITE_API_BASE_URL at the https deployment). -->
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<!-- Google Sign-In callback: replace the string below with your iOS OAuth
 	     client's REVERSED client ID (Google Cloud console -> iOS client ->
 	     "iOS URL scheme", e.g. com.googleusercontent.apps.1234567890-abcdef). -->

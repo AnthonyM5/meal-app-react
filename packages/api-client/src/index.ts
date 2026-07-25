@@ -1,6 +1,7 @@
 import type {
   BowlAnalysisItem,
   Dog,
+  Food,
   Ingredient,
   MealSource,
   MealType,
@@ -152,6 +153,10 @@ export interface BowlAnalyzeResult {
   guest?: boolean
 }
 
+/** A food-catalog row plus the amount of the queried nutrient (per 100g),
+ *  returned by the nutrient-search route. */
+export type FoodByNutrient = Food & { nutrient_amount: number }
+
 export interface BowlAnalyzeInput {
   /** The captured photo. A Blob/File; `fileName` names the multipart part. */
   image: Blob
@@ -256,6 +261,25 @@ export function createPawPlateClient(options: PawPlateClientOptions) {
         request<{ food: Ingredient }>('POST', '/api/ingredients/branded', {
           code,
         }).then(r => r.food),
+    },
+    foods: {
+      /** Fuzzy name search over the global food catalog (2+ chars). */
+      search: (query: string) =>
+        request<{ foods: Food[] }>(
+          'GET',
+          `/api/foods/unified-search?q=${encodeURIComponent(query)}`
+        ).then(r => r.foods),
+      /** Foods highest in a given tracked nutrient (per 100g), min optional. */
+      searchByNutrient: (nutrient: NutrientKey, min = 0) =>
+        request<{ foods: FoodByNutrient[] }>(
+          'GET',
+          `/api/foods/nutrient-search?nutrient=${nutrient}&min=${min}`
+        ).then(r => r.foods),
+      /** Full catalog row for one food (all nutrient columns). */
+      get: (foodId: string) =>
+        request<{ food: Food }>('GET', `/api/foods/${foodId}`).then(
+          r => r.food
+        ),
     },
     bowl: {
       /** Upload a bowl photo for analysis. Multipart — the image plus the

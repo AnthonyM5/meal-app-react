@@ -55,6 +55,20 @@ const BEARER_AUTH_ROUTES = [
   '/api/bowl/analyze',
 ]
 
+// Read-only food-catalog routes the native client browses: name search
+// (/unified-search), nutrient search (/nutrient-search), and single-food lookup
+// (/<uuid>). The data is global (not user-scoped) and served via the service
+// role, so a Bearer/CORS exemption exposes nothing private. Matched by prefix
+// rather than listed in BEARER_AUTH_ROUTES because the lookup's dynamic segment
+// has no fixed prefix — and `/api/foods/import-external` is deliberately
+// EXCLUDED: it's an unauthenticated WRITE that still relies on the cookie gate.
+function isBearerFoodRead(path: string): boolean {
+  return (
+    path.startsWith('/api/foods/') &&
+    !path.startsWith('/api/foods/import-external')
+  )
+}
+
 // CORS for the Bearer-token routes. The mobile shell runs from a WebView
 // origin (capacitor://localhost on iOS, https://localhost on Android;
 // http://localhost:5173 in vite dev), so every call here is cross-origin and
@@ -89,7 +103,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // Bearer-token REST routes authenticate themselves; skip the cookie gate.
-  if (BEARER_AUTH_ROUTES.some(route => path.startsWith(route))) {
+  if (
+    BEARER_AUTH_ROUTES.some(route => path.startsWith(route)) ||
+    isBearerFoodRead(path)
+  ) {
     if (request.method === 'OPTIONS') {
       // Preflight — the route handlers have no OPTIONS export, so answer here.
       return new NextResponse(null, {
