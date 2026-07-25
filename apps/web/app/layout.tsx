@@ -29,9 +29,18 @@ export const viewport: Viewport = {
   themeColor: '#2E7D32',
 }
 
-// Absolute base for OG/Twitter image URLs. Set NEXT_PUBLIC_SITE_URL in prod
-// (e.g. https://pawplate.app); localhost is only a dev fallback.
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+// Absolute base for OG/Twitter image URLs, in precedence order:
+//   1. NEXT_PUBLIC_SITE_URL — set explicitly for production (e.g.
+//      https://pawplate.app). Scope it to the Production environment only, so
+//      preview deploys fall through to (2) rather than advertising prod URLs.
+//   2. VERCEL_URL — injected automatically on every Vercel deployment (preview
+//      included). It carries no protocol, hence the https prefix. This keeps a
+//      preview's link previews pointing at that same preview.
+//   3. localhost — local dev fallback.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+  'http://localhost:3000'
 
 const TITLE = 'PawPlate — Fresh-Feeding Dog Nutrition'
 const DESCRIPTION =
