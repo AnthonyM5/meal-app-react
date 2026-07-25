@@ -79,6 +79,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>PawPlate uses the photo library to save your dog's bowl photo for future reference.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>PawPlate uses the camera to photograph your dog's bowl so it can identify the food and estimate portions.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
