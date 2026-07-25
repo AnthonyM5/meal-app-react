@@ -45,6 +45,18 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- NO NSAppTransportSecurity exemption here — this is the store-ready
+	     posture, and it works because VITE_API_BASE_URL points at an https
+	     deployment. To go back to a CLEARTEXT local dev API (http://localhost or
+	     an http:// LAN IP), re-add:
+	         <key>NSAppTransportSecurity</key>
+	         <dict>
+	             <key>NSAllowsArbitraryLoadsInWebContent</key><true/>
+	         </dict>
+	     That WebView-specific key is the one that matters (the iOS parallel to
+	     Android's allowMixedContent); NSAllowsLocalNetworking / NSExceptionDomains
+	     do NOT cover WKWebView-originated fetch(), and the latter can't hold a
+	     raw IP. See the options block in apps/mobile/.env.local. -->
 	<!-- Google Sign-In callback: replace the string below with your iOS OAuth
 	     client's REVERSED client ID (Google Cloud console -> iOS client ->
 	     "iOS URL scheme", e.g. com.googleusercontent.apps.1234567890-abcdef). -->
@@ -57,5 +69,11 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>PawPlate uses the photo library to save your dog's bowl photo for future reference.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PawPlate uses the camera to photograph your dog's bowl so it can identify the food and estimate portions.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PawPlate lets you pick a bowl photo from your library to identify the food and estimate portions.</string>
 </dict>
 </plist>

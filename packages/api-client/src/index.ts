@@ -1,5 +1,7 @@
 import type {
+  BowlAnalysisItem,
   Dog,
+  Food,
   Ingredient,
   MealSource,
   MealType,
@@ -115,6 +117,54 @@ export interface ManualIngredientInput {
   carbs_g_per_100g?: number
 }
 
+/** What the photo's gram estimates were scaled against, for the UI notice. */
+export type ScaleBasis = 'bowl_diameter' | 'reference_coin' | 'reference_card'
+
+/** OFF product suggestion for an unmatched label (transcribed from
+ *  apps/web/lib/resolve-ingredient.ts). */
+export interface BrandedSuggestion {
+  code: string
+  name: string
+  brand: string | null
+  attribution: string | null
+  kcal_per_100g: number
+}
+
+/** One identified item in an analyze response (transcribed from
+ *  apps/web/components/bowl-confirmation.tsx `AnalyzedBowlItem`). */
+export interface AnalyzedBowlItem {
+  label: string
+  estimated_proportion: number
+  confidence: number
+  normalized_ingredient_id: string | null
+  ingredient: Ingredient | null
+  branded_suggestion?: BrandedSuggestion | null
+  estimated_grams?: number | null
+}
+
+/** Response of POST /api/bowl/analyze. Owner scans carry `analysis_id` +
+ *  `image_url`; guest scans set `guest: true` and neither. */
+export interface BowlAnalyzeResult {
+  analysis_id?: string
+  image_url?: string
+  notes?: string
+  items: AnalyzedBowlItem[]
+  scale_basis?: ScaleBasis | null
+  guest?: boolean
+}
+
+/** A food-catalog row plus the amount of the queried nutrient (per 100g),
+ *  returned by the nutrient-search route. */
+export type FoodByNutrient = Food & { nutrient_amount: number }
+
+export interface BowlAnalyzeInput {
+  /** The captured photo. A Blob/File; `fileName` names the multipart part. */
+  image: Blob
+  fileName?: string
+  dogId: string
+  hint?: string
+}
+
 export function createPawPlateClient(options: PawPlateClientOptions) {
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis)
   const baseUrl = options.baseUrl.replace(/\/$/, '')
@@ -125,13 +175,19 @@ export function createPawPlateClient(options: PawPlateClientOptions) {
     body?: unknown
   ): Promise<T> {
     const token = await options.getAccessToken()
+    // Multipart bodies (the bowl photo upload) must NOT get a JSON
+    // Content-Type — the runtime sets `multipart/form-data` with the boundary
+    // itself. Setting it by hand corrupts the boundary and the server sees an
+    // empty body.
+    const isForm =
+      typeof FormData !== 'undefined' && body instanceof FormData
     const response = await doFetch(`${baseUrl}${path}`, {
       method,
       headers: {
-        ...(body !== undefined && { 'Content-Type': 'application/json' }),
+        ...(body !== undefined && !isForm && { 'Content-Type': 'application/json' }),
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
+      ...(body !== undefined && { body: isForm ? body : JSON.stringify(body) }),
     })
 
     const payload = await response.json().catch(() => null)
@@ -205,6 +261,53 @@ export function createPawPlateClient(options: PawPlateClientOptions) {
         request<{ food: Ingredient }>('POST', '/api/ingredients/branded', {
           code,
         }).then(r => r.food),
+    },
+    foods: {
+      /** Fuzzy name search over the global food catalog (2+ chars). */
+      search: (query: string) =>
+        request<{ foods: Food[] }>(
+          'GET',
+          `/api/foods/unified-search?q=${encodeURIComponent(query)}`
+        ).then(r => r.foods),
+      /** Foods highest in a given tracked nutrient (per 100g), min optional. */
+      searchByNutrient: (nutrient: NutrientKey, min = 0) =>
+        request<{ foods: FoodByNutrient[] }>(
+          'GET',
+          `/api/foods/nutrient-search?nutrient=${nutrient}&min=${min}`
+        ).then(r => r.foods),
+      /** Full catalog row for one food (all nutrient columns). */
+      get: (foodId: string) =>
+        request<{ food: Food }>('GET', `/api/foods/${foodId}`).then(
+          r => r.food
+        ),
+    },
+    bowl: {
+      /** Upload a bowl photo for analysis. Multipart — the image plus the
+       *  target dog and an optional identification hint. */
+      analyze: (input: BowlAnalyzeInput) => {
+        const form = new FormData()
+        form.append('image', input.image, input.fileName ?? 'bowl.jpg')
+        form.append('dog_id', input.dogId)
+        if (input.hint) form.append('hint', input.hint)
+        return request<BowlAnalyzeResult>('POST', '/api/bowl/analyze', form)
+      },
+      /** Re-run identification on an already-uploaded photo with a corrective
+       *  note (owner spotted a miss on the confirm screen — no re-upload). */
+      reanalyze: (input: { analysisId: string; hint: string }) => {
+        const form = new FormData()
+        form.append('analysis_id', input.analysisId)
+        form.append('hint', input.hint)
+        return request<BowlAnalyzeResult>('POST', '/api/bowl/analyze', form)
+      },
+      /** Persist the owner's confirmed items — the §2.4 calibration signal. */
+      saveCorrections: (input: {
+        analysisId: string
+        correctedItems: BowlAnalysisItem[]
+      }) =>
+        request<{ ok: true }>('PATCH', '/api/bowl/analyze', {
+          analysis_id: input.analysisId,
+          corrected_items: input.correctedItems,
+        }),
     },
   }
 }

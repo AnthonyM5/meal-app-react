@@ -673,6 +673,36 @@ First functional slice of the native app: Vite + React 19 + React Router 7
   `packages/features` extraction (sharing DogMealBuilder etc. with
   injected transport) remains optional/deferred.
 
+#### Step 4b checklist — bowl-photo flow on mobile
+
+- [ ] **Backend Bearer auth on `/api/bowl/analyze`.** The route today
+      authenticates cookie-only (`getAuthenticatedUserId` reads the session
+      cookie) and is NOT in `middleware.ts` `BEARER_AUTH_ROUTES`, so a native
+      Bearer caller can't reach it. Add a Bearer fallback to
+      `getAuthenticatedUserId` (resolve `data.user` from the
+      `Authorization: Bearer` token via the service client, same as
+      `authenticateRequest`) and add `/api/bowl/analyze` to
+      `BEARER_AUTH_ROUTES` for CORS/preflight. Web cookie + guest flows stay
+      untouched (the guest cookie still wins first).
+- [ ] **`@pawplate/api-client`: `bowl.analyze()` / `bowl.saveCorrections()`.**
+      The existing `request()` helper is JSON-only; analyze is multipart
+      (`FormData` with the image), so add a FormData-capable path (no
+      `Content-Type` header — let the runtime set the multipart boundary).
+- [ ] **Native permission strings** (required before the camera plugin will
+      run, and for store review):
+  - iOS `apps/mobile/ios/App/App/Info.plist`: `NSCameraUsageDescription`
+    AND `NSPhotoLibraryUsageDescription` (the flow allows library pick too).
+  - Android `apps/mobile/android/app/src/main/AndroidManifest.xml`:
+    `<uses-permission android:name="android.permission.CAMERA" />`.
+  - `pnpm add @capacitor/camera` in `apps/mobile`, then `npx cap sync`.
+- [ ] **Mobile capture + confirmation UI.** Capture screen (Camera plugin,
+      with a library-pick option) → POST to analyze → ported
+      `BowlConfirmation` screen (ingredient search, gram confirm, unmatched
+      resolve, PATCH corrections). Router entry + a "Log from photo" action
+      on the dog-detail screen.
+- [ ] **Test:** extend `cypress/e2e/mobile-rest-api.cy.ts` with a Bearer
+      analyze case (dog-ownership 404 pre-vision path keeps it Gemini-free).
+
 ## Bowl analysis — photo portion estimation (built 2026-07-15, per VISION_MODELS_AND_ESTIMATION.md)
 
 Implements §2.1/2.2 (reference-object + fixed-bowl calibration), §2.4
@@ -852,6 +882,62 @@ past day to view or edit its meals; dot markers indicate days with entries.
   removed (`30df066`, superseded by the monorepo + Capacitor plan below;
   never shipped a camera flow).
 
+## Mobile → web parity scope (planned, scoped 2026-07-24)
+
+Goal: bring `apps/mobile` up to feature parity with `apps/web`. Assessed by
+diffing web routes/features against mobile screens + the shared
+`packages/api-client` surface.
+
+### Already at parity (no work)
+Dogs CRUD, meal logging/edit, in-meal ingredient search, nutrient gap bars
+(`GapBars`), day-by-day history (prev/today arrows on `DogDetailScreen`),
+branded-ingredient accept (in bowl flow), auth + Google SSO. Bowl-photo flow is
+on `feat/mobile-bowl-photo-v2` (pending smoke test).
+
+### Gaps, prioritized
+
+**P1 — Foods browse + Food details (biggest true gap).**
+- Backend: NONE needed. Routes `/api/foods/unified-search`,
+  `/api/foods/nutrient-search`, `/api/foods/[foodId]` already exist and are in
+  `GUEST_ALLOWED_ROUTES`, so the mobile client can call them as-is (ingredient
+  data is global, not user-scoped).
+- `packages/api-client`: add a `foods` namespace — `unifiedSearch(q)`,
+  `nutrientSearch(nutrient, min)`, `get(foodId)` + result types.
+- Shared helpers already available: `NUTRIENT_LABELS` / `nutrientUnit` live in
+  `packages/core/src/canine-nutrition.ts` — reuse, don't re-port.
+- Mobile UI: `FoodsScreen` (tabs: text search / nutrient search) + a
+  `FoodDetailsScreen` (nutrient breakdown); routes `/foods`, `/foods/:foodId`;
+  add a Foods entry to `AppShell` (currently only links `/dogs`).
+- Port from `apps/web/app/foods/foods-page.tsx` +
+  `apps/web/app/food-details/[foodId]/food-details-view.tsx`.
+- Effort: **M** (2 screens + api-client; no backend).
+
+**P2 — Calendar / month history (enhancement over the arrow nav).**
+- Backend: NEW. `getDogMealDates(dogId, from, to)` exists as a server action +
+  `mealService.getDogMealDates` but has NO REST route. Add
+  `/api/dogs/[dogId]/meal-dates?start=&end=` wrapping the service fn, and add it
+  to `BEARER_AUTH_ROUTES` in `middleware.ts`.
+- `packages/api-client`: `meals.datesForDog(dogId, start, end)`.
+- Mobile UI: month calendar with per-day "logged" dots on `DogDetailScreen`
+  (replace/augment the arrow nav). `react-day-picker` works in the Capacitor
+  web runtime — port `apps/web/components/meal-calendar.tsx`.
+- Effort: **M** (1 REST route + api-client + calendar UI).
+
+**P3 — Optional / product decisions (not strictly parity).**
+- Guest mode on mobile: web allows guest browse; mobile `RequireAuth` forces
+  login. Decide whether an installed app should offer guest mode at all
+  (many app-store apps skip it). Effort S–M if wanted.
+- Cross-dog dashboard/home hub: web `/dashboard` is a single-page hub; mobile
+  uses a dogs-list model that's arguably better for touch. Optional. Effort M.
+- Manual ingredient creation UI: api-client `ingredients.createManual` exists;
+  verify it's surfaced in the mobile meal builder (web has it). Effort S.
+
+### Sequencing & cross-cutting
+Do P1 → P2 → (P3 by decision). Each new screen needs a route in
+`apps/mobile/src/App.tsx` + a nav affordance in `AppShell`. Keep local-date
+handling consistent with the bowl/meal `localToday()` fix (meals log under LOCAL
+date, not UTC). Reuse `GapBars` and the `packages/core` nutrition helpers.
+
 ## Mobile strategy (planned) — monorepo + Capacitor
 
 **Decision:** build native iOS/Android via **Capacitor wrapping a shared
@@ -961,6 +1047,22 @@ REST backend both apps talk to — no separate backend deploy needed.
 - Native back-button handling on Android (hardware back → in-app history,
   not app close).
 - CI matrix roughly doubles (web + iOS + Android build/signing).
+
+### Pre-release hardening (not blockers for the MVP)
+
+- **Token storage.** The mobile app already uses the Supabase JS SDK with
+  the default WebView `localStorage` (`apps/mobile/src/lib/supabase.ts`) —
+  it never used cookies, so there is no cookie→native "swap" to do. Not
+  necessary for a functional build; it's a reliability/security hardening:
+  - _Durability:_ iOS (WKWebView) can evict website data under storage
+    pressure → silent logout. Fixed by passing a custom `auth.storage`
+    adapter backed by `@capacitor/preferences` (survives eviction).
+  - _Security at rest:_ the refresh token in `localStorage` is app-sandboxed
+    but not encrypted. `@capacitor/preferences` does NOT fix this (plain
+    UserDefaults on iOS); real at-rest encryption needs a Keychain/Keystore
+    plugin (e.g. `@aparajita/capacitor-secure-storage`).
+  - Either way it's a ~1-file change (custom `storage` object on
+    `createClient`'s `auth` options); schedule before store submission.
 
 ### Suggested phasing
 

@@ -399,4 +399,47 @@ describe('Mobile REST API', () => {
       expect(status).to.eq(400)
     })
   })
+
+  it('authenticates the bowl-analyze route by Bearer token (mobile photo flow)', () => {
+    // /api/bowl/analyze authenticated cookie-only until mobile phasing step
+    // 4b; it now also accepts a Bearer token (getAuthenticatedUserId) and is
+    // in middleware's BEARER_AUTH_ROUTES. These assertions prove the token
+    // resolves the caller WITHOUT reaching Gemini: handleOwnerScan checks
+    // dog_id (400) then ownership (404) before it ever reads the image or
+    // calls the model. `form: true` sends a urlencoded body that the route's
+    // request.formData() parses like the native multipart upload.
+
+    // A Bearer caller with no dog_id lands on the owner path (400), not the
+    // guest path — proof the token authenticated the request.
+    cy.request({
+      method: 'POST',
+      url: '/api/bowl/analyze',
+      headers: auth(ownerToken),
+      form: true,
+      body: { hint: 'the protein is chicken breast' },
+      failOnStatusCode: false,
+    }).then(({ status, body }) => {
+      expect(status).to.eq(400)
+      expect(body.error).to.match(/dog_id is required/i)
+    })
+
+    // A Bearer caller passing a dog they don't own gets 404 — the ownership
+    // check ran against the Bearer-resolved user.
+    cy.task<string>('createDogForUser', {
+      userId: stranger.id,
+      name: 'Bowl Stranger Dog',
+    }).then(strangerDogId => {
+      cy.request({
+        method: 'POST',
+        url: '/api/bowl/analyze',
+        headers: auth(ownerToken),
+        form: true,
+        body: { dog_id: strangerDogId },
+        failOnStatusCode: false,
+      }).then(({ status, body }) => {
+        expect(status).to.eq(404)
+        expect(body.error).to.match(/not found/i)
+      })
+    })
+  })
 })
