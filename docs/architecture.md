@@ -1,8 +1,13 @@
 # Architecture Overview
 
-## Next.js 13+ App Router Structure
+> **Scope:** this document describes the **web app** (`apps/web`) and predates
+> the monorepo/mobile split — some of its framing is still NutriTrack-era. For
+> the current repo layout, packages, and mobile app, see
+> [CHEATSHEET.md](../CHEATSHEET.md) and [README.md](../README.md).
 
-The application uses Next.js 13's App Router, which provides:
+## Next.js App Router Structure
+
+The application uses the Next.js App Router, which provides:
 
 - Server Components by default
 - Nested routing with folders
@@ -12,35 +17,39 @@ The application uses Next.js 13's App Router, which provides:
 ### Directory Structure Explained
 
 ```
-/app
-├── api/                  # API Routes
-│   ├── foods/           # Food-related endpoints
-│   └── usda-search/     # USDA API integration
-├── auth/                # Authentication pages
+apps/web/app
+├── api/                 # API Routes
+│   ├── bowl/analyze/   # Vision pipeline (POST) + corrections (PATCH)
+│   ├── foods/          # unified-search, nutrient-search
+│   ├── dogs/ meals/    # Bearer-token REST routes consumed by apps/mobile
+│   └── ingredients/    # USDA FoodData Central import
+├── auth/               # Authentication pages
 │   ├── login/          # Login page
 │   └── sign-up/        # Sign up page
+├── bowl/               # Photo capture → confirmation → meal
 ├── dashboard/          # Main application
+├── dogs/               # Dog profile management
 ├── food-details/       # Food detail pages
-└── landing/           # Landing page
+└── landing/            # Landing page
 ```
 
 ## Key Components
 
 ### Authentication Flow
 
-1. **Landing Page** (`/app/landing/page.tsx`)
+1. **Landing Page** (`apps/web/app/landing/page.tsx`)
 
    - Entry point for users
    - Options to sign in, create account, or continue as guest
    - Guest mode implementation using sessionStorage
 
-2. **Auth Pages** (`/app/auth/`)
+2. **Auth Pages** (`apps/web/app/auth/`)
 
    - Login and signup forms
    - Integration with Supabase Auth
    - Protected route handling
 
-3. **Dashboard** (`/app/dashboard/`)
+3. **Dashboard** (`apps/web/app/dashboard/`)
    - Main application interface
    - Meal tracking functionality
    - Real-time updates using Supabase
@@ -125,13 +134,16 @@ export function useGuestMode() {
    - Data mutations
    - Error handling
 
-Example server action:
+Example server action (the helper lives in
+`apps/web/lib/server/auth-context.ts`):
 
 ```typescript
 'use server'
 
+import { getAuthenticatedClientOrRedirect } from '@/lib/server/auth-context'
+
 export async function createMeal(type: MealType, date: string) {
-  const supabase = await getAuthenticatedClient()
+  const { supabase, user } = await getAuthenticatedClientOrRedirect()
   // Implementation...
 }
 ```
@@ -200,7 +212,9 @@ create policy "Authenticated users can create foods"
 
 ### Shared Components
 
-Located in `/components/ui/`, built with:
+Canonically in `packages/ui/src/` (`@pawplate/ui`), so web and mobile render
+the same design system. `apps/web/components/ui/` holds thin re-export shims
+so existing `@/components/ui/*` imports keep working. Built with:
 
 - Radix UI primitives
 - Tailwind CSS

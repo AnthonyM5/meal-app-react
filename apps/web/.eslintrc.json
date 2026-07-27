@@ -32,7 +32,6 @@
     "public/",
     "coverage/",
     "cypress/",
-    "mobile/",
     "scripts/",
     "**/*.config.js",
     "**/*.config.mjs",

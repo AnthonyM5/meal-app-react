@@ -248,16 +248,23 @@ pnpm --filter web start            # Production server
 pnpm --filter web lint             # ESLint
 pnpm --filter web test             # Jest unit tests
 pnpm --filter web test:coverage    # With coverage
-pnpm --filter web cypress          # Cypress UI
-pnpm --filter web test:e2e         # Server + Cypress
+pnpm --filter web cypress           # Cypress UI (against a running server)
+pnpm --filter web test:e2e          # next dev + Cypress UI
+pnpm --filter web test:e2e:headless # next dev + Cypress headless
 ```
 
-Data scripts (require `set -a && source apps/web/.env.local && set +a`, run from `apps/web`):
+Data scripts are run from `apps/web` with its env loaded:
 
 ```bash
+cd apps/web
+set -a && source .env.local && set +a
+
 npx tsx scripts/import-cooked-ingredients.ts     # Cooked USDA variants
 npx tsx scripts/019_audit_raw_cooked_gaps.ts     # Raw/cooked coverage audit (read-only)
 ```
+
+Schema changes are **not** scripts — add a timestamped migration under
+`supabase/migrations/` and apply it with `supabase db push`.
 
 ---
 

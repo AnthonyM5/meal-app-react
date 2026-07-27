@@ -1,7 +1,7 @@
 /**
  * Import cooked USDA variants of the common fresh-feeding proteins so raw
  * and cooked entries coexist in `foods` (values are as-fed; see
- * scripts/014_add_preparation_state.sql).
+ * supabase/migrations/20260707010000_add_preparation_state.sql).
  *
  * Usage:
  *   set -a && source .env.local && set +a

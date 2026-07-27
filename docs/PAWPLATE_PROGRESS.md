@@ -17,6 +17,13 @@ Supabase Integration below.
 
 ### Phase 1 — Schema
 
+> **Note (2026-07-27):** this section refers to numbered `.sql` files under
+> `apps/web/scripts/`. Those were byte-identical duplicates of the timestamped
+> migrations they name, and were deleted in the cleanup pass —
+> `supabase/migrations/` is now the single source of truth. The script names
+> below are kept for historical accuracy; read them as pointers to the
+> migration each one names.
+
 - `scripts/010_pawplate_schema.sql` (mirrored at
   `supabase/migrations/20260706000000_pawplate_schema.sql`): `dogs`,
   `nutrient_requirements`, `bowl_analyses` tables with RLS; canine nutrient
@@ -938,6 +945,64 @@ Do P1 → P2 → (P3 by decision). Each new screen needs a route in
 handling consistent with the bowl/meal `localToday()` fix (meals log under LOCAL
 date, not UTC). Reuse `GapBars` and the `packages/core` nutrition helpers.
 
+## Cleanup backlog (collated 2026-07-25) — do on a separate branch
+
+Housekeeping deliberately deferred so it wouldn't muddy feature diffs. None of
+it blocks shipping; grouped roughly by value. Suggested branch: `chore/cleanup`.
+
+### A. TypeScript debt (the reason this list exists)
+`apps/web/next.config.mjs` sets **`typescript: { ignoreBuildErrors: true }`**, so
+type errors never fail the build and have accumulated silently. `pnpm --filter
+web exec tsc --noEmit` currently reports (all pre-existing on `main`, unrelated
+to the mobile work):
+- `components/signup-form.tsx` (~L47/L49) — reads `state.success`, but `signUp`
+  in `lib/actions.ts` only ever returns `{ error }` or redirects, so the success
+  banner is **unreachable dead code**. Either add a `success` return path or
+  delete the branch.
+- `lib/nutrition-calculator.ts` (~6 errors, L15–L22) — `NutritionData` fields are
+  optional but assigned to a `Required<...>` type and then arithmetic'd, so
+  `totals.calories` etc. are possibly-`undefined` → **risk of `NaN` downstream**.
+  Real correctness issue, worth fixing properly rather than casting.
+- **Goal:** fix the above, then flip `ignoreBuildErrors` to `false` so the build
+  gate keeps it clean. Do this LAST in the cleanup branch.
+
+### B. Dead / stale dependencies + docs
+- `@supabase/auth-helpers-nextjs@0.10.0` is in `apps/web/package.json` with
+  **zero imports** anywhere, and its transitive `@supabase/auth-helpers-shared`
+  shows in pnpm's deprecation warnings. Remove the dependency.
+- This doc's "mobile phasing" section still says `lib/recipe-actions.ts` (0 call
+  sites) should be "flagged for deletion" and that `lib/food-actions.ts` needs an
+  overlap review — **both files are already deleted**. Update that prose so it
+  stops describing work that's done.
+
+### C. Mobile bundle size
+`apps/mobile` builds a single ~545 KB JS chunk and Vite warns past its 500 KB
+limit. Route-level `React.lazy` + `Suspense` (BowlPhotoScreen is 558 lines and
+only used on one route; FoodDetailsScreen likewise) would cut first-load cost on
+a phone. Low risk, real UX win on cold start.
+
+### D. Pre-store-build hardening (must happen before submission, not before merge)
+- `apps/mobile/capacitor.config.ts` still sets `server.cleartext: true` and
+  `android.allowMixedContent: true` — dev-only affordances for the plain-http
+  local API. Drop both and build against the https deployment.
+- iOS equivalent is already clean: `NSAppTransportSecurity` has been removed from
+  `Info.plist` (restore snippet is in a comment there if local cleartext dev is
+  needed again).
+- Re-enable **Vercel Deployment Protection** on preview deployments if it isn't
+  needed for device testing anymore — it was disabled to let the native app
+  reach preview URLs (see the mobile testing notes).
+- Add the Play **app-signing** SHA-1 to the Google OAuth Android client after the
+  first `.aab` upload, or production Google sign-in fails with `DEVELOPER_ERROR`.
+
+### E. Test housekeeping
+- `apps/web/cypress/e2e/dashboard-meal-tracking.cy.ts:129` ("should allow
+  navigation back to dashboard") was previously left failing and has since been
+  softened to assert only `url().should('not.include', '/food-details')`, with a
+  note that App Router lands guests on `/landing`. **Verify it actually passes
+  now**, then either restore a meaningful assertion or document why the weak one
+  is correct.
+- No specs are `.skip`-ed — the suite is otherwise honest.
+
 ## Mobile strategy (planned) — monorepo + Capacitor
 
 **Decision:** build native iOS/Android via **Capacitor wrapping a shared
@@ -1148,6 +1213,13 @@ lib/database.types.ts`. This file is **not currently imported anywhere**
    and the canine columns on `foods` against `lib/types.ts` — they match.
    Treat `lib/database.types.ts` as a reconciliation reference, not a live
    import, unless/until something is switched over to it.
+
+   > **Superseded (2026-07-27):** nothing was ever switched over, so
+   > `apps/web/lib/database.types.ts` was deleted in the cleanup pass. The
+   > hand-maintained `Database` type in `apps/web/lib/types.ts` remains the
+   > only one. Regenerate on demand rather than keeping a stale copy in git:
+   > `supabase gen types typescript --linked > /tmp/database.types.ts` and
+   > diff it against `lib/types.ts`.
 
 7. **Verified end-to-end against the live project:**
    - `psql` via the pooler connection: all 10 expected tables present, RLS

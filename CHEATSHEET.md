@@ -20,17 +20,25 @@ pawplate/
 │   ├── ui/          # @pawplate/ui — shared shadcn/Radix components, cn(), hooks
 │   └── api-client/ # @pawplate/api-client — typed fetch wrappers over apps/web's
 │                     mobile REST routes (Bearer-token auth); used by apps/mobile
-├── supabase/migrations/   # Shared Postgres schema for both apps
+├── supabase/migrations/   # Shared Postgres schema for both apps — single
+│                           source of truth; apply with `supabase db push`
 └── turbo.json / pnpm-workspace.yaml
 ```
 
-> Root-level `app/`, `components/`, `hooks/`, `lib/` (outside `apps/`) are
-> pre-monorepo leftovers on disk — they are **not tracked in git** and not
-> part of the workspace. The real web app lives at `apps/web/app` etc.
+> If you cloned this repo *before* the monorepo migration, you may still have
+> root-level `app/`, `components/`, `hooks/`, `lib/` directories sitting on
+> disk. They are **not tracked in git** and not part of the workspace — a
+> fresh clone won't have them. The real web app lives at `apps/web/app` etc.
 
-**Package manager is pnpm, not npm.** Root `package.json` has no
-dependencies of its own — every task (`build`, `dev`, `lint`, `test`) is a
-`turbo run <task>` that fans out to whichever workspace package defines it.
+> `apps/web/scripts/` holds only TypeScript data/maintenance scripts. The
+> numbered `.sql` files that used to live there were snapshots of migrations
+> that already exist under `supabase/migrations/` — schema changes go in a
+> new timestamped migration, never in `scripts/`.
+
+**Package manager is pnpm, not npm.** Root `package.json` declares no runtime
+dependencies (only `turbo` as a devDependency) — every task (`build`, `dev`,
+`lint`, `test`) is a `turbo run <task>` that fans out to whichever workspace
+package defines it.
 
 ```bash
 pnpm install                 # installs for the whole workspace
@@ -111,13 +119,22 @@ pnpm install
 cp apps/web/.env.example apps/web/.env.local   # then fill in real values
 ```
 
-`apps/web/.env.local`:
+`apps/web/.env.local` — the full reference (`.env.local` takes precedence over
+`.env` in Next.js; the names below are exact, and a mismatched name fails
+silently at runtime — the bowl route just returns a 503):
 ```env
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...        # server-only; bowl analysis + imports
 GEMINI_API_KEY=...                   # server-only; bowl photo vision
 NEXT_PUBLIC_USDA_API_KEY=...         # ingredient imports
+
+# Optional — guest bowl-scan metering
+GUEST_RATE_LIMIT_SALT=...            # falls back to the service-role key
+GUEST_BOWL_DAILY_LIMIT=3             # guest scans per IP per day
+
+# Optional
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 ```bash
@@ -131,10 +148,19 @@ Web tests:
 ```bash
 pnpm --filter web test               # Jest
 pnpm --filter web test:coverage
-pnpm --filter web cypress            # Cypress UI
+pnpm --filter web cypress            # Cypress UI, against an already-running server
+
+# E2E — these hit the LIVE Supabase project with throwaway pawplate.e2e.* users,
+# so the server env must be loaded first.
 set -a && source apps/web/.env.local && set +a
-pnpm --filter web test:e2e           # boots dev server + Cypress headless
+pnpm --filter web test:e2e           # boots `next dev`, opens the Cypress UI
+pnpm --filter web test:e2e:headless  # boots `next dev`, runs headless
+pnpm --filter web test:e2e:ci        # boots `next start` (needs a prior build) — what CI runs
 ```
+
+Prefer `test:e2e:ci` when reproducing a CI failure: `next dev` compiles each
+route on first request (a cold `/dashboard` took ~17s in CI), which blows past
+Cypress's 10s assertion timeout and makes the first test to hit a route flake.
 
 ---
 
@@ -198,6 +224,19 @@ Requires **three** Google Cloud OAuth client IDs:
    `ios/App/App/Info.plist` under `CFBundleURLTypes`.
 3. **Android** client — register the app's SHA-1 fingerprint in the Cloud
    console; no env var needed on that side.
+
+Two failure modes that are easy to hit and hard to diagnose:
+
+- **The web client ID must come FIRST** in Supabase's combined "Client IDs"
+  field (it's one comma-separated field holding all three). Supabase uses the
+  first entry to derive the OAuth redirect, so putting the iOS or Android ID
+  first makes *web* login fail with `redirect_uri_mismatch` while native keeps
+  working.
+- **Production Android needs a second SHA-1.** Play re-signs your `.aab` with
+  its own app-signing key, so the SHA-1 from your local keystore isn't the one
+  that ships. After the first upload, copy the app-signing SHA-1 from Play
+  Console → Setup → App integrity into the Android OAuth client, or production
+  sign-in fails with `DEVELOPER_ERROR` even though debug builds work.
 
 Implementation: `apps/mobile/src/lib/socialAuth.ts` (`initSocialAuth`,
 `signInWithGoogle`) + `apps/mobile/src/components/GoogleSignInButton.tsx`.
