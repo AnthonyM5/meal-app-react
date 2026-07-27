@@ -25,16 +25,21 @@ The core design constraint: **no LLM ever touches the nutrient math.** A vision 
 - **Ingredient database** — USDA FoodData Central import with raw/cooked preparation-state awareness, plus hand-curated entries USDA doesn't carry.
 - **Fuzzy ingredient search** — typo-tolerant trigram search, plus search-by-nutrient ("find foods high in lysine").
 - **Guest mode** — browse ingredients without an account.
+- **Native mobile app** (`apps/mobile`) — Capacitor-wrapped iOS/Android shell with native camera capture for bowl photos and native Google Sign-In, talking to `apps/web`'s REST API over a Bearer-token session.
+
+See [CHEATSHEET.md](./CHEATSHEET.md) for the full package/setup reference.
 
 ### Tech Stack
 
-- **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Server Actions
+- **Frontend (web)**: Next.js 15 (App Router), React 19, TypeScript, Server Actions
+- **Frontend (mobile)**: Vite, React 19, React Router, Capacitor (iOS/Android)
+- **Monorepo**: pnpm workspaces + Turborepo — `apps/web`, `apps/mobile`, `packages/{core,ui,api-client}`
 - **Backend**: Supabase — PostgreSQL, Auth, Row-Level Security, Storage
 - **Styling**: Tailwind CSS + Radix UI (shadcn), Fraunces/Inter type system
 - **Vision**: Google Gemini (`gemini-2.5-flash`) with a structured `responseSchema` + Zod validation
 - **Data**: USDA FoodData Central API; Open Food Facts / FatSecret planned for branded products
 - **Testing**: Jest (business logic), Cypress (E2E)
-- **Deployment**: Vercel
+- **Deployment**: Vercel (web); Xcode/Android Studio via Capacitor (mobile)
 
 ---
 
@@ -54,7 +59,7 @@ Bowl photo ──▶ Gemini vision ──▶ { labels, proportions, confidence }
                               Owner confirms grams  ◀── the human is the sensor
                                           │
                                           ▼
-                     lib/canine-nutrition.ts  (pure functions, no network)
+              packages/core/src/canine-nutrition.ts  (pure functions, no network)
                                           │
                                           ▼
                           Energy targets + per-nutrient gaps
@@ -62,7 +67,7 @@ Bowl photo ──▶ Gemini vision ──▶ { labels, proportions, confidence }
 
 The vision model returns **labels and rough proportions only — never grams.** Estimating mass from a single 2D image is not something a model can do reliably, so the app doesn't pretend otherwise: the owner supplies weight, and the model supplies identification. Model output is Zod-validated with one corrective retry.
 
-The nutrient engine (`lib/canine-nutrition.ts`) is pure and network-free, so results are reproducible and unit-testable.
+The nutrient engine (`packages/core/src/canine-nutrition.ts`, exported as `@pawplate/core`) is pure and network-free, so results are reproducible and unit-testable — and identical whether it's called from `apps/web` or `apps/mobile`.
 
 ### "Missing ≠ zero"
 
@@ -112,17 +117,23 @@ A companion `search_foods_by_nutrient` RPC powers nutrient search. It's **SQL-in
 
 ## Development Setup
 
+This is a **pnpm workspace + Turborepo monorepo**: `apps/web` (Next.js) and
+`apps/mobile` (Capacitor) share `packages/core`, `packages/ui`, and
+`packages/api-client`. Full details, env var reference, and mobile/Xcode/
+Android steps live in [CHEATSHEET.md](./CHEATSHEET.md) — this section covers
+the fast path to running the web app.
+
 ### 1. Install
 
 ```bash
 git clone <repository-url>
 cd meal-app-react
-npm install
+pnpm install
 ```
 
 ### 2. Environment
 
-Create `.env.local`:
+Create `apps/web/.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
@@ -150,38 +161,59 @@ Migrations create the `dogs`, `nutrient_requirements`, and `bowl_analyses` table
 ### 4. Run
 
 ```bash
-npm run dev
+pnpm --filter web dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Mobile app
+
+The mobile app (`apps/mobile`) needs `apps/web` running as its API backend.
+See [CHEATSHEET.md → Mobile app setup](./CHEATSHEET.md#mobile-app-setup) for
+env vars, Google Sign-In client-ID setup, and running on an iOS/Android
+simulator via Capacitor.
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env   # fill in values
+pnpm --filter mobile dev
+```
 
 ---
 
 ## Project Structure
 
 ```
-meal-app-react/
-├── app/
-│   ├── bowl/                # Photo capture → confirmation → meal
-│   ├── dashboard/           # Dog selector, energy progress, nutrient gaps
-│   ├── dogs/                # Dog profile management
-│   ├── foods/               # Ingredient browse + nutrient search
-│   ├── auth/ landing/       # Authentication & marketing
-│   └── api/
-│       ├── bowl/analyze/    # Vision pipeline (POST) + corrections (PATCH)
-│       ├── foods/           # unified-search, nutrient-search
-│       └── ingredients/     # USDA import
-├── lib/
-│   ├── canine-nutrition.ts  # ⭐ Deterministic engine — no network, no LLM
-│   ├── vision/analyze-bowl.ts # Gemini call + Zod schema validation
-│   ├── usda-canine.ts       # FDC nutrient extraction (verified IDs)
-│   ├── dog-toxic-foods.ts   # Cited toxic-ingredient matcher
-│   ├── dog-actions.ts       # Server actions
-│   └── meal-actions.ts
-├── audits/                  # USDA data-sourcing audit deliverables
-├── docs/                    # Progress log + design docs
-├── scripts/                 # Import + audit scripts
-└── supabase/migrations/     # Timestamped migration chain
+pawplate/
+├── apps/
+│   ├── web/                 # Next.js app (App Router)
+│   │   ├── app/
+│   │   │   ├── bowl/                # Photo capture → confirmation → meal
+│   │   │   ├── dashboard/           # Dog selector, energy progress, nutrient gaps
+│   │   │   ├── dogs/                # Dog profile management
+│   │   │   ├── foods/               # Ingredient browse + nutrient search
+│   │   │   ├── auth/ landing/       # Authentication & marketing
+│   │   │   └── api/
+│   │   │       ├── bowl/analyze/    # Vision pipeline (POST) + corrections (PATCH)
+│   │   │       ├── foods/           # unified-search, nutrient-search
+│   │   │       ├── dogs/ meals/     # Bearer-token REST routes consumed by apps/mobile
+│   │   │       └── ingredients/     # USDA import
+│   │   └── lib/
+│   │       ├── vision/analyze-bowl.ts # Gemini call + Zod schema validation
+│   │       ├── usda-canine.ts       # FDC nutrient extraction (verified IDs)
+│   │       ├── dog-actions.ts       # Server actions
+│   │       └── meal-actions.ts
+│   └── mobile/               # Vite + React + Capacitor (iOS/Android)
+│       └── src/
+│           ├── screens/       # DogsScreen, BowlPhotoScreen, FoodsScreen, ...
+│           ├── auth/          # AuthProvider, RequireAuth
+│           └── lib/           # api.ts (REST client), socialAuth.ts (Google SSO)
+├── packages/
+│   ├── core/                 # ⭐ @pawplate/core — deterministic nutrition engine, no network, no LLM
+│   ├── ui/                   # @pawplate/ui — shared shadcn/Radix components
+│   └── api-client/           # @pawplate/api-client — typed fetch wrappers for the mobile REST routes
+├── audits/                   # USDA data-sourcing audit deliverables
+├── docs/                     # Progress log + design docs
+└── supabase/migrations/      # Timestamped migration chain (shared by both apps)
 ```
 
 ---
@@ -205,23 +237,34 @@ See [`docs/BRANDED_INGREDIENTS_DESIGN.md`](./docs/BRANDED_INGREDIENTS_DESIGN.md)
 
 ## Scripts
 
+Run from the repo root with `pnpm --filter web <script>` (or `cd apps/web &&
+pnpm <script>`). See [CHEATSHEET.md](./CHEATSHEET.md) for the mobile
+equivalents and top-level `turbo run` commands.
+
 ```bash
-npm run dev              # Development server
-npm run build            # Production build
-npm run start            # Production server
-npm run lint             # ESLint
-npm run test             # Jest unit tests
-npm run test:coverage    # With coverage
-npm run cypress          # Cypress UI
-npm run test:e2e         # Server + Cypress
+pnpm --filter web dev              # Development server
+pnpm --filter web build            # Production build
+pnpm --filter web start            # Production server
+pnpm --filter web lint             # ESLint
+pnpm --filter web test             # Jest unit tests
+pnpm --filter web test:coverage    # With coverage
+pnpm --filter web cypress           # Cypress UI (against a running server)
+pnpm --filter web test:e2e          # next dev + Cypress UI
+pnpm --filter web test:e2e:headless # next dev + Cypress headless
 ```
 
-Data scripts (require `set -a && source .env.local && set +a`):
+Data scripts are run from `apps/web` with its env loaded:
 
 ```bash
+cd apps/web
+set -a && source .env.local && set +a
+
 npx tsx scripts/import-cooked-ingredients.ts     # Cooked USDA variants
 npx tsx scripts/019_audit_raw_cooked_gaps.ts     # Raw/cooked coverage audit (read-only)
 ```
+
+Schema changes are **not** scripts — add a timestamped migration under
+`supabase/migrations/` and apply it with `supabase db push`.
 
 ---
 
@@ -247,6 +290,7 @@ Real user flows against a real database, with throwaway users created via the ad
 The Gemini call is stubbed via `cy.intercept` so the suite is deterministic and free, while the confirmation step still exercises the real `createDogMeal` server action.
 
 ```bash
+cd apps/web
 set -a && source .env.local && set +a
 npx cypress run
 ```
