@@ -25,7 +25,7 @@ pawplate/
 └── turbo.json / pnpm-workspace.yaml
 ```
 
-> If you cloned this repo *before* the monorepo migration, you may still have
+> If you cloned this repo _before_ the monorepo migration, you may still have
 > root-level `app/`, `components/`, `hooks/`, `lib/` directories sitting on
 > disk. They are **not tracked in git** and not part of the workspace — a
 > fresh clone won't have them. The real web app lives at `apps/web/app` etc.
@@ -83,32 +83,35 @@ search, etc.) see the [README's Features section](./README.md#features).
 ## Key pnpm packages by app
 
 ### `apps/web` (Next.js 15 / React 19)
-| Package | Why it's here |
-|---|---|
-| `next`, `react`, `react-dom` | App Router, Server Actions |
-| `@supabase/ssr`, `@supabase/supabase-js` | Auth + Postgres client (cookie-based session) |
+
+| Package                                                   | Why it's here                                           |
+| --------------------------------------------------------- | ------------------------------------------------------- |
+| `next`, `react`, `react-dom`                              | App Router, Server Actions                              |
+| `@supabase/ssr`, `@supabase/supabase-js`                  | Auth + Postgres client (cookie-based session)           |
 | `@radix-ui/*`, `class-variance-authority`, `cmdk`, `vaul` | shadcn primitives (also re-exported via `@pawplate/ui`) |
-| `react-hook-form`, `@hookform/resolvers`, `zod` | Forms + schema validation |
-| `recharts` | Dashboard nutrient/energy charts |
-| `@pawplate/core`, `@pawplate/ui` | workspace packages |
+| `react-hook-form`, `@hookform/resolvers`, `zod`           | Forms + schema validation                               |
+| `recharts`                                                | Dashboard nutrient/energy charts                        |
+| `@pawplate/core`, `@pawplate/ui`                          | workspace packages                                      |
 
 ### `apps/mobile` (Vite / React 19 / Capacitor)
-| Package | Why it's here |
-|---|---|
-| `vite`, `@vitejs/plugin-react` | Dev server + bundler (not Next.js) |
-| `@capacitor/core`, `@capacitor/ios`, `@capacitor/android`, `@capacitor/cli` | Native shell + platform projects |
-| `@capacitor/camera` | Bowl photo capture |
-| `@capgo/capacitor-social-login` | Native Google Sign-In |
-| `react-router` | Client-side routing (no Next.js router on mobile) |
-| `@supabase/supabase-js` | Auth session (Bearer token, no `@supabase/ssr`) |
-| `@pawplate/core`, `@pawplate/ui`, `@pawplate/api-client` | workspace packages |
+
+| Package                                                                     | Why it's here                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------------- |
+| `vite`, `@vitejs/plugin-react`                                              | Dev server + bundler (not Next.js)                |
+| `@capacitor/core`, `@capacitor/ios`, `@capacitor/android`, `@capacitor/cli` | Native shell + platform projects                  |
+| `@capacitor/camera`                                                         | Bowl photo capture                                |
+| `@capgo/capacitor-social-login`                                             | Native Google Sign-In                             |
+| `react-router`                                                              | Client-side routing (no Next.js router on mobile) |
+| `@supabase/supabase-js`                                                     | Auth session (Bearer token, no `@supabase/ssr`)   |
+| `@pawplate/core`, `@pawplate/ui`, `@pawplate/api-client`                    | workspace packages                                |
 
 ### `packages/*`
-| Package | Exports |
-|---|---|
-| `@pawplate/core` | `.`, `./canine-nutrition`, `./types`, `./dog-toxic-foods` |
-| `@pawplate/ui` | `./lib/utils`, `./hooks/use-toast`, `./hooks/use-mobile`, `./*` (any component) |
-| `@pawplate/api-client` | `.` — `createPawPlateClient({ baseUrl, getAccessToken })`, `ApiError` |
+
+| Package                | Exports                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| `@pawplate/core`       | `.`, `./canine-nutrition`, `./types`, `./dog-toxic-foods`                       |
+| `@pawplate/ui`         | `./lib/utils`, `./hooks/use-toast`, `./hooks/use-mobile`, `./*` (any component) |
+| `@pawplate/api-client` | `.` — `createPawPlateClient({ baseUrl, getAccessToken })`, `ApiError`           |
 
 ---
 
@@ -122,6 +125,7 @@ cp apps/web/.env.example apps/web/.env.local   # then fill in real values
 `apps/web/.env.local` — the full reference (`.env.local` takes precedence over
 `.env` in Next.js; the names below are exact, and a mismatched name fails
 silently at runtime — the bowl route just returns a 503):
+
 ```env
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
@@ -145,6 +149,7 @@ pnpm --filter web dev                # http://localhost:3000
 ```
 
 Web tests:
+
 ```bash
 pnpm --filter web test               # Jest
 pnpm --filter web test:coverage
@@ -156,6 +161,8 @@ set -a && source apps/web/.env.local && set +a
 pnpm --filter web test:e2e           # boots `next dev`, opens the Cypress UI
 pnpm --filter web test:e2e:headless  # boots `next dev`, runs headless
 pnpm --filter web test:e2e:ci        # boots `next start` (needs a prior build) — what CI runs
+env -u ELECTRON_RUN_AS_NODE pnpm --filter web exec cypress verify
+
 ```
 
 Prefer `test:e2e:ci` when reproducing a CI failure: `next dev` compiles each
@@ -175,6 +182,7 @@ cp apps/mobile/.env.example apps/mobile/.env
 ```
 
 `apps/mobile/.env` (Vite env, **not** `.env.local`):
+
 ```env
 VITE_SUPABASE_URL=...                # same Supabase project as apps/web
 VITE_SUPABASE_ANON_KEY=...
@@ -199,6 +207,7 @@ pnpm --filter mobile exec cap open android   # opens the project in Android Stud
 ```
 
 Notes:
+
 - **Android emulator reaches the host as `10.0.2.2`, not `localhost`** —
   `apps/mobile/src/lib/api.ts` rewrites this automatically at runtime, so
   `VITE_API_BASE_URL=http://localhost:3000` works on both platforms during dev.
@@ -217,7 +226,7 @@ Notes:
 Requires **three** Google Cloud OAuth client IDs:
 
 1. **Web application** client → `VITE_GOOGLE_WEB_CLIENT_ID`. This is the
-   token *audience* — it must also be added under Supabase Dashboard → Auth →
+   token _audience_ — it must also be added under Supabase Dashboard → Auth →
    Providers → Google → "Authorized Client IDs".
 2. **iOS** client → `VITE_GOOGLE_IOS_CLIENT_ID`. Its **reversed** value
    (`com.googleusercontent.apps.XXXX`) must be added to
@@ -230,7 +239,7 @@ Two failure modes that are easy to hit and hard to diagnose:
 - **The web client ID must come FIRST** in Supabase's combined "Client IDs"
   field (it's one comma-separated field holding all three). Supabase uses the
   first entry to derive the OAuth redirect, so putting the iOS or Android ID
-  first makes *web* login fail with `redirect_uri_mismatch` while native keeps
+  first makes _web_ login fail with `redirect_uri_mismatch` while native keeps
   working.
 - **Production Android needs a second SHA-1.** Play re-signs your `.aab` with
   its own app-signing key, so the SHA-1 from your local keystore isn't the one
@@ -260,7 +269,7 @@ pnpm --filter @pawplate/core <script>  # scope to a package by its package name
 ## CI/CD (`.github/workflows/ci-cd.yml`)
 
 - Runs on every push/PR to `main` via pnpm (10.12.1) + Node 20, `pnpm
-  install --frozen-lockfile`.
+install --frozen-lockfile`.
 - `test` job: `pnpm lint`, `pnpm test`, `pnpm build`.
 - `build` job (push to `main` only): production build.
 - `cypress` job: builds `apps/web` in production mode (`next start`, not
