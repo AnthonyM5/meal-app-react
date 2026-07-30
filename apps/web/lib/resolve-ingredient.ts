@@ -9,8 +9,27 @@ import { searchOFFByName, type OFFProductLike } from '@/lib/off-integration'
 import type { Database } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/** Trigram-confidence floor below which a label stays unmatched. */
-export const MATCH_THRESHOLD = 0.3
+/**
+ * Confidence floor below which a label stays unmatched.
+ *
+ * Re-fitted 2026-07-29 for the blended relevance score introduced in
+ * migration 20260729000100. The old 0.3 was calibrated against the previous
+ * scoring, which saturated at 1.00 for anything containing the query — under
+ * that score a 0.3 floor rejected essentially nothing, so the bowl resolver
+ * auto-matched the alphabetically-first row containing the label.
+ *
+ * The blended score spreads out, so the floor now does real work. Measured
+ * across all 5,029 live rows (see scripts/023_search_relevance_check.ts):
+ *
+ *   labels that SHOULD resolve locally ....... 0.584 - 0.913
+ *     ('white rice' 0.584 is the floor case; typos land ~0.64)
+ *   labels that should NOT (branded/DTC) ..... 0.000 - 0.363
+ *     ('greenies' -> "Beet greens, raw" 0.329 is the worst false positive)
+ *
+ * 0.5 sits mid-gap. Raising it past ~0.58 starts rejecting real matches;
+ * lowering it below ~0.37 lets branded labels match whole foods by accident.
+ */
+export const MATCH_THRESHOLD = 0.5
 
 /** How long an OFF suggestion lookup may take before we give up on it. */
 const OFF_SUGGESTION_TIMEOUT_MS = 4000

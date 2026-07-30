@@ -231,6 +231,84 @@ describe('Mobile REST API', () => {
     })
   })
 
+  it('ranks search results by relevance, not alphabetically', () => {
+    // Regression guard for the bug fixed in migration 20260729000100. The
+    // previous scoring used word_similarity(), which returns 1.0 for anything
+    // containing the query as a word — at 5,029 USDA rows that saturated every
+    // score, so ordering silently collapsed to alphabetical `name`. "beef"
+    // returned "Beans, baked, canned, with beef" and "rice" returned
+    // "Noodles, chinese, cellophane or long rice" above any actual rice.
+    //
+    // Deeper relevance coverage (18 named cases + MATCH_THRESHOLD separation)
+    // lives in scripts/023_search_relevance_check.ts, which can run against a
+    // populated database outside CI.
+    cy.request({
+      url: '/api/ingredients/search?q=beef',
+      headers: auth(ownerToken),
+    }).then(({ body }) => {
+      expect(body.foods).to.be.an('array').and.not.be.empty
+      expect(body.foods[0].name).to.match(/^beef[,\s]/i)
+      // Scores must spread out, not all pin to 1.00.
+      expect(body.foods[0].similarity).to.be.lessThan(1)
+    })
+
+    cy.request({
+      url: '/api/ingredients/search?q=rice',
+      headers: auth(ownerToken),
+    }).then(({ body }) => {
+      expect(body.foods[0].name).to.match(/^rice[,\s]/i)
+    })
+  })
+
+  it('returns canonical groups from grouped search', () => {
+    // The canonical layer collapses ~960 "Beef, ..." variant rows onto ~43
+    // groups. Skips cleanly when scripts/026 has not been run against this
+    // database yet, so the spec is safe on a freshly seeded environment.
+    cy.request({
+      url: '/api/ingredients/grouped-search?q=beef',
+      headers: auth(ownerToken),
+    }).then(({ status, body }) => {
+      expect(status).to.eq(200)
+      expect(body.groups).to.be.an('array')
+      if (body.groups.length === 0) {
+        cy.log('canonical layer not built in this database — skipping assertions')
+        return
+      }
+      const group = body.groups[0]
+      expect(group.display_name).to.match(/beef/i)
+      expect(group.slug).to.match(/^beef/)
+      expect(group.variant_count).to.be.at.least(1)
+      // The default variant's nutrition rides along, so the picker needs no
+      // second round trip to render a group.
+      expect(group.food_id).to.be.a('string')
+      expect(group.calories_per_serving).to.be.a('number')
+
+      // Expanding a group lists its variants, default first.
+      cy.request({
+        url: `/api/ingredients/grouped-search?canonical_id=${group.canonical_id}`,
+        headers: auth(ownerToken),
+      }).then(({ body: expanded }) => {
+        expect(expanded.variants).to.be.an('array').and.not.be.empty
+        expect(expanded.variants[0].is_canonical_default).to.eq(true)
+      })
+    })
+
+    // Sub-2-char queries return an empty group list, mirroring flat search.
+    cy.request({
+      url: '/api/ingredients/grouped-search?q=a',
+      headers: auth(ownerToken),
+    }).then(({ body }) => {
+      expect(body.groups).to.deep.eq([])
+    })
+
+    cy.request({
+      url: '/api/ingredients/grouped-search?q=beef',
+      failOnStatusCode: false,
+    }).then(({ status }) => {
+      expect(status).to.eq(401)
+    })
+  })
+
   it('answers CORS preflight for the native WebView origins', () => {
     // The Capacitor shell calls from capacitor://localhost (iOS) /
     // https://localhost (Android); the Authorization header forces a
