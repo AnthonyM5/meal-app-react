@@ -25,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useGuestMode } from '@/hooks/use-guest-mode'
 import { getUserDogs } from '@/lib/dog-actions'
 import type { Dog } from '@/lib/types'
-import { Camera, Dog as DogIcon, Loader2 } from 'lucide-react'
+import { Camera, Dog as DogIcon, Loader2, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
@@ -55,12 +55,21 @@ function validateFile(file: File): string | null {
   return null
 }
 
+/**
+ * Selects a photo — it does NOT start the analysis.
+ *
+ * Analysis used to fire the instant a file was chosen, which gave the owner no
+ * chance to describe what the photo can't show (mixed-in, shredded, or
+ * broth-covered foods) before the model ran. They could only correct it
+ * afterwards via re-analysis, which discards any grams already entered. Now
+ * choosing a photo just stages it, and a separate action runs the model.
+ */
 function PhotoPicker({
-  isAnalyzing,
+  hasFile,
   disabled,
   onFile,
 }: {
-  isAnalyzing: boolean
+  hasFile: boolean
   disabled?: boolean
   onFile: (file: File) => void
 }) {
@@ -85,22 +94,58 @@ function PhotoPicker({
       />
       <Button
         className="w-full"
-        disabled={isAnalyzing || disabled}
+        variant={hasFile ? 'outline' : 'default'}
+        disabled={disabled}
         onClick={() => fileInputRef.current?.click()}
       >
-        {isAnalyzing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Analyzing bowl…
-          </>
-        ) : (
-          <>
-            <Camera className="mr-2 h-4 w-4" />
-            Take or choose a photo
-          </>
-        )}
+        <Camera className="mr-2 h-4 w-4" />
+        {hasFile ? 'Choose a different photo' : 'Take or choose a photo'}
       </Button>
     </>
+  )
+}
+
+/** Staged photo preview, shown between choosing and analyzing. */
+function PhotoPreview({ url }: { url: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- local object URL
+    <img
+      src={url}
+      alt="Selected bowl"
+      className="max-h-56 w-full rounded-md border object-contain"
+    />
+  )
+}
+
+/** Runs the model on the staged photo. */
+function AnalyzeButton({
+  isAnalyzing,
+  disabled,
+  onClick,
+}: {
+  isAnalyzing: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <Button
+      className="w-full"
+      disabled={isAnalyzing || disabled}
+      onClick={onClick}
+      data-testid="bowl-analyze-button"
+    >
+      {isAnalyzing ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Analyzing bowl…
+        </>
+      ) : (
+        <>
+          <Sparkles className="mr-2 h-4 w-4" />
+          Analyze this photo
+        </>
+      )}
+    </Button>
   )
 }
 
@@ -122,6 +167,8 @@ function GuestBowlView() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // Staged but not yet analyzed — the owner triggers the model explicitly.
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
   // Object URLs leak until revoked; drop the old one whenever it's replaced
   // and on unmount.
@@ -133,19 +180,25 @@ function GuestBowlView() {
   const reset = useCallback(() => {
     setAnalysis(null)
     setPreviewUrl(null)
+    setPendingFile(null)
   }, [])
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFile = useCallback((file: File) => {
     const invalid = validateFile(file)
     if (invalid) {
       toast.error(invalid)
       return
     }
+    setPendingFile(file)
+    setPreviewUrl(URL.createObjectURL(file))
+  }, [])
 
+  const handleAnalyze = useCallback(async () => {
+    if (!pendingFile) return
     setIsAnalyzing(true)
     try {
       const body = new FormData()
-      body.append('image', file)
+      body.append('image', pendingFile)
 
       const response = await fetch('/api/bowl/analyze', {
         method: 'POST',
@@ -154,7 +207,6 @@ function GuestBowlView() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Bowl analysis failed')
 
-      setPreviewUrl(URL.createObjectURL(file))
       setAnalysis(data as AnalysisResponse)
     } catch (error) {
       console.error('Bowl analysis error:', error)
@@ -164,7 +216,7 @@ function GuestBowlView() {
     } finally {
       setIsAnalyzing(false)
     }
-  }, [])
+  }, [pendingFile])
 
   return (
     <div className="container mx-auto max-w-2xl space-y-6 p-4 pb-8">
@@ -209,7 +261,11 @@ function GuestBowlView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PhotoPicker isAnalyzing={isAnalyzing} onFile={handleFile} />
+            {previewUrl && <PhotoPreview url={previewUrl} />}
+            <PhotoPicker hasFile={!!pendingFile} onFile={handleFile} />
+            {pendingFile && (
+              <AnalyzeButton isAnalyzing={isAnalyzing} onClick={handleAnalyze} />
+            )}
             {MODEL_DISCLAIMER}
             <p className="text-xs text-muted-foreground">
               Guest photos are analyzed and discarded — nothing is uploaded or
@@ -232,9 +288,20 @@ function OwnerBowlView() {
   const [isLoadingDogs, setIsLoadingDogs] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null)
+  // Staged but not yet analyzed. Choosing a photo no longer starts the model —
+  // the owner gets to write the hint below with the photo in front of them,
+  // then trigger analysis explicitly.
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   // Optional owner note guiding identification (mixed-in/submerged items the
   // photo can't show). Passed to the model; never a source of grams.
   const [hint, setHint] = useState('')
+
+  // Object URLs leak until revoked; drop the old one when replaced/unmounted.
+  useEffect(() => {
+    if (!previewUrl) return
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
   // Bumped on re-analysis so BowlConfirmation remounts with the fresh items
   // (its rows state is seeded once from props).
   const [revision, setRevision] = useState(0)
@@ -257,45 +324,48 @@ function OwnerBowlView() {
       .finally(() => setIsLoadingDogs(false))
   }, [searchParams])
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      if (!selectedDogId) {
-        toast.error('Select a dog first')
-        return
-      }
-      const invalid = validateFile(file)
-      if (invalid) {
-        toast.error(invalid)
-        return
-      }
+  const handleFile = useCallback((file: File) => {
+    const invalid = validateFile(file)
+    if (invalid) {
+      toast.error(invalid)
+      return
+    }
+    setPendingFile(file)
+    setPreviewUrl(URL.createObjectURL(file))
+  }, [])
 
-      setIsAnalyzing(true)
-      try {
-        const body = new FormData()
-        body.append('image', file)
-        body.append('dog_id', selectedDogId)
-        if (hint.trim()) body.append('hint', hint.trim())
+  const handleAnalyze = useCallback(async () => {
+    if (!pendingFile) return
+    if (!selectedDogId) {
+      toast.error('Select a dog first')
+      return
+    }
 
-        const response = await fetch('/api/bowl/analyze', {
-          method: 'POST',
-          body,
-        })
-        const data = await response.json()
-        if (!response.ok) {
-          throw new Error(data.error || 'Bowl analysis failed')
-        }
-        setAnalysis(data as AnalysisResponse)
-      } catch (error) {
-        console.error('Bowl analysis error:', error)
-        toast.error(
-          error instanceof Error ? error.message : 'Bowl analysis failed'
-        )
-      } finally {
-        setIsAnalyzing(false)
+    setIsAnalyzing(true)
+    try {
+      const body = new FormData()
+      body.append('image', pendingFile)
+      body.append('dog_id', selectedDogId)
+      if (hint.trim()) body.append('hint', hint.trim())
+
+      const response = await fetch('/api/bowl/analyze', {
+        method: 'POST',
+        body,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Bowl analysis failed')
       }
-    },
-    [selectedDogId, hint]
-  )
+      setAnalysis(data as AnalysisResponse)
+    } catch (error) {
+      console.error('Bowl analysis error:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Bowl analysis failed'
+      )
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }, [pendingFile, selectedDogId, hint])
 
   // Re-run the model on the already-uploaded photo with a corrective note —
   // for misses the owner only spots on the confirmation screen.
@@ -435,6 +505,18 @@ function OwnerBowlView() {
               </Select>
             </div>
 
+            {previewUrl && <PhotoPreview url={previewUrl} />}
+
+            <PhotoPicker
+              hasFile={!!pendingFile}
+              disabled={!selectedDogId}
+              onFile={handleFile}
+            />
+
+            {/* Hint sits between choosing and analyzing on purpose: the owner
+                writes it with the photo visible, so they can see what the
+                model will miss before it runs — rather than discovering it
+                afterwards and paying for a re-analysis that resets grams. */}
             <div className="space-y-1">
               <label
                 htmlFor="bowl-hint"
@@ -448,6 +530,7 @@ function OwnerBowlView() {
                 onChange={e => setHint(e.target.value)}
                 maxLength={500}
                 rows={2}
+                disabled={isAnalyzing}
                 placeholder='e.g. "there&apos;s also ground beef and shredded chicken mixed in"'
               />
               <p className="text-xs text-muted-foreground">
@@ -456,11 +539,13 @@ function OwnerBowlView() {
               </p>
             </div>
 
-            <PhotoPicker
-              isAnalyzing={isAnalyzing}
-              disabled={!selectedDogId}
-              onFile={handleFile}
-            />
+            {pendingFile && (
+              <AnalyzeButton
+                isAnalyzing={isAnalyzing}
+                disabled={!selectedDogId}
+                onClick={handleAnalyze}
+              />
+            )}
 
             <p className="text-xs text-muted-foreground">
               The model identifies ingredients and rough proportions only — you

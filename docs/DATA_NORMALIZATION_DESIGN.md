@@ -512,6 +512,86 @@ domestic cut, because `is_verified` (+1000) dominates the specificity penalty
 still reachable — but it wants a rebalance before the picker UI ships. Re-run
 `scripts/026 --apply --reset` after any change; it is fully recomputable.
 
+## 5c. Bowl-flow integration — explicit variant choice
+
+The canonical layer's first real consumer. Two changes, 2026-07-30.
+
+### The problem it fixes
+
+The vision model emits a label like `"ground beef"`. Fat percentage is not
+visually determinable, so no ratio ever enters the pipeline — yet
+`matchLocalIngredient` took `match_limit: 1` and that single row's ratio
+silently became the bowl's nutrition.
+
+Measured on the live corpus: the `beef_ground` group spans **121–332 kcal/100 g
+and 3–30 g fat** — a 2.7× energy swing and 10× on fat. For a 150 g serving
+that is 182 vs 498 kcal. Fat matters independently of calories here:
+3 g vs 30 g per 100 g is the difference between a routine meal and a
+pancreatitis risk in a susceptible dog.
+
+The Phase 0 ranking fix already improved this by accident — the old saturating
+score picked `Beef, ground, 70% lean / 30% fat, crumbles, cooked` (the fattiest
+variant, and cooked when the label implies raw); the blended score picks
+`Beef, ground, 90% lean, raw`. But that moved it from *wrong* to *a plausible
+guess presented as fact*.
+
+### How it works
+
+`matchIngredientWithCanonical()` (`lib/resolve-ingredient.ts`) resolves the
+label, then reports the canonical group and whether its variants disagree
+materially:
+
+```
+requiresChoice = (kcal spread / min) > 0.20   ||   (fat spread) > 5 g/100g
+```
+
+Both thresholds are deliberate: 20% of a meal's energy is well past rounding,
+and 5 g/100 g of fat is clinically meaningful independent of calories.
+
+Measured gate rate across all 1,432 groups:
+
+| | Count | Share |
+|---|---|---|
+| Single-variant (nothing to choose) | 783 | 55% |
+| Multi-variant, variants agree | 178 | 12% |
+| **Multi-variant, requires choice** | **471** | **33%** |
+
+So a typical 4–5 item bowl asks for one or two explicit choices — enough to
+matter, not enough to nag.
+
+`BowlConfirmation` renders an amber `VariantChoice` block for those rows,
+**disables the log button**, and names the offending items in the blocking
+message. Choosing is never pre-satisfied: the owner must pick even if they
+pick the pre-filled variant, because that click is what turns an assumption
+into a measurement. Picking from the search box also clears the gate — they
+named an exact row.
+
+Variants load **lazily on expand** via the existing
+`/api/ingredients/grouped-search?canonical_id=…` route. `beef_round` has 165
+members and most bowl items are never expanded, so shipping them with every
+analysis would be waste.
+
+Rows with no `canonical_id` (branded/manual — never parsed into the canonical
+layer) and hand-added rows resolve without a gate.
+
+### Analysis is now an explicit action
+
+Choosing a photo used to fire the model immediately, so the owner had no chance
+to describe what the photo can't show before it ran. They could only correct it
+afterwards via re-analysis — which discards any grams already entered.
+
+Now: choose a photo → it stages with a preview → write the optional hint **with
+the photo visible** → press *Analyze this photo*. Applies to the guest flow
+too (minus the hint, which is owner-only). The re-analysis path is unchanged
+and still available for misses spotted on the confirmation screen.
+
+### Client parity
+
+`packages/api-client` exports `BowlItemCanonical` on `AnalyzedBowlItem`, so
+native clients receive `requiresChoice` and can enforce the same gate. **A
+mobile client that ignores it will log guessed nutrition** — the flag is
+advisory at the transport layer and enforced only in the web UI today.
+
 ## 6. Phased plan
 
 Phases 0-4 were **implemented on branch `feat/data-normalization` (2026-07-29)**.

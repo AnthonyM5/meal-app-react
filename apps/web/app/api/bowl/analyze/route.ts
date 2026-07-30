@@ -3,9 +3,10 @@ import {
   consumeGuestBowlQuota,
 } from '@/lib/guest-rate-limit'
 import {
-  matchLocalIngredient,
+  matchIngredientWithCanonical,
   suggestBranded,
   type BrandedSuggestion,
+  type CanonicalMatch,
 } from '@/lib/resolve-ingredient'
 import { createClient as createUserClient } from '@/lib/supabase/server'
 import type { Database, Ingredient } from '@/lib/types'
@@ -198,11 +199,19 @@ async function identifyBowl(
   const identifiedItems: (NormalizedBowlItem & {
     branded_suggestion: BrandedSuggestion | null
     estimated_grams: number | null
+    canonical: CanonicalMatch | null
   })[] = []
   for (const item of result.items) {
+    // Resolve to a row AND to its canonical group. The group is what lets the
+    // confirmation screen demand an explicit variant choice: the model says
+    // "ground beef" and cannot see the lean/fat ratio, so picking the top
+    // scoring row would silently commit an assumption worth up to 2.7x in
+    // calories. See CanonicalMatch in lib/resolve-ingredient.ts.
+    const matched = await matchIngredientWithCanonical(supabase, item.label)
     identifiedItems.push({
       ...item,
-      normalized_ingredient_id: await matchLocalIngredient(supabase, item.label),
+      normalized_ingredient_id: matched.ingredientId,
+      canonical: matched.canonical,
       branded_suggestion: null,
       estimated_grams: scale
         ? estimateItemGrams({

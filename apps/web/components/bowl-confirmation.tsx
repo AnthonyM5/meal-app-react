@@ -19,7 +19,10 @@ import {
   createManualIngredient,
 } from '@/lib/ingredient-actions'
 import { createDogMeal } from '@/lib/meal-actions'
-import type { BrandedSuggestion } from '@/lib/resolve-ingredient'
+import type {
+  BrandedSuggestion,
+  CanonicalMatch,
+} from '@/lib/resolve-ingredient'
 import type { BowlAnalysisItem, Food, MealType } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -51,6 +54,9 @@ export interface AnalyzedBowlItem {
   /** Photo-derived gram ESTIMATE (bounding box × scale reference × density
    *  priors) — prefills the grams field, always owner-confirmable */
   estimated_grams?: number | null
+  /** Canonical group + whether its variants disagree enough to require an
+   *  explicit owner choice (e.g. ground beef 70/30 vs 97/3) */
+  canonical?: CanonicalMatch | null
 }
 
 /** What the photo's gram estimates were scaled against, for the UI notice. */
@@ -82,6 +88,14 @@ interface ConfirmRow {
    * anchor can re-estimate the row.
    */
   gramsTouched: boolean
+  /** Canonical group this row's ingredient belongs to, when it has one */
+  canonical: CanonicalMatch | null
+  /**
+   * True once the owner has explicitly picked a variant (or re-affirmed the
+   * pre-filled one). While a row's group `requiresChoice` and this is false,
+   * logging is blocked — the pre-filled variant is a guess, not a measurement.
+   */
+  variantChosen: boolean
 }
 
 let rowSeq = 0
@@ -170,6 +184,134 @@ function IngredientPicker({
           </Card>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Explicit variant choice for an ambiguous canonical group.
+ *
+ * The vision model reports "ground beef". It cannot see the lean/fat ratio,
+ * and neither can anything downstream — yet that ratio moves the group's
+ * energy from 121 to 332 kcal/100 g. Previously the top-scoring row's ratio
+ * silently became the bowl's nutrition. This makes the owner say which one
+ * they actually served.
+ *
+ * Variants are fetched lazily (on first expand) rather than shipped with every
+ * analysis: a group like `beef_round` has 165 members, and most bowl items are
+ * never expanded.
+ */
+function VariantChoice({
+  canonical,
+  selectedId,
+  onChoose,
+}: {
+  canonical: CanonicalMatch
+  selectedId: string | null
+  onChoose: (food: Food) => void
+}) {
+  const [variants, setVariants] = useState<Food[] | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+
+  const open = async () => {
+    setIsOpen(true)
+    if (variants || isLoading) return
+    setIsLoading(true)
+    try {
+      const response = await fetch(
+        `/api/ingredients/grouped-search?canonical_id=${encodeURIComponent(
+          canonical.canonicalId
+        )}`
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not load options')
+      setVariants((data.variants ?? []) as Food[])
+    } catch (error) {
+      console.error('Variant load error:', error)
+      toast.error(
+        error instanceof Error ? error.message : 'Could not load options'
+      )
+      setIsOpen(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const kcalSpread = canonical.kcalRange
+    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(
+        canonical.kcalRange[1]
+      )} kcal`
+    : null
+  const fatSpread = canonical.fatRange
+    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
+    : null
+
+  return (
+    <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Which {canonical.displayName.toLowerCase()} did you use?
+            </p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+              The photo can&apos;t show this. {canonical.variantCount} options
+              span{' '}
+              {[kcalSpread, fatSpread].filter(Boolean).join(' and ')} per 100 g —
+              picking the wrong one skews the whole bowl.
+            </p>
+          </div>
+
+          {!isOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={open}
+              data-testid="variant-choice-open"
+            >
+              Choose an option
+            </Button>
+          ) : isLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading options…
+            </div>
+          ) : (
+            <div className="max-h-56 overflow-y-auto rounded-md border bg-background">
+              <ul className="divide-y">
+                {(variants ?? []).map(food => (
+                  <li key={food.id}>
+                    <button
+                      type="button"
+                      onClick={() => onChoose(food)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-2 p-2 text-left text-sm hover:bg-muted',
+                        food.id === selectedId && 'bg-muted'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{food.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(Number(food.calories_per_serving))} kcal
+                          {food.fat_g != null && ` · ${food.fat_g}g fat`}
+                          {food.preparation_state && ` · ${food.preparation_state}`}
+                          {' / 100g'}
+                        </span>
+                      </span>
+                      {food.id === selectedId && (
+                        <Check className="h-4 w-4 shrink-0 text-primary" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -343,6 +485,11 @@ export function BowlConfirmation({
       // and the total-weight anchor below is still free to replace them.
       grams: item.estimated_grams != null ? String(item.estimated_grams) : '',
       gramsTouched: false,
+      canonical: item.canonical ?? null,
+      // Never pre-satisfied. When the group is ambiguous the owner must pick,
+      // even if they end up picking the pre-filled variant — that click is the
+      // difference between a measurement and an assumption.
+      variantChosen: false,
     }))
   )
   // Total weight the owner served. This is the one real measurement the photo
@@ -425,6 +572,10 @@ export function BowlConfirmation({
         estimatedGrams: null,
         grams: '',
         gramsTouched: false,
+        // Hand-picked from search: the owner already chose this exact row, so
+        // there is nothing left to disambiguate.
+        canonical: null,
+        variantChosen: true,
       },
     ])
 
@@ -434,6 +585,11 @@ export function BowlConfirmation({
 
   const unmatchedCount = rows.filter(row => !row.ingredient).length
 
+  /** Rows whose canonical group is ambiguous and still unconfirmed. */
+  const pendingVariantRows = rows.filter(
+    row => row.canonical?.requiresChoice && !row.variantChosen
+  )
+
   const handleConfirm = async () => {
     if (rows.length === 0) {
       toast.error('Add at least one ingredient')
@@ -442,6 +598,14 @@ export function BowlConfirmation({
     if (unmatchedCount > 0) {
       toast.error(
         'Resolve every item: search an ingredient, accept a suggested product, or log it as custom'
+      )
+      return
+    }
+    if (pendingVariantRows.length > 0) {
+      toast.error(
+        `Pick which ${pendingVariantRows
+          .map(row => row.canonical?.displayName.toLowerCase())
+          .join(' and ')} you used — the photo can't tell us`
       )
       return
     }
@@ -704,13 +868,30 @@ export function BowlConfirmation({
                   </div>
                 </div>
 
+                {row.canonical?.requiresChoice && (
+                  <VariantChoice
+                    canonical={row.canonical}
+                    selectedId={row.variantChosen ? row.ingredient?.id ?? null : null}
+                    onChoose={food =>
+                      updateRow(row.key, {
+                        ingredient: food,
+                        variantChosen: true,
+                      })
+                    }
+                  />
+                )}
+
                 <IngredientPicker
                   placeholder={
                     row.ingredient
                       ? 'Wrong ingredient? Search to replace…'
                       : `Search an ingredient for "${row.label}"…`
                   }
-                  onSelect={food => updateRow(row.key, { ingredient: food })}
+                  onSelect={food =>
+                    // An explicit search pick supersedes the group gate: the
+                    // owner named the exact row they want.
+                    updateRow(row.key, { ingredient: food, variantChosen: true })
+                  }
                 />
 
                 {!row.ingredient && row.suggestion && (
@@ -781,9 +962,21 @@ export function BowlConfirmation({
             )}
           </div>
 
+          {pendingVariantRows.length > 0 && (
+            <p className="text-center text-xs text-amber-600 dark:text-amber-400">
+              Pick an option for{' '}
+              {pendingVariantRows
+                .map(row => row.canonical?.displayName.toLowerCase())
+                .join(', ')}{' '}
+              before logging.
+            </p>
+          )}
+
           <Button
             onClick={handleConfirm}
-            disabled={isSaving || rows.length === 0}
+            disabled={
+              isSaving || rows.length === 0 || pendingVariantRows.length > 0
+            }
             className="w-full"
           >
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
