@@ -68,6 +68,88 @@ export interface Food {
   is_complete_food?: boolean
   /** How much of the nutrient profile is actually reported */
   data_completeness?: DataCompleteness
+  // --- Corpus metadata (backfilled from source_payloads, migration 20260729000000) ---
+  /** FDC dataType: 'Foundation' | 'SR Legacy'. Null for non-USDA rows. */
+  usda_data_type?: string | null
+  /** FDC foodCategory.description, e.g. 'Legumes and Legume Products' */
+  food_category?: string | null
+  /**
+   * FALSE hides the row from search without deleting it. Soft delete exists
+   * because meal_items/recipe_ingredients cascade off `foods` — a hard DELETE
+   * would destroy owners' logged meals.
+   */
+  is_active?: boolean
+  /** Why the row was deactivated ('prune:<rule>', 'duplicate_of:<uuid>') */
+  inactive_reason?: string | null
+  // --- Canonical layer (migration 20260729000200) ---
+  /** The canonical ingredient this row is a variant of */
+  canonical_id?: string | null
+  /** Structured attributes parsed out of the description */
+  variant_attrs?: FoodVariantAttrs | null
+  /** The variant shown when its canonical group is collapsed */
+  is_canonical_default?: boolean
+}
+
+/**
+ * Attributes that distinguish variants sharing one canonical key. Mirrors
+ * VariantAttrs in apps/web/lib/food-name-parser.ts, which is what writes it.
+ */
+export interface FoodVariantAttrs {
+  prep: string[]
+  trim: string[]
+  grade: string[]
+  origin: string[]
+  /** USDA grouping segments that carry no nutritional meaning */
+  grouping: string[]
+  /** Segments no gazetteer claimed — the parser's blind-spot log */
+  residual: string[]
+}
+
+/**
+ * A group of `foods` variants that are the same ingredient. Populated by
+ * scripts/026_build_canonical_ingredients.ts; `foods` is the variant table.
+ */
+export interface CanonicalIngredient {
+  id: string
+  /** Dedupe anchor: 'beef_round', 'chicken_breast' */
+  slug: string
+  display_name: string
+  base_food: string
+  /** Primal cut / organ; null for whole foods */
+  part: string | null
+  category: string | null
+  /** FALSE only when EVERY variant in the group is toxic */
+  is_safe_for_dogs: boolean
+  variant_count: number
+  created_at: string
+  updated_at: string
+}
+
+/** One row of grouped search: the canonical plus its default variant. */
+export interface CanonicalSearchResult {
+  canonical_id: string
+  slug: string
+  display_name: string
+  base_food: string
+  part: string | null
+  category: string | null
+  variant_count: number
+  group_is_safe: boolean
+  /** The default variant's id and nutrition, so no second round trip */
+  food_id: string
+  name: string
+  brand: string | null
+  serving_size: number
+  calories_per_serving: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  fiber_g: number
+  preparation_state: PreparationState | null
+  is_verified: boolean
+  source: IngredientSource | null
+  data_completeness: DataCompleteness | null
+  similarity: number
 }
 
 export type PreparationState = 'raw' | 'cooked'
@@ -333,6 +415,22 @@ export interface Database {
           match_limit: number
         }
         Returns: Array<Food & { similarity: number }>
+      }
+      /** Grouped search over the canonical layer (migration 20260729000300) */
+      search_canonical_ingredients: {
+        Args: {
+          search_query: string
+          match_limit?: number
+        }
+        Returns: CanonicalSearchResult[]
+      }
+      /** Expand one canonical group into its variants */
+      list_canonical_variants: {
+        Args: {
+          p_canonical_id: string
+          match_limit?: number
+        }
+        Returns: Array<Food & { variant_attrs: FoodVariantAttrs | null }>
       }
       consume_guest_bowl_quota: {
         Args: {

@@ -1,7 +1,9 @@
 import type {
   BowlAnalysisItem,
+  CanonicalSearchResult,
   Dog,
   Food,
+  FoodVariantAttrs,
   Ingredient,
   MealSource,
   MealType,
@@ -130,6 +132,27 @@ export interface BrandedSuggestion {
   kcal_per_100g: number
 }
 
+/**
+ * The canonical group a matched bowl item landed in, plus whether its variants
+ * differ enough that the owner must choose one explicitly.
+ *
+ * The vision model reports "ground beef" and cannot see the lean/fat ratio —
+ * but that ratio spans 121-332 kcal/100 g. When `requires_choice` is true the
+ * client MUST make the owner pick a variant (expand the group via
+ * `ingredients.variants(canonical_id)`) before logging the meal; the
+ * pre-filled ingredient is a guess, not a measurement.
+ */
+export interface BowlItemCanonical {
+  canonicalId: string
+  displayName: string
+  variantCount: number
+  requiresChoice: boolean
+  /** [min, max] kcal per 100 g across the group */
+  kcalRange: [number, number] | null
+  /** [min, max] fat g per 100 g across the group */
+  fatRange: [number, number] | null
+}
+
 /** One identified item in an analyze response (transcribed from
  *  apps/web/components/bowl-confirmation.tsx `AnalyzedBowlItem`). */
 export interface AnalyzedBowlItem {
@@ -140,6 +163,7 @@ export interface AnalyzedBowlItem {
   ingredient: Ingredient | null
   branded_suggestion?: BrandedSuggestion | null
   estimated_grams?: number | null
+  canonical?: BowlItemCanonical | null
 }
 
 /** Response of POST /api/bowl/analyze. Owner scans carry `analysis_id` +
@@ -246,11 +270,36 @@ export function createPawPlateClient(options: PawPlateClientOptions) {
         request<DogDailyGaps>('GET', withDate(`/api/dogs/${dogId}/gaps`, date)),
     },
     ingredients: {
+      /**
+       * Flat search: one row per `foods` variant. At 5,000 catalogue rows a
+       * query like "beef" matches ~960 near-identical USDA descriptions, so
+       * prefer `groupedSearch` for picker UIs — this stays for callers that
+       * genuinely want individual variants.
+       */
       search: (query: string) =>
         request<{ foods: Ingredient[] }>(
           'GET',
           `/api/ingredients/search?q=${encodeURIComponent(query)}`
         ).then(r => r.foods),
+      /**
+       * Grouped search over the canonical layer
+       * (docs/DATA_NORMALIZATION_DESIGN.md §4.4). "beef" returns ~43 groups
+       * (Beef round, Beef chuck, Beef liver, ...) instead of 960 rows. Each
+       * group carries its default variant's nutrition inline, so rendering a
+       * result list needs no follow-up request; call `variants()` only when
+       * the owner expands a group.
+       */
+      groupedSearch: (query: string) =>
+        request<{ groups: CanonicalSearchResult[] }>(
+          'GET',
+          `/api/ingredients/grouped-search?q=${encodeURIComponent(query)}`
+        ).then(r => r.groups),
+      /** Expand one canonical group into its variants, default first. */
+      variants: (canonicalId: string) =>
+        request<{ variants: Array<Ingredient & { variant_attrs: FoodVariantAttrs | null }> }>(
+          'GET',
+          `/api/ingredients/grouped-search?canonical_id=${encodeURIComponent(canonicalId)}`
+        ).then(r => r.variants),
       createManual: (input: ManualIngredientInput) =>
         request<{ food: Ingredient }>(
           'POST',

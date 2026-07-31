@@ -58,7 +58,15 @@ describe('Dashboard and Meal Tracking', () => {
       cy.get('[data-testid="nutrient-info"]', { timeout: 5000 }).should(
         'be.visible'
       )
-      cy.get('h1').should('contain.text', 'banana')
+      // Case-insensitive, and tolerant of USDA's plural + comma-modifier
+      // naming ("Bananas, raw"). `contain.text` is case-SENSITIVE, so the
+      // old lowercase assertion only ever passed because the pre-2026-07-29
+      // ranking returned "Bananas, dehydrated, or banana powder" — which
+      // happens to contain a lowercase "banana". The corrected ranking
+      // returns "Bananas, raw", where the only match is capitalized.
+      cy.get('h1')
+        .invoke('text')
+        .should('match', /bananas?\b/i)
     })
 
     it('should provide exit guest mode option', () => {

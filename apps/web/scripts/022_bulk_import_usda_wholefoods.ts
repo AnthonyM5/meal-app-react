@@ -34,6 +34,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { isPrunable } from '../lib/food-relevance'
 import { storePayload } from '../lib/source-payloads'
 import { convertUSDAToIngredient, type USDAFoodLike } from '../lib/usda-canine'
 
@@ -163,9 +164,21 @@ async function main() {
   // 2. Category filter — applied to BOTH data types. (Foundation is mostly
   // whole foods but does carry a few processed categories: Sausages and
   // Luncheon Meats, Baked Products, Restaurant Foods, Sweets, Beverages.)
-  const survivors = all.filter(
+  const inWhitelist = all.filter(
     h => h.foodCategory && CATEGORY_WHITELIST.has(h.foodCategory)
   )
+
+  // 2b. DESCRIPTION denylist (added 2026-07-29). The category whitelist is too
+  // coarse on its own: whole categories we want carry prepared products we
+  // don't. 'Fats and Oils' brought in 58 salad dressings and 49 margarines;
+  // 'Poultry Products' brought in "Chicken, meatless", a soy product that is
+  // genuinely the closest trigram match to the query "chicken" and therefore
+  // cannot be demoted by any search-ranking change. scripts/024 soft-deleted
+  // the 274 rows the first run already imported; this stops a re-run from
+  // reintroducing them. Rules live in lib/food-relevance.ts.
+  const survivors = inWhitelist.filter(h => !isPrunable(h.description))
+  const denied = inWhitelist.length - survivors.length
+
   const filtered = ONLY_CATEGORY
     ? survivors.filter(h => h.foodCategory === ONLY_CATEGORY)
     : survivors
@@ -176,7 +189,8 @@ async function main() {
     byCategory.set(key, (byCategory.get(key) ?? 0) + 1)
   }
   console.error(
-    `\nCorpus: ${all.length} | after whitelist: ${survivors.length}` +
+    `\nCorpus: ${all.length} | after category whitelist: ${inWhitelist.length}` +
+      ` | after description denylist: ${survivors.length} (-${denied})` +
       (ONLY_CATEGORY ? ` | in --category: ${filtered.length}` : '')
   )
   for (const [cat, n] of [...byCategory.entries()].sort((a, b) => b[1] - a[1])) {

@@ -3,9 +3,10 @@ import {
   consumeGuestBowlQuota,
 } from '@/lib/guest-rate-limit'
 import {
-  matchLocalIngredient,
+  matchIngredientWithCanonical,
   suggestBranded,
   type BrandedSuggestion,
+  type CanonicalMatch,
 } from '@/lib/resolve-ingredient'
 import { createClient as createUserClient } from '@/lib/supabase/server'
 import type { Database, Ingredient } from '@/lib/types'
@@ -195,25 +196,39 @@ async function identifyBowl(
   // Local match first (unsafe rows are never auto-matched); items the local
   // table can't resolve get a best-effort Open (Pet) Food Facts SUGGESTION
   // in parallel — surfaced for the owner to confirm, never auto-committed.
+  // Resolve every item to a row AND to its canonical group. The group is what
+  // lets the confirmation screen demand an explicit variant choice: the model
+  // says "ground beef" and cannot see the lean/fat ratio, so picking the top
+  // scoring row would silently commit an assumption worth up to 2.7x in
+  // calories. See CanonicalMatch in lib/resolve-ingredient.ts.
+  //
+  // Resolved in PARALLEL: canonical lookup costs ~3 round trips per item on
+  // top of the search, and a bowl carries up to a handful of items. Run
+  // sequentially that is a visible stall appended to an already-slow vision
+  // call. Promise.all preserves input order, so item order is unchanged.
   const identifiedItems: (NormalizedBowlItem & {
     branded_suggestion: BrandedSuggestion | null
     estimated_grams: number | null
-  })[] = []
-  for (const item of result.items) {
-    identifiedItems.push({
-      ...item,
-      normalized_ingredient_id: await matchLocalIngredient(supabase, item.label),
-      branded_suggestion: null,
-      estimated_grams: scale
-        ? estimateItemGrams({
-            label: item.label,
-            confidence: item.confidence,
-            box: (item.box_2d ?? null) as Box2D | null,
-            scale,
-          })
-        : null,
+    canonical: CanonicalMatch | null
+  })[] = await Promise.all(
+    result.items.map(async item => {
+      const matched = await matchIngredientWithCanonical(supabase, item.label)
+      return {
+        ...item,
+        normalized_ingredient_id: matched.ingredientId,
+        canonical: matched.canonical,
+        branded_suggestion: null,
+        estimated_grams: scale
+          ? estimateItemGrams({
+              label: item.label,
+              confidence: item.confidence,
+              box: (item.box_2d ?? null) as Box2D | null,
+              scale,
+            })
+          : null,
+      }
     })
-  }
+  )
   await Promise.all(
     identifiedItems
       .filter(item => !item.normalized_ingredient_id)

@@ -126,6 +126,10 @@ describe('Bowl photo flow', () => {
           'cypress/fixtures/bowl.png',
           { force: true }
         )
+
+        // Choosing a photo only stages it — analysis is an explicit action so
+        // the owner can write the hint with the photo in front of them.
+        cy.get('[data-testid="bowl-analyze-button"]').click()
         cy.wait('@analyze').then(({ request }) => {
           // Multipart body arrives as an ArrayBuffer — decode to assert the
           // hint field was actually sent.
@@ -195,6 +199,86 @@ describe('Bowl photo flow', () => {
     })
   })
 
+  it('blocks logging until the owner picks a lean/fat variant explicitly', () => {
+    // The vision model reports "ground beef" and cannot see the lean/fat
+    // ratio, but that ratio spans 121-332 kcal/100 g. The confirmation screen
+    // must refuse to log until the owner says which one they served — a
+    // pre-filled variant is a guess, not a measurement.
+    cy.login(owner.email, owner.password)
+    cy.url().should('include', '/dashboard')
+
+    cy.request('/api/foods/unified-search?q=ground%20beef')
+      .its('body.foods')
+      .should('have.length.greaterThan', 0)
+      .then((foods: Food[]) => {
+        const food = foods[0]
+
+        cy.intercept('POST', '/api/bowl/analyze', {
+          statusCode: 200,
+          body: {
+            analysis_id: '00000000-0000-4000-8000-0000000000fa',
+            image_url: '/icon-192.png',
+            notes: '',
+            items: [
+              {
+                label: 'ground beef',
+                estimated_proportion: 1,
+                confidence: 0.9,
+                normalized_ingredient_id: food.id,
+                ingredient: food,
+                estimated_grams: 150,
+                canonical: {
+                  canonicalId: '00000000-0000-4000-8000-0000000000cb',
+                  displayName: 'Beef ground',
+                  variantCount: 45,
+                  requiresChoice: true,
+                  kcalRange: [121, 332],
+                  fatRange: [3, 30],
+                },
+              },
+            ],
+          },
+        }).as('analyze')
+
+        // Expanding the group loads its variants on demand.
+        cy.intercept(
+          'GET',
+          '/api/ingredients/grouped-search?canonical_id=*',
+          {
+            statusCode: 200,
+            body: {
+              variants: [
+                { ...food, id: food.id, name: 'Beef, ground, 93% lean meat / 7% fat, raw', calories_per_serving: 152, fat_g: 7 },
+              ],
+            },
+          }
+        ).as('variants')
+
+        cy.visit('/bowl')
+        cy.get('[data-testid="bowl-photo-input"]').selectFile(
+          'cypress/fixtures/bowl.png',
+          { force: true }
+        )
+        cy.get('[data-testid="bowl-analyze-button"]').click()
+        cy.wait('@analyze')
+        cy.contains('Confirm this bowl', { timeout: 10000 }).should('be.visible')
+
+        // The gate is visible and explains the stakes in the owner's terms.
+        cy.contains(/which beef ground did you use/i).should('be.visible')
+        cy.contains(/121–332 kcal/).should('be.visible')
+
+        // ...and the submit button is disabled until they choose.
+        cy.contains('button', /Log breakfast from photo/i).should('be.disabled')
+
+        cy.get('[data-testid="variant-choice-open"]').click()
+        cy.wait('@variants')
+        cy.contains('button', /93% lean/).click()
+
+        // Choosing clears the gate.
+        cy.contains('button', /Log breakfast from photo/i).should('not.be.disabled')
+      })
+  })
+
   it('re-analyzes the same photo when the owner adds a corrective note', () => {
     cy.login(owner.email, owner.password)
     cy.url().should('include', '/dashboard')
@@ -232,6 +316,10 @@ describe('Bowl photo flow', () => {
           'cypress/fixtures/bowl.png',
           { force: true }
         )
+
+        // Choosing a photo only stages it — analysis is an explicit action so
+        // the owner can write the hint with the photo in front of them.
+        cy.get('[data-testid="bowl-analyze-button"]').click()
         cy.wait('@analyze')
         cy.contains('Confirm this bowl', { timeout: 10000 }).should('be.visible')
         cy.get('[data-testid="bowl-items"] li').should('have.length', 1)

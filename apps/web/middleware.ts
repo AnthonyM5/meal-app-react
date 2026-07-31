@@ -46,6 +46,7 @@ const BEARER_AUTH_ROUTES = [
   '/api/ingredients/manual',
   '/api/ingredients/branded',
   '/api/ingredients/search',
+  '/api/ingredients/grouped-search',
   // The bowl-analyze route self-authenticates (Bearer token for the native
   // shell, session/guest cookie for web — see its getAuthenticatedUserId).
   // Listed here so the Authorization-header preflight gets a CORS answer and

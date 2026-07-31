@@ -1,0 +1,24 @@
+// Resolve a path under the repo-root `audits/` directory.
+//
+// The maintenance scripts are documented to run from `apps/web` (they need
+// its .env.local), but `audits/` lives at the monorepo root — so a bare
+// relative path like 'audits/foo.md' resolves to apps/web/audits and throws
+// ENOENT. Walk up from cwd to the workspace root instead, so the scripts work
+// from either directory.
+
+import { existsSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+/** Absolute path to `<repo-root>/audits/<fileName>`, creating the dir. */
+export function auditPath(fileName: string): string {
+  let dir = process.cwd()
+  for (let i = 0; i < 5; i++) {
+    if (existsSync(resolve(dir, 'pnpm-workspace.yaml'))) break
+    const parent = resolve(dir, '..')
+    if (parent === dir) break // hit the filesystem root
+    dir = parent
+  }
+  const auditsDir = resolve(dir, 'audits')
+  mkdirSync(auditsDir, { recursive: true })
+  return resolve(auditsDir, fileName)
+}

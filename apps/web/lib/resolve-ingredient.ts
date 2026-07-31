@@ -9,8 +9,27 @@ import { searchOFFByName, type OFFProductLike } from '@/lib/off-integration'
 import type { Database } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/** Trigram-confidence floor below which a label stays unmatched. */
-export const MATCH_THRESHOLD = 0.3
+/**
+ * Confidence floor below which a label stays unmatched.
+ *
+ * Re-fitted 2026-07-29 for the blended relevance score introduced in
+ * migration 20260729000100. The old 0.3 was calibrated against the previous
+ * scoring, which saturated at 1.00 for anything containing the query — under
+ * that score a 0.3 floor rejected essentially nothing, so the bowl resolver
+ * auto-matched the alphabetically-first row containing the label.
+ *
+ * The blended score spreads out, so the floor now does real work. Measured
+ * across all 5,029 live rows (see scripts/023_search_relevance_check.ts):
+ *
+ *   labels that SHOULD resolve locally ....... 0.584 - 0.913
+ *     ('white rice' 0.584 is the floor case; typos land ~0.64)
+ *   labels that should NOT (branded/DTC) ..... 0.000 - 0.363
+ *     ('greenies' -> "Beet greens, raw" 0.329 is the worst false positive)
+ *
+ * 0.5 sits mid-gap. Raising it past ~0.58 starts rejecting real matches;
+ * lowering it below ~0.37 lets branded labels match whole foods by accident.
+ */
+export const MATCH_THRESHOLD = 0.5
 
 /** How long an OFF suggestion lookup may take before we give up on it. */
 const OFF_SUGGESTION_TIMEOUT_MS = 4000
@@ -27,6 +46,121 @@ export interface BrandedSuggestion {
 export interface ResolvedIngredient {
   ingredientId: string | null
   brandedSuggestion: BrandedSuggestion | null
+}
+
+/**
+ * A variant is materially different if it moves calories by more than this
+ * fraction. 20% of a meal's energy is well past rounding — for a 150 g serving
+ * of ground beef the group spans 182-498 kcal, a 2.7x swing.
+ */
+export const AMBIGUOUS_KCAL_RATIO = 0.2
+
+/**
+ * ...or moves fat by more than this many grams per 100 g. Fat matters
+ * independently of calories for dogs: 3 g vs 30 g per 100 g is the difference
+ * between a routine meal and a pancreatitis risk in a susceptible dog.
+ */
+export const AMBIGUOUS_FAT_DELTA_G = 5
+
+/**
+ * The canonical group a matched ingredient belongs to, plus whether its
+ * variants disagree enough that the owner must choose explicitly.
+ *
+ * The vision model emits "ground beef" — it cannot see lean/fat ratio, and
+ * nothing downstream can infer it. Before this, `matchLocalIngredient` took
+ * the single top-scoring row and its ratio silently became the bowl's
+ * nutrition. That is a guess presented as a measurement, so the flow now
+ * refuses to proceed until the owner picks.
+ */
+export interface CanonicalMatch {
+  canonicalId: string
+  displayName: string
+  variantCount: number
+  /** Owner must explicitly choose a variant before the bowl can be logged */
+  requiresChoice: boolean
+  /** [min, max] kcal per 100 g across the group — the UI explains the spread */
+  kcalRange: [number, number] | null
+  /** [min, max] fat g per 100 g across the group */
+  fatRange: [number, number] | null
+}
+
+export interface MatchedIngredient {
+  ingredientId: string | null
+  canonical: CanonicalMatch | null
+}
+
+function range(values: number[]): [number, number] | null {
+  return values.length > 0 ? [Math.min(...values), Math.max(...values)] : null
+}
+
+/**
+ * Resolve a label AND report the canonical group it landed in, so the
+ * confirmation UI can require an explicit variant choice when the group's
+ * members disagree materially on calories or fat.
+ *
+ * Single-variant groups (55% of the catalogue) never require a choice — there
+ * is nothing to choose. Of the multi-variant groups, ~73% are flagged.
+ */
+export async function matchIngredientWithCanonical(
+  supabase: SupabaseClient<Database>,
+  label: string
+): Promise<MatchedIngredient> {
+  const ingredientId = await matchLocalIngredient(supabase, label)
+  if (!ingredientId) return { ingredientId: null, canonical: null }
+
+  const { data: matched, error: matchedError } = await supabase
+    .from('foods')
+    .select('canonical_id')
+    .eq('id', ingredientId)
+    .single()
+  // A row with no canonical_id is legitimate (branded/manual rows are never
+  // parsed into the canonical layer) — resolve it without a choice gate.
+  if (matchedError || !matched?.canonical_id) {
+    return { ingredientId, canonical: null }
+  }
+
+  const [{ data: group }, { data: variants }] = await Promise.all([
+    supabase
+      .from('canonical_ingredients')
+      .select('id,display_name,variant_count')
+      .eq('id', matched.canonical_id)
+      .single(),
+    supabase
+      .from('foods')
+      .select('calories_per_serving,fat_g')
+      .eq('canonical_id', matched.canonical_id)
+      .eq('is_active', true),
+  ])
+
+  if (!group || !variants || variants.length <= 1) {
+    return { ingredientId, canonical: null }
+  }
+
+  const kcalRange = range(
+    variants
+      .map(v => Number(v.calories_per_serving))
+      .filter(n => Number.isFinite(n) && n > 0)
+  )
+  const fatRange = range(
+    variants.map(v => Number(v.fat_g)).filter(n => Number.isFinite(n))
+  )
+
+  const kcalAmbiguous =
+    kcalRange !== null && (kcalRange[1] - kcalRange[0]) / kcalRange[0] > AMBIGUOUS_KCAL_RATIO
+  const fatAmbiguous =
+    fatRange !== null && fatRange[1] - fatRange[0] > AMBIGUOUS_FAT_DELTA_G
+
+  return {
+    ingredientId,
+    canonical: {
+      canonicalId: group.id as string,
+      displayName: group.display_name as string,
+      variantCount: variants.length,
+      requiresChoice: kcalAmbiguous || fatAmbiguous,
+      kcalRange,
+      fatRange,
+    },
+  }
 }
 
 /**

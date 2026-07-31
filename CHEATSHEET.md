@@ -74,6 +74,18 @@ a new dependency's postinstall silently doesn't run.
 - **Shared `@pawplate/ui` package** — shadcn/Radix components centralized so
   web and mobile render the same design system; web consumes it via
   `transpilePackages` in `next.config.mjs`, mobile via plain Vite/TS resolve.
+- **Normalized food catalogue** — the USDA bulk import took `foods` to 5,029
+  rows, which broke search (everything scored 1.00 and sorted alphabetically:
+  `'beef'` returned *"Beans, baked, canned, with beef"*). Search now uses a
+  fitted relevance blend, prepared foods are pruned, duplicates merged, and
+  4,700 active rows roll up into **1,409 canonical groups** — so `'beef'`
+  returns 8 groups instead of 960 rows. See
+  [`docs/DATA_NORMALIZATION_DESIGN.md`](docs/DATA_NORMALIZATION_DESIGN.md).
+- **Bowl analysis requires an explicit lean/fat choice** — the vision model
+  reports "ground beef" and cannot see the ratio, but that spans 121–332
+  kcal/100 g. Ambiguous items now block logging until the owner picks a
+  variant. Analysis is also a manual button press after choosing a photo, so
+  the hint can be written with the photo visible.
 
 For the deeper feature set (fresh-feeding nutrient engine, guest mode, fuzzy
 search, etc.) see the [README's Features section](./README.md#features).
@@ -263,6 +275,38 @@ pnpm --filter web <script>      # scope any script to apps/web
 pnpm --filter mobile <script>   # scope any script to apps/mobile
 pnpm --filter @pawplate/core <script>  # scope to a package by its package name
 ```
+
+### Food-catalogue maintenance (`apps/web/scripts/`)
+
+All need service-role env and are run from `apps/web`. The mutating ones are
+**dry-run by default** and write a report to `audits/` — read it before
+passing `--apply`.
+
+```bash
+cd apps/web && set -a && source .env.local && set +a
+
+npx tsx scripts/023_search_relevance_check.ts          # search relevance gate
+npx tsx scripts/024_prune_prepared_foods.ts [--apply|--revert]
+npx tsx scripts/025_merge_duplicate_foods.ts  [--apply]
+npx tsx scripts/026_build_canonical_ingredients.ts [--apply] [--reset]
+npx tsx scripts/027_audit_canonical_merges.ts          # merge-threshold gate
+```
+
+Two of these are **verification gates that exit non-zero**, and both should be
+run after any change to search ranking or `lib/food-name-parser.ts`:
+
+- **`023`** asserts named relevance expectations against the live
+  `fuzzy_search_foods` RPC (18/18 today). The Jest suite deliberately never
+  hits the network, so it cannot test SQL ranking — this is the only thing
+  that catches a ranking regression.
+- **`027`** replays the canonical matcher's **silent** ≥0.90 auto-merges
+  (`canonical_review_queue` only records the 0.75–0.90 band a human reviews)
+  and fails if the merged and kept-apart populations overlap.
+
+`026` is fully recomputable — `--apply --reset` rebuilds the canonical layer
+from scratch, so parser fixes are cheap to land. Nothing here ever hard-deletes
+a `foods` row; see [`DATA_NORMALIZATION_DESIGN.md`](docs/DATA_NORMALIZATION_DESIGN.md) §3.3
+for why that would destroy logged meals.
 
 ---
 
