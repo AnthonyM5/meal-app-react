@@ -167,6 +167,17 @@ const TRIM = [
   /^salted$/,
   /^with(out)? added salt$/,
   /^with(out)? salt added$/,
+  // "no X" phrasing — FDC uses it interchangeably with "without X", and
+  // missing it was not cosmetic: "Sweet potato, cooked, no skin" fell through
+  // to the part slot and keyed the row as `sweet_potato_skin`, i.e. sweet
+  // potato SKIN, the opposite of what the row is. Likewise "no salt added"
+  // became a part and spawned a junk `beans_no_salt_added` canonical that
+  // lima beans and soybeans both drifted toward.
+  /^no (added )?salt( added)?$/,
+  /^no (added )?sugar( added)?$/,
+  /^no skin$/,
+  /^no bones?$/,
+  /^no shell$/,
   /^enriched$/,
   /^unenriched$/,
   /^reduced fat$/,
@@ -328,6 +339,51 @@ function applySynonym(term: string): string {
   return SYNONYMS[term] ?? term
 }
 
+/**
+ * Words ending in `s` that are not plurals. Without these, naive stripping
+ * turns asparagus into "asparagu" and molasses into "molasse".
+ */
+const NOT_PLURAL = new Set([
+  'molasses', 'asparagus', 'hummus', 'couscous', 'watercress', 'cress',
+  'bass', 'grass', 'glass', 'swiss', 'brussels', 'anise', 'sassafras',
+])
+
+/**
+ * Collapse an English plural to its singular.
+ *
+ * FDC is inconsistent about number — "Mushrooms, portabella" and "Mushroom,
+ * portabella" are separate rows for the same food, as are yardlong bean(s),
+ * winged bean(s), and emu inside drum(s). Every one of those pairs landed in
+ * the review queue as a near-miss the pipeline refused to merge. Normalizing
+ * number fixes them in code rather than by hand, so they cannot re-queue on
+ * the next rebuild.
+ *
+ * It also repairs a search defect: USDA pluralizes fruit ("Oranges, navels")
+ * while owners search singular ("orange"), which let "Orange peel" outrank
+ * the actual fruit in grouped search.
+ */
+function singularizeWord(word: string): string {
+  if (word.length <= 3 || NOT_PLURAL.has(word)) return word
+  if (/[^aeiou]ies$/.test(word)) return `${word.slice(0, -3)}y` // berries -> berry
+  if (/oes$/.test(word)) return word.slice(0, -2) // potatoes -> potato
+  if (/(ch|sh|s|x|z)es$/.test(word)) return word.slice(0, -2) // radishes -> radish
+  if (/(ss|us|is)$/.test(word)) return word // molasses, asparagus
+  if (/s$/.test(word)) return word.slice(0, -1) // mushrooms -> mushroom
+  return word
+}
+
+/** Singularize only the head noun: "yardlong beans" -> "yardlong bean". */
+function singularize(term: string): string {
+  const words = term.split(' ')
+  words[words.length - 1] = singularizeWord(words[words.length - 1])
+  return words.join(' ')
+}
+
+/** Synonyms first (they are keyed on the plural forms), then number. */
+function normalizeTerm(term: string): string {
+  return singularize(applySynonym(term))
+}
+
 function matchesAny(segment: string, patterns: RegExp[]): boolean {
   return patterns.some(p => p.test(segment))
 }
@@ -421,7 +477,7 @@ export function parseFoodName(name: string): ParsedFoodName {
   // as their USDA equivalents.
   const headWords = head.split(' ')
   if (headWords.length >= 2) {
-    const last = applySynonym(headWords[headWords.length - 1])
+    const last = normalizeTerm(headWords[headWords.length - 1])
     if (PART_SET.has(last)) {
       baseFood = headWords.slice(0, -1).join(' ')
       part = last
@@ -452,8 +508,8 @@ export function parseFoodName(name: string): ParsedFoodName {
     }
   }
 
-  baseFood = applySynonym(baseFood)
-  if (part) part = applySynonym(part)
+  baseFood = normalizeTerm(baseFood)
+  if (part) part = normalizeTerm(part)
 
   const slug = part ? slugify(`${baseFood} ${part}`) : slugify(baseFood)
   const displayName = titleCase(part ? `${baseFood} ${part}` : baseFood)

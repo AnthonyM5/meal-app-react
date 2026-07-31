@@ -5,10 +5,10 @@ _Generated 2026-07-30 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
 | Metric | Value |
 |---|---|
 | Active rows | 4700 |
-| Canonical keys | 1432 |
-| Singleton keys | 783 |
-| Review-queue items | 55 |
-| Rows with unparsed segments | 1984 |
+| Canonical keys | 1409 |
+| Singleton keys | 758 |
+| Review-queue items | 44 |
+| Rows with unparsed segments | 1979 |
 
 ## Largest groups
 
@@ -35,10 +35,10 @@ _Generated 2026-07-30 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
    28  pork_shoulder
    28  yogurt_greek
    26  lamb
-   25  beans_kidney
+   25  bean_kidney
    24  oil_industrial
    24  rice_white
-   23  beans_snap
+   23  bean_snap
    23  beef_tenderloin
    23  turkey
    22  squash_summer
@@ -50,9 +50,9 @@ _Generated 2026-07-30 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
    19  chicken_drumstick
    19  wheat_flour_white
    18  beef_shoulder
-   18  peppers_sweet
-   18  potatoes_french_fried
-   17  chicken_breast
+   18  pepper_sweet
+   18  potato
+   18  potato_french_fried
 ```
 
 ## Top unclassified residual terms
@@ -87,7 +87,6 @@ ones there is the cheapest way to improve grouping quality.
    16  shank
    16  sirloin
    16  from whole bird
-   15  no salt added
    15  lowfat
    14  fast roasted
    14  pan-broil
@@ -101,11 +100,12 @@ ones there is the cheapest way to improve grouping quality.
    12  americas beef roast
    12  short ribs
    12  top blade
+   12  under blade center steak
 ```
 
 ## Review queue
 
-55 rows landed between 0.75 and 0.9 similarity against an existing canonical. They were KEPT SEPARATE (the conservative choice) and queued. Resolve each by adding a
+44 rows landed between 0.75 and 0.9 similarity against an existing canonical. They were KEPT SEPARATE (the conservative choice) and queued. Resolve each by adding a
 SYNONYMS entry in `lib/food-name-parser.ts`, then re-run with `--reset`.
 
 ```
@@ -117,51 +117,40 @@ SYNONYMS entry in `lib/food-name-parser.ts`, then re-run with `--reset`.
 0.868  pear_nectar_without_added_ascorbic_acid  ~  pear_nectar_with_added_ascorbic_acid
 0.867  milk_with_added_vitamin_a_and_vitamin_d  ~  milk_with_added_vitamin_d
 0.865  applesauce_without_added_ascorbic_acid  ~  applesauce_with_added_ascorbic_acid
-0.864  mushrooms_portabella  ~  mushroom_portabella
 0.857  hormel_always_tender_tenderloin  ~  hormel_always_tender_loin
 0.846  milk_buttermilk  ~  buttermilk
 0.839  cheese_pasteurized_process  ~  cheese_food_pasteurized_process
-0.833  emu_inside_drums  ~  emu_inside_drum
 0.833  milk_without_added_vitamin_d  ~  milk_with_added_vitamin_d
-0.833  mushrooms_maitake  ~  mushroom_maitake
-0.833  mushrooms_oyster  ~  mushroom_oyster
 0.833  vitasoy_usa_azumaya_firm_tofu  ~  vitasoy_usa_azumaya_extra_firm_tofu
-0.824  mushrooms_enoki  ~  mushroom_enoki
-0.824  mushrooms_white  ~  mushroom_white
 0.822  lemon_juice_from_concentrate_canned_or_bottled  ~  lemon_juice_from_concentrate_bottled
 0.818  silk_very_vanilla_soymilk  ~  silk_vanilla_soymilk
-0.815  plums_without_added_sugar  ~  plums_with_added_sugar
-0.813  refried_beans_traditional  ~  refried_beans_traditional_style
-0.813  yardlong_beans  ~  yardlong_bean
 0.808  peanut_butter_smooth_style  ~  peanut_butter_smooth
+0.808  plum_without_added_sugar  ~  plum_with_added_sugar
+0.806  refried_bean_traditional  ~  refried_bean_traditional_style
 0.806  silk_strawberry_soy_yogurt  ~  silk_banana_strawberry_soy_yogurt
-0.800  lima_beans_no_salt_added  ~  beans_no_salt_added
-0.800  peppers_hot_chili  ~  peppers_hot_chile
-0.800  raspberries  ~  raspberries_red
 0.795  cheese_pasteurized_process_cheese_food_or_product  ~  cheese_food_pasteurized_process
-0.786  winged_beans  ~  winged_bean
+0.789  pepper_hot_chili  ~  pepper_hot_chile
 0.784  pineapple_juice_frozen_concentrate  ~  apple_juice_frozen_concentrate
 0.771  pineapple_juice_canned_or_bottled  ~  apple_juice_canned_or_bottled
-0.769  crustaceans_spiny_lobster  ~  crustaceans_lobster
-0.769  mungo_beans  ~  beans_mung
 0.769  passion_fruit_purple  ~  passion_fruit_juice_purple
+0.769  raspberry  ~  raspberry_red
 0.769  silk_light_chocolate_soymilk  ~  silk_chocolate_soymilk
 0.769  sorghum_whole_grain  ~  sorghum_flour_whole_grain
-0.769  sweet_potatoes_french_fried  ~  potatoes_french_fried
+0.767  seed_pumpkin_and_squash_seed  ~  seed_pumpkin_and_squash_seed_kernel
 0.765  fish_herring  ~  fish_oil_herring
 0.765  fish_sardine  ~  fish_oil_sardine
-0.765  sweet_potato_skin  ~  sweet_potato
 0.763  soy_sauce_made_from_soy_and_wheat_low_sodium  ~  soy_sauce_made_from_soy_and_wheat
 0.762  cheese_monterey_jack  ~  cheese_monterey
 0.762  mushroom_oyster  ~  mushroom_king_oyster
-0.762  seeds_sunflower_seed  ~  seeds_sunflower_seed_flour
+0.762  tangerine_juice_pack  ~  tangerine_juice
+0.760  crustacean_spiny_lobster  ~  crustacean_lobster
 0.759  grapefruit_juice_pink  ~  grapefruit_juice_pink_or_red
 0.756  vitasoy_usa_organic_nasoya_silken_tofu  ~  vitasoy_usa_organic_nasoya_soft_tofu
 0.750  fish_salmon  ~  fish_oil_salmon
 0.750  flour_whole_wheat  ~  flour_wheat
 0.750  ice_cream_light  ~  cream_light
-0.750  radishes_red  ~  radishes
+0.750  mungo_bean  ~  bean_mung
 0.750  silk_vanilla_soymilk  ~  silk_light_vanilla_soymilk
-0.750  soybeans_no_salt_added  ~  beans_no_salt_added
+0.750  sweet_potato_french_fried  ~  potato_french_fried
 0.750  wheat_flour_white  ~  flour_wheat
 ```

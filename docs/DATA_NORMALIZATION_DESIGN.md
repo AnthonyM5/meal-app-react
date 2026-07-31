@@ -490,6 +490,24 @@ sits inside it, matching the offline fit almost exactly.
    PostgREST `select` is a silent correctness bug at >1,000 rows, and this
    codebase has several.
 
+**Two follow-up defects found after the initial rollout**, both fixed and applied:
+
+4. **`search_canonical_ingredients` reintroduced the saturating score.** It
+   ranked with `GREATEST(..., word_similarity(...))` — the exact defect
+   20260729000100 had just removed from flat search. Every group tied at 1.000
+   and ordering fell through to `variant_count DESC`, so `'orange'` returned
+   four juice groups and `'banana'` buried the fruit. Fixed in
+   `20260730000000` with a `0.60 × display_name + 0.40 × base_food` blend,
+   keeping `word_similarity` in the `WHERE` for recall only. `'banana'` →
+   *Bananas*, `'beef'` → *Beef*, `'chicken breast'` → *Chicken breast*.
+5. **`search_foods_by_nutrient` never learned about `is_active`.** It backs the
+   Foods page's "highest in <nutrient>" browser, so margarine, industrial
+   shortening and salad dressings stayed reachable there after scripts/024 hid
+   them everywhere else. Fixed in `20260730000100`. The by-id paths
+   (`/api/foods/[foodId]`, meal-service, bowl hydration) were deliberately left
+   alone — soft delete removes a row from *discovery*, not from *history*, or a
+   meal logged before the prune would stop rendering.
+
 **One nutrient-quality finding.** Winner selection ranks `source` above
 nutrient count, so the USDA row won for `broccoli, raw` and `spinach, raw`
 even though the hand-curated losers carried `taurine_mg` and `vitamin_d_mcg`
@@ -502,6 +520,55 @@ bug: the loser was a Foundation row with `calories_per_serving = 0` that a
 logged meal already pointed at.
 
 Zero `meal_items` reference a deactivated row — every FK was repointed.
+
+### Review-queue verification — 2026-07-30
+
+The queue only holds the 0.75–0.90 band: cases the pipeline **refused** to
+decide. The riskier decisions are the ≥0.90 **auto-merges**, which happen
+silently — and a wrong merge permanently fuses two foods' nutrients, where a
+wrong split merely shows a duplicate. `scripts/027_audit_canonical_merges.ts`
+replays them and reports the two numbers that decide whether the threshold is
+calibrated:
+
+```
+highest QUEUED (kept apart)  0.892   pear_nectar ~ peach_nectar
+lowest  AUTO-MERGE           0.900
+```
+
+They must not cross, and the script exits non-zero if they do. The boundary
+sits exactly between *"pear and peach are different fruit"* and the first real
+merge. Dropping to 0.85 would have wrongly merged pear/peach nectar,
+`milk_with_added_vitamin_a_and_d` ~ `milk_with_added_vitamin_d`, and
+`plums_with_added_sugar` ~ `plums_without_added_sugar` — all opposite-meaning
+pairs. **Run this after any change to `lib/food-name-parser.ts`.**
+
+Of the 16 auto-merges, 15 are word-order variants scoring 1.000 (trigram
+similarity is order-blind, which is exactly right for FDC's inconsistent
+`"Cheese, cottage"` vs `"Cottage cheese"`). One is wrong:
+`soymilk_chocolate` → `silk_chocolate_soymilk` at exactly 0.900, absorbing a
+generic into a branded group.
+
+**Triaging the queue exposed three parser defects**, all fixed rather than
+hand-merged (a hand merge would simply re-queue on the next rebuild):
+
+- `"Sweet potato, cooked, no skin"` keyed as **`sweet_potato_skin`** — sweet
+  potato SKIN, the opposite of the row's meaning. Only the `"without X"`
+  phrasing was recognised; FDC uses `"no X"` interchangeably.
+- `"…, no salt added"` became a *part*, spawning a junk `beans_no_salt_added`
+  canonical that lima beans and soybeans both drifted toward.
+- FDC carries both `"Mushrooms, portabella"` and `"Mushroom, portabella"` for
+  one food. Number is now normalized (`singularizeWord`, with a `NOT_PLURAL`
+  set so molasses/asparagus/hummus survive).
+
+Result: **55 → 44 queued**, 1,432 → 1,409 canonicals, zero singular/plural
+pairs remaining, and all three junk canonicals gone. The 44 that remain are
+genuine ambiguity — different fruit, with/without pairs, branded product
+lines — which is the queue doing its job.
+
+Singularization also fixed a search defect noted earlier: `'orange'` returned
+*Orange peel* above the fruit, because USDA pluralizes (`"Oranges, navels"`)
+while owners search singular. Grouped search now returns *Orange navel*,
+*Orange florida*, *Orange with peel*.
 
 ### Known rough edge
 

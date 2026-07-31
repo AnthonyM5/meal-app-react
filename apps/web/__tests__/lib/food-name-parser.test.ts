@@ -12,9 +12,9 @@ describe('parseFoodName', () => {
   describe('USDA comma grammar', () => {
     it('takes the first segment as the base food', () => {
       const parsed = parseFoodName('Blueberries, raw')
-      expect(parsed.baseFood).toBe('blueberries')
+      expect(parsed.baseFood).toBe('blueberry')
       expect(parsed.part).toBeNull()
-      expect(parsed.slug).toBe('blueberries')
+      expect(parsed.slug).toBe('blueberry')
       expect(parsed.attrs.prep).toEqual(['raw'])
     })
 
@@ -78,7 +78,7 @@ describe('parseFoodName', () => {
 
     it('does not split a head whose last word is not a known part', () => {
       // "beans" and "potato" are not parts — these are the food itself.
-      expect(parseFoodName('Green beans, cooked').baseFood).toBe('green beans')
+      expect(parseFoodName('Green beans, cooked').baseFood).toBe('green bean')
       expect(parseFoodName('Sweet potato, cooked, no skin').baseFood).toBe('sweet potato')
     })
   })
@@ -91,7 +91,7 @@ describe('parseFoodName', () => {
       const parsed = parseFoodName(
         'Chickpeas (garbanzo beans, bengal gram), mature seeds, raw'
       )
-      expect(parsed.slug).toBe('chickpeas')
+      expect(parsed.slug).toBe('chickpea')
       expect(parsed.attrs.prep).toEqual(['raw'])
     })
 
