@@ -1,6 +1,11 @@
 # USDA Food / Corpus Coverage Audit
 
-_Audit-plan AC #3 (`NUTRIENT_API_SOURCING_AND_AUDIT.md` §3.2, corpus-coverage portion). Generated 2026-07-08._
+_Audit-plan AC #3 (`NUTRIENT_API_SOURCING_AND_AUDIT.md` §3.2, corpus-coverage portion). Originally generated 2026-07-08; **regenerated 2026-07-30** after the bulk import and the normalization work._
+
+> ⚠️ **Revisions of this file before 2026-07-30 were badly stale.** They reported
+> 61 rows / 0.28% coverage long after `scripts/022_bulk_import_usda_wholefoods.ts`
+> had been run against the live project, which took `foods` to 5,029 rows. If you
+> are reading a cached copy, verify against the database before trusting it.
 
 ## Corpus coverage
 
@@ -8,28 +13,52 @@ How much of the USDA whole-food corpus relevant to fresh feeding the app has act
 
 | Data type | Available in FDC | Imported into `foods` |
 |---|---|---|
-| Foundation | 394 | (see note) |
-| SR Legacy | 7793 | (see note) |
-| **Total (Foundation + SR Legacy)** | **8187** | **23** |
+| Foundation | 394 | 311 |
+| SR Legacy | 7793 | 4,659 |
+| **Total (Foundation + SR Legacy)** | **8187** | **4,970** |
 
-**Corpus coverage: 23 / 8187 = 0.28%** (as of 2026-07-10; was 19 on 2026-07-08).
+**Corpus coverage: 4,970 / 8187 = 61%** (as of 2026-07-30).
 
-> Note: the `foods` table does not persist USDA `dataType`, so the per-type imported split isn't recorded. All current USDA rows were sourced from SR Legacy queries (muscle meats, organs, eggs, fish, staple starches, legumes). As of 2026-07-10, raw `format=full` responses are archived in `source_payloads` (migration `20260711000000`), so `dataType` and other discarded fields are recoverable for new imports without a re-fetch.
+The gap to 100% is the deliberate `CATEGORY_WHITELIST` in `scripts/022`: prepared
+dishes, snacks, beverages, baby foods, restaurant and fast-food categories are
+never fetched. Coverage is now capped by that filter, not by import effort.
+
+> The per-type split is reportable for the first time: migration
+> `20260729000000` added `usda_data_type` and `food_category` to `foods` and
+> backfilled both from the archived `source_payloads` — no FDC re-fetch. 4,970 of
+> 4,989 `fdc_id` rows were backfilled; the 19 misses predate `source_payloads`
+> (migration `20260711000000`).
 
 ## Interpretation
 
-This is expected and **by design, not a defect.** Import is query-triggered (`/api/ingredients/import`, `scripts/import-cooked-ingredients.ts`, `scripts/018_import_raw_counterparts.ts`) and curated toward canine fresh-feeding staples, not a corpus-wide bulk load. The vast majority of FDC SR Legacy is human-oriented (processed foods, restaurant items, brand-name products, prepared dishes) with no place in a fresh dog bowl. A high corpus-coverage percentage is **not** a goal here — targeted coverage of the ingredients dogs actually eat is.
+The 2026-07-08 revision of this file argued that low coverage was "by design, not a defect" because import was query-triggered and curated. **That reasoning is superseded** — `scripts/022` replaced query-at-a-time curation with a filtered bulk load, and the strategy is now "import every whitelisted whole-food category, then normalize."
+
+The concern that motivated the old stance (human-oriented processed foods polluting the catalogue) turned out to be real, and is handled downstream rather than by refusing to import: `lib/food-relevance.ts` + `scripts/024_prune_prepared_foods.ts` soft-deleted 274 rows the category whitelist let through (salad dressings, margarines, syrups, imitation meats). See [`DATA_NORMALIZATION_DESIGN.md`](../docs/DATA_NORMALIZATION_DESIGN.md) §3.2.
 
 ## `foods` table composition (live)
 
-_Updated 2026-07-10 after `scripts/020_seed_staple_gaps.ts` (chickpeas + lentils,
-raw + cooked)._
+_Updated 2026-07-30, after the bulk import, prune, duplicate merge, and canonical build._
 
-- Total rows: **61**
-- USDA-sourced (`fdc_id` set): **23** — all `is_verified` ✅
-- Curated / hand-entered (no `fdc_id`): **38** (8 still unverified)
+| | Rows |
+|---|---|
+| **Total** | **5,029** |
+| Active (searchable) | 4,700 |
+| Soft-deleted — pruned prepared foods | 274 |
+| Soft-deleted — merged duplicates | 55 |
+| **Hard-deleted** | **0** |
 
-- Preparation split (all rows): raw=30, cooked=21, unlabeled/NA=10
+By source: USDA 4,985 · curated 38 · manual 2 · OFF 0.
+
+Nothing is ever hard-deleted from `foods`: `meal_items.food_id` and
+`recipe_ingredients.food_id` are both `REFERENCES public.foods(id) ON DELETE
+CASCADE NOT NULL`, so deleting a catalogue row would silently destroy owners'
+logged meals and saved recipes. Removal is `is_active = false` +
+`inactive_reason`, which hides a row from discovery while keeping it resolvable
+by id so history still renders.
+
+- Active rows flagged unsafe for dogs: **132**
+- Canonical groups over the active set: **1,409** (`canonical_ingredients`)
+- Ambiguous parses pending human review: **44** (`canonical_review_queue`)
 
 ## AC #2 — Raw/cooked variant gap table
 
@@ -104,3 +133,20 @@ excluded — dried fruit ≠ raw.
 
 Re-run `scripts/019` whenever the staple list changes, or quarterly alongside the AC #1
 nutrient-diff (§3.5), to catch FDC description-format drift.
+
+**Regenerate this file's numbers whenever the corpus changes** — it went two
+weeks reporting 61 rows while the live table held 5,029, and a later session
+trusted it at face value. The counts above come from:
+
+```bash
+cd apps/web && set -a && source .env.local && set +a
+npx tsx scripts/027_audit_canonical_merges.ts   # canonicals + queue + merge boundary
+# row/source/type splits: count queries against `foods` filtered on
+# is_active, source, usda_data_type, inactive_reason
+```
+
+Companion audits regenerated by the same pipeline:
+[`prune-prepared-foods.md`](./prune-prepared-foods.md),
+[`merge-duplicate-foods.md`](./merge-duplicate-foods.md),
+[`canonical-ingredients.md`](./canonical-ingredients.md),
+[`canonical-merge-audit.md`](./canonical-merge-audit.md).

@@ -228,10 +228,14 @@ Nutrient data quality is the product. The [`audits/`](./audits/) directory holds
 | `usda-food-coverage.md` | Corpus coverage %, plus a raw/cooked variant gap table across all staples. |
 | `usda-nonnutrient-fields.md` | Explicit keep/discard decision for every non-nutrient FDC field. |
 | `pawplate-staple-ingredients.md` | ~33 source-backed fresh-feeding staples (AKC / FDA / PetMD / Hill's), with canine caveats. |
+| `prune-prepared-foods.md` | Every row hidden from search as a prepared/imitation food, grouped by the rule that matched it. |
+| `merge-duplicate-foods.md` | Every duplicate merge, with the winner-selection reasoning and reference counts. |
+| `canonical-ingredients.md` | Canonical grouping stats + the parser's unclassified residual terms (its own blind-spot log). |
+| `canonical-merge-audit.md` | The **silent** ≥0.90 auto-merges, plus the threshold-calibration boundary. |
 
 Known limitations are documented rather than hidden — e.g. **taurine is not reported by FDC at all**, so it comes from curated data; imports with sparse profiles are marked `is_verified = false`.
 
-See [`docs/BRANDED_INGREDIENTS_DESIGN.md`](./docs/BRANDED_INGREDIENTS_DESIGN.md) for the multi-source resolution chain (USDA → Open Food Facts → FatSecret → manual).
+See [`docs/BRANDED_INGREDIENTS_DESIGN.md`](./docs/BRANDED_INGREDIENTS_DESIGN.md) for the multi-source resolution chain (USDA → Open Food Facts → FatSecret → manual), and [`docs/DATA_NORMALIZATION_DESIGN.md`](./docs/DATA_NORMALIZATION_DESIGN.md) for how 5,029 catalogue rows are normalized into 1,409 canonical ingredient groups — including why nothing is ever hard-deleted from `foods` (`meal_items` cascades off it).
 
 ---
 

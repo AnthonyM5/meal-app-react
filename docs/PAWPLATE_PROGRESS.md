@@ -878,6 +878,110 @@ past day to view or edit its meals; dot markers indicate days with entries.
 - Verified: Jest 173/173, `next lint` clean on all touched files,
   `next build` clean (`/dashboard` in manifest).
 
+## Data normalization, dedupe & search (done, 2026-07-30, branch `feat/data-normalization`)
+
+Full design + measurements: [`DATA_NORMALIZATION_DESIGN.md`](./DATA_NORMALIZATION_DESIGN.md).
+**All six migrations and all four data scripts are applied to the live
+project.** The corpus went from "5,029 unusable rows" to a searchable,
+grouped catalogue.
+
+### Why this was urgent
+`scripts/022` had been run against prod, taking `foods` from 61 rows to 5,029
+— and that silently broke search. `fuzzy_search_foods` scored with
+`word_similarity()`, which returns 1.0 whenever the query appears anywhere in
+the name; at 5,029 long USDA descriptions everything saturated at 1.00 and
+ordering collapsed to **alphabetical**. Observed on prod: `'beef'` returned
+*"Beans, baked, canned, with beef"*; `'rice'` returned noodles and rice-bran
+oil above rice. The bowl auto-resolver (`match_limit: 1`, threshold 0.3) was
+therefore confidently matching the alphabetically-first row containing a label.
+
+### What shipped
+- **Relevance ranking** (`20260729000100`) — blended score
+  (base 0.50 / full 0.20 / word 0.15 / head 0.10 / brevity 0.05), fitted
+  offline over a 5,966-point grid against all 5,029 live names with pg_trgm
+  reimplemented. `MATCH_THRESHOLD` re-fitted 0.3 → 0.5 (measured separation:
+  should-resolve floor 0.584, should-not ceiling 0.344).
+- **Metadata + soft delete** (`20260729000000`) — `usda_data_type`,
+  `food_category` backfilled from `source_payloads` (no re-fetch);
+  `is_active` / `inactive_reason`. **Nothing is ever hard-deleted**:
+  `meal_items.food_id` and `recipe_ingredients.food_id` are
+  `ON DELETE CASCADE NOT NULL`, so a hard delete destroys logged meals.
+- **Canonical layer** (`20260729000200`, `20260729000300`) —
+  `canonical_ingredients` + `foods.canonical_id`/`variant_attrs`/
+  `is_canonical_default`, a review queue, and additive grouped-search RPCs.
+  `fuzzy_search_foods`'s return type is unchanged, so mobile REST clients were
+  unaffected.
+- **Bowl flow — explicit lean/fat choice.** The model reports "ground beef"
+  and cannot see the ratio, but `beef_ground` spans 121–332 kcal/100 g and
+  3–30 g fat. Analysis now returns the canonical group and a `requiresChoice`
+  flag; `BowlConfirmation` blocks logging until the owner picks. Gate fires on
+  33% of groups (55% are single-variant).
+- **Analysis is now a manual action.** Choosing a photo stages it with a
+  preview; the owner writes the hint *with the photo visible*, then presses
+  "Analyze this photo". Previously it fired on file-select, so the only way to
+  add context was a re-analysis that resets entered grams.
+
+### Live corpus state
+
+| | |
+|---|---|
+| `foods` rows | 5,029 (**0 deleted**) |
+| active | 4,700 |
+| soft-deleted | 329 — 274 pruned prepared foods + 55 merged duplicates |
+| Foundation / SR Legacy | 311 / 4,659 |
+| canonical groups | **1,409** |
+| review queue (pending) | 44 |
+| `'beef'` search | 960 rows → **8 groups** |
+
+### Defects found during rollout (all fixed)
+1. `gin_trgm_ops` unresolvable in the migration runner — `pg_trgm` lives in
+   `extensions`, which isn't on its `search_path`. Now resolved from
+   `pg_opclass` at runtime.
+2. Audit reports wrote to `apps/web/audits/` and threw `ENOENT` — added
+   `scripts/_audit-path.ts`.
+3. **PostgREST silently truncated a lookup at 1,000 rows**, so the first
+   canonical build attached only 4,268 of 4,700 variants *and reported
+   success*. Now paginated with a guard. Worth remembering beyond this branch:
+   an unbounded PostgREST `select` is a silent correctness bug past 1,000 rows.
+4. Grouped search reintroduced the saturating score (`GREATEST(...,
+   word_similarity(...))`) — fixed in `20260730000000`.
+5. `search_foods_by_nutrient` never learned about `is_active`, so pruned
+   margarine/shortening stayed reachable in the Foods page's nutrient browser
+   — fixed in `20260730000100`.
+6. Parser kept `"no skin"`/`"no salt added"` as anatomical *parts*, keying
+   "Sweet potato, cooked, no skin" as `sweet_potato_skin` — the opposite of
+   its meaning. Fixed, plus number normalization so FDC's
+   `"Mushrooms, portabella"` and `"Mushroom, portabella"` share a key.
+
+`scripts/025` also **fixed a live bug**: the `cabbage, red, raw` duplicate was
+a Foundation row with `calories_per_serving = 0` that a logged meal pointed at.
+Losers are repointed before deactivation and their nutrient columns are
+backfilled onto the winner (12 columns salvaged), so merging never loses
+canine data the curated row had and USDA lacked.
+
+### Verification
+- `scripts/023_search_relevance_check.ts` — 18/18, exit 0. Named expectations
+  against the real RPC; the Jest suite can't test SQL ranking.
+- `scripts/027_audit_canonical_merges.ts` — replays the ≥0.90 **silent**
+  auto-merges (the review queue only holds 0.75–0.90). Boundary: highest
+  queued 0.892 (`pear_nectar` ~ `peach_nectar`), lowest auto-merge 0.900.
+  Exits non-zero if they cross. **Run after any parser change.**
+- Jest 189/189, `next lint` clean, `next build` clean, mobile `tsc` clean.
+
+### Known gaps carried forward
+- **Cypress not run on this branch** — three specs changed, one added.
+- Default-variant selection is mediocre for large primal groups (`Beef round`
+  → *"New Zealand, imported, eye round"*): `is_verified` (+1000) swamps the
+  specificity penalty in `pickDefault()`.
+- One wrong auto-merge at exactly 0.900: `soymilk_chocolate` →
+  `silk_chocolate_soymilk` (generic absorbed into a branded group).
+- 44 queued items unreviewed; grouped search has one consumer (the bowl
+  variant picker) — the Foods page and search still use flat mode.
+- The mobile variant gate is **advisory**: `requiresChoice` ships in the
+  payload but only the web UI enforces it.
+- `foods_source_check` still permits `'fatsecret'`, contradicting the
+  CC0/ODbL-only storage rule.
+
 ## Next phase (planned)
 
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
