@@ -1,58 +1,58 @@
 # Canonical ingredient build
 
-_Generated 2026-07-30 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
+_Generated 2026-08-04 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
 
 | Metric | Value |
 |---|---|
 | Active rows | 4700 |
-| Canonical keys | 1409 |
-| Singleton keys | 758 |
-| Review-queue items | 44 |
-| Rows with unparsed segments | 1979 |
+| Canonical keys | 695 |
+| Singleton keys | 294 |
+| Review-queue items | 8 |
+| Rows with unparsed segments | 3052 |
 
 ## Largest groups
 
 ```
+  196  fish
   165  beef_round
   152  beef_chuck
   118  pork_loin
   107  beef_loin
+  106  bean
+   95  nut
    94  beef_rib
    91  pork_ham
+   86  cheese
+   78  chicken
+   76  oil
+   71  lamb
+   71  potato
    66  beef_ribeye
    64  lamb_shoulder
    62  lamb_leg
+   59  beef
+   51  yogurt
+   49  seed
+   47  milk
+   47  squash
    46  beef_short_loin
-   46  chicken
    45  beef_ground
-   40  beef_brisket
-   34  corn_sweet
-   31  beef
+   42  beef_brisket
+   40  pepper
+   37  game_meat
+   37  pork
+   35  turkey
    30  beef_sirloin
-   29  fish_salmon
    29  lamb_loin
    28  beef_plate
+   28  mollusk
+   28  mushroom
    28  pork_shoulder
-   28  yogurt_greek
-   26  lamb
+   26  flour
+   26  pasta
    25  bean_kidney
-   24  oil_industrial
-   24  rice_white
-   23  bean_snap
-   23  beef_tenderloin
-   23  turkey
-   22  squash_summer
-   22  squash_winter
-   20  beef_blade
-   20  chicken_thigh
-   20  veal_shoulder
-   19  beef_flank
-   19  chicken_drumstick
-   19  wheat_flour_white
-   18  beef_shoulder
-   18  pepper_sweet
-   18  potato
-   18  potato_french_fried
+   25  pea
+   24  cabbage
 ```
 
 ## Top unclassified residual terms
@@ -61,96 +61,60 @@ Each is a gazetteer gap in `lib/food-name-parser.ts`. Adding the frequent
 ones there is the cheapest way to improve grouping quality.
 
 ```
+   64  sweet
+   59  green
+   53  yellow
    47  blade
-   35  yellow
+   45  red
    35  bottom round
    31  top loin
    31  small end
-   31  white
-   29  green
-   29  top round
+   30  salmon
+   28  sprouted
+   28  greek
+   26  top round
    25  top loin steak
-   24  atlantic
-   23  red
-   22  shoulder clod
+   25  atlantic
+   24  industrial
+   23  snap
+   23  plain
+   22  lowfat
    22  arm
+   22  summer
+   22  winter
+   21  french fried
+   20  shoulder clod
    20  center rib
+   19  low sodium
+   19  back
+   18  sulfured
    18  mock tender steak
    18  tip round
    18  porterhouse steak
    17  large end
    17  t-bone steak
-   17  plain
+   17  chinese
    17  chobani
    16  arm pot roast
+   16  chopped
+   16  domesticated
    16  rump
    16  shank
    16  sirloin
-   16  from whole bird
-   15  lowfat
-   14  fast roasted
-   14  pan-broil
-   14  center loin
-   14  long-grain
-   13  low sodium
-   13  fast fried
-   13  top round steak
-   13  tenderloin
-   13  with added vitamin a and vitamin d
-   12  americas beef roast
-   12  short ribs
-   12  top blade
-   12  under blade center steak
 ```
 
 ## Review queue
 
-44 rows landed between 0.75 and 0.9 similarity against an existing canonical. They were KEPT SEPARATE (the conservative choice) and queued. Resolve each by adding a
+8 rows landed between 0.75 and 0.9 similarity against an existing canonical. They were KEPT SEPARATE (the conservative choice) and queued. Resolve each by adding a
 SYNONYMS entry in `lib/food-name-parser.ts`, then re-run with `--reset`.
 
 ```
-0.892  pear_nectar_with_added_ascorbic_acid  ~  peach_nectar_with_added_ascorbic_acid
-0.891  vitasoy_usa_organic_nasoya_extra_firm_tofu  ~  vitasoy_usa_organic_nasoya_tofu_plus_extra_firm
-0.879  milk_without_added_vitamin_a_and_vitamin_d  ~  milk_without_added_vitamin_d
-0.875  vitasoy_usa_organic_nasoya_firm_tofu  ~  vitasoy_usa_organic_nasoya_tofu_plus_firm
-0.870  vitasoy_usa_organic_nasoya_tofu_plus_firm  ~  vitasoy_usa_organic_nasoya_tofu_plus_extra_firm
-0.868  pear_nectar_without_added_ascorbic_acid  ~  pear_nectar_with_added_ascorbic_acid
-0.867  milk_with_added_vitamin_a_and_vitamin_d  ~  milk_with_added_vitamin_d
-0.865  applesauce_without_added_ascorbic_acid  ~  applesauce_with_added_ascorbic_acid
 0.857  hormel_always_tender_tenderloin  ~  hormel_always_tender_loin
-0.846  milk_buttermilk  ~  buttermilk
-0.839  cheese_pasteurized_process  ~  cheese_food_pasteurized_process
-0.833  milk_without_added_vitamin_d  ~  milk_with_added_vitamin_d
-0.833  vitasoy_usa_azumaya_firm_tofu  ~  vitasoy_usa_azumaya_extra_firm_tofu
-0.822  lemon_juice_from_concentrate_canned_or_bottled  ~  lemon_juice_from_concentrate_bottled
-0.818  silk_very_vanilla_soymilk  ~  silk_vanilla_soymilk
-0.808  peanut_butter_smooth_style  ~  peanut_butter_smooth
-0.808  plum_without_added_sugar  ~  plum_with_added_sugar
-0.806  refried_bean_traditional  ~  refried_bean_traditional_style
+0.808  hormel_always_tender  ~  hormel_always_tender_loin
 0.806  silk_strawberry_soy_yogurt  ~  silk_banana_strawberry_soy_yogurt
-0.795  cheese_pasteurized_process_cheese_food_or_product  ~  cheese_food_pasteurized_process
-0.789  pepper_hot_chili  ~  pepper_hot_chile
-0.784  pineapple_juice_frozen_concentrate  ~  apple_juice_frozen_concentrate
-0.771  pineapple_juice_canned_or_bottled  ~  apple_juice_canned_or_bottled
-0.769  passion_fruit_purple  ~  passion_fruit_juice_purple
-0.769  raspberry  ~  raspberry_red
-0.769  silk_light_chocolate_soymilk  ~  silk_chocolate_soymilk
-0.769  sorghum_whole_grain  ~  sorghum_flour_whole_grain
-0.767  seed_pumpkin_and_squash_seed  ~  seed_pumpkin_and_squash_seed_kernel
-0.765  fish_herring  ~  fish_oil_herring
-0.765  fish_sardine  ~  fish_oil_sardine
-0.763  soy_sauce_made_from_soy_and_wheat_low_sodium  ~  soy_sauce_made_from_soy_and_wheat
-0.762  cheese_monterey_jack  ~  cheese_monterey
-0.762  mushroom_oyster  ~  mushroom_king_oyster
-0.762  tangerine_juice_pack  ~  tangerine_juice
-0.760  crustacean_spiny_lobster  ~  crustacean_lobster
-0.759  grapefruit_juice_pink  ~  grapefruit_juice_pink_or_red
-0.756  vitasoy_usa_organic_nasoya_silken_tofu  ~  vitasoy_usa_organic_nasoya_soft_tofu
-0.750  fish_salmon  ~  fish_oil_salmon
-0.750  flour_whole_wheat  ~  flour_wheat
-0.750  ice_cream_light  ~  cream_light
-0.750  mungo_bean  ~  bean_mung
-0.750  silk_vanilla_soymilk  ~  silk_light_vanilla_soymilk
-0.750  sweet_potato_french_fried  ~  potato_french_fried
-0.750  wheat_flour_white  ~  flour_wheat
+0.778  game_meat_round  ~  game_meat_ground
+0.765  silk_very_vanilla  ~  silk_vanilla
+0.750  mungo_bean  ~  mung_bean
+0.750  wheat_flour_white  ~  flour_white
+0.750  wheat_flour  ~  wheat_flour_white
 ```

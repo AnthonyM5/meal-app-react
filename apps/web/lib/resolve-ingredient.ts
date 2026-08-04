@@ -6,8 +6,12 @@
 // "macaroni" can't pull crowd-sourced junk into the trusted table.
 
 import { searchOFFByName, type OFFProductLike } from '@/lib/off-integration'
-import type { Database } from '@/lib/types'
+import { per100g, type CanonicalMatch, type Database } from '@/lib/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
+
+// Shared with the confirmation UI and the mobile client — the single
+// definition lives in @pawplate/core.
+export type { CanonicalMatch }
 
 /**
  * Confidence floor below which a label stays unmatched.
@@ -62,28 +66,6 @@ export const AMBIGUOUS_KCAL_RATIO = 0.2
  */
 export const AMBIGUOUS_FAT_DELTA_G = 5
 
-/**
- * The canonical group a matched ingredient belongs to, plus whether its
- * variants disagree enough that the owner must choose explicitly.
- *
- * The vision model emits "ground beef" — it cannot see lean/fat ratio, and
- * nothing downstream can infer it. Before this, `matchLocalIngredient` took
- * the single top-scoring row and its ratio silently became the bowl's
- * nutrition. That is a guess presented as a measurement, so the flow now
- * refuses to proceed until the owner picks.
- */
-export interface CanonicalMatch {
-  canonicalId: string
-  displayName: string
-  variantCount: number
-  /** Owner must explicitly choose a variant before the bowl can be logged */
-  requiresChoice: boolean
-  /** [min, max] kcal per 100 g across the group — the UI explains the spread */
-  kcalRange: [number, number] | null
-  /** [min, max] fat g per 100 g across the group */
-  fatRange: [number, number] | null
-}
-
 export interface MatchedIngredient {
   ingredientId: string | null
   canonical: CanonicalMatch | null
@@ -99,7 +81,14 @@ function range(values: number[]): [number, number] | null {
  * members disagree materially on calories or fat.
  *
  * Single-variant groups (55% of the catalogue) never require a choice — there
- * is nothing to choose. Of the multi-variant groups, ~73% are flagged.
+ * is nothing to choose. The ambiguity spread is computed ONLY across variants
+ * sharing the matched row's preparation_state: raw vs cooked legitimately
+ * differ per 100 g by water loss, and flagging that difference would gate
+ * nearly every multi-variant group (~73% before this narrowing) without
+ * asking the owner anything the photo hasn't already answered.
+ *
+ * All values are normalized to per-100 g via per100g() rather than read raw —
+ * the "serving_size is always 100" convention is enforced here, not assumed.
  */
 export async function matchIngredientWithCanonical(
   supabase: SupabaseClient<Database>,
@@ -110,11 +99,12 @@ export async function matchIngredientWithCanonical(
 
   const { data: matched, error: matchedError } = await supabase
     .from('foods')
-    .select('canonical_id')
+    .select('canonical_id,preparation_state')
     .eq('id', ingredientId)
     .single()
-  // A row with no canonical_id is legitimate (branded/manual rows are never
-  // parsed into the canonical layer) — resolve it without a choice gate.
+  // A row with no canonical_id is legitimate — anything added after the last
+  // canonical build (owner-created manual rows, cache-on-accept OFF rows) is
+  // unattached until scripts/026 next runs. Resolve it without a choice gate.
   if (matchedError || !matched?.canonical_id) {
     return { ingredientId, canonical: null }
   }
@@ -122,27 +112,34 @@ export async function matchIngredientWithCanonical(
   const [{ data: group }, { data: variants }] = await Promise.all([
     supabase
       .from('canonical_ingredients')
-      .select('id,display_name,variant_count')
+      .select('id,display_name')
       .eq('id', matched.canonical_id)
       .single(),
     supabase
       .from('foods')
-      .select('calories_per_serving,fat_g')
+      .select('calories_per_serving,fat_g,serving_size,preparation_state')
       .eq('canonical_id', matched.canonical_id)
       .eq('is_active', true),
   ])
 
-  if (!group || !variants || variants.length <= 1) {
-    return { ingredientId, canonical: null }
-  }
+  if (!group || !variants) return { ingredientId, canonical: null }
+
+  // Only variants the owner could plausibly have meant instead: same
+  // preparation state as the matched row. A null prep state can't narrow.
+  const comparable = matched.preparation_state
+    ? variants.filter(v => v.preparation_state === matched.preparation_state)
+    : variants
+  if (comparable.length <= 1) return { ingredientId, canonical: null }
 
   const kcalRange = range(
-    variants
-      .map(v => Number(v.calories_per_serving))
-      .filter(n => Number.isFinite(n) && n > 0)
+    comparable
+      .map(v => per100g(Number(v.calories_per_serving), Number(v.serving_size)))
+      .filter((n): n is number => n !== null && n > 0)
   )
   const fatRange = range(
-    variants.map(v => Number(v.fat_g)).filter(n => Number.isFinite(n))
+    comparable
+      .map(v => per100g(Number(v.fat_g), Number(v.serving_size)))
+      .filter((n): n is number => n !== null)
   )
 
   const kcalAmbiguous =
@@ -155,7 +152,7 @@ export async function matchIngredientWithCanonical(
     canonical: {
       canonicalId: group.id as string,
       displayName: group.display_name as string,
-      variantCount: variants.length,
+      variantCount: comparable.length,
       requiresChoice: kcalAmbiguous || fatAmbiguous,
       kcalRange,
       fatRange,

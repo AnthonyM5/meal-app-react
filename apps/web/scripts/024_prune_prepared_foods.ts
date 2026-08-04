@@ -30,6 +30,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { writeFileSync } from 'node:fs'
 import { auditPath } from './_audit-path'
+import { fetchAllActiveFoods } from './_fetch-all'
 import { PRUNE_RULES, matchPruneRule } from '../lib/food-relevance'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -64,19 +65,10 @@ async function main() {
   if (REVERT) return revert()
 
   // Pull every currently-active row; the rules run on the description.
-  const rows: Array<{ id: string; name: string; source: string | null }> = []
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase
-      .from('foods')
-      .select('id,name,source')
-      .eq('is_active', true)
-      .order('name')
-      .range(offset, offset + 999)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    rows.push(...data)
-    if (data.length < 1000) break
-  }
+  const rows = await fetchAllActiveFoods<{ id: string; name: string }>(
+    supabase,
+    'id,name'
+  )
   console.error(`Scanned ${rows.length} active rows.`)
 
   // Attribute each match to the FIRST rule that fires, so the audit groups

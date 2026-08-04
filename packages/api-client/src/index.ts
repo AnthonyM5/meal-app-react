@@ -1,5 +1,6 @@
 import type {
   BowlAnalysisItem,
+  CanonicalMatch,
   CanonicalSearchResult,
   Dog,
   Food,
@@ -10,6 +11,8 @@ import type {
   NutrientGap,
   NutrientKey,
 } from '@pawplate/core'
+
+export type { CanonicalMatch }
 
 /**
  * Typed client for the mobile REST layer (apps/web/app/api — phasing step 2).
@@ -132,29 +135,12 @@ export interface BrandedSuggestion {
   kcal_per_100g: number
 }
 
-/**
- * The canonical group a matched bowl item landed in, plus whether its variants
- * differ enough that the owner must choose one explicitly.
- *
- * The vision model reports "ground beef" and cannot see the lean/fat ratio —
- * but that ratio spans 121-332 kcal/100 g. When `requires_choice` is true the
- * client MUST make the owner pick a variant (expand the group via
- * `ingredients.variants(canonical_id)`) before logging the meal; the
- * pre-filled ingredient is a guess, not a measurement.
- */
-export interface BowlItemCanonical {
-  canonicalId: string
-  displayName: string
-  variantCount: number
-  requiresChoice: boolean
-  /** [min, max] kcal per 100 g across the group */
-  kcalRange: [number, number] | null
-  /** [min, max] fat g per 100 g across the group */
-  fatRange: [number, number] | null
-}
-
 /** One identified item in an analyze response (transcribed from
- *  apps/web/components/bowl-confirmation.tsx `AnalyzedBowlItem`). */
+ *  apps/web/components/bowl-confirmation.tsx `AnalyzedBowlItem`).
+ *
+ *  When `canonical.requiresChoice` is true the client MUST make the owner
+ *  pick a variant (expand the group via `ingredients.variants(canonicalId)`)
+ *  before logging the meal — see `CanonicalMatch` in @pawplate/core. */
 export interface AnalyzedBowlItem {
   label: string
   estimated_proportion: number
@@ -163,7 +149,7 @@ export interface AnalyzedBowlItem {
   ingredient: Ingredient | null
   branded_suggestion?: BrandedSuggestion | null
   estimated_grams?: number | null
-  canonical?: BowlItemCanonical | null
+  canonical?: CanonicalMatch | null
 }
 
 /** Response of POST /api/bowl/analyze. Owner scans carry `analysis_id` +

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useIngredientSearch } from '@/hooks/use-ingredient-search'
+import { apiClient, ApiError } from '@/lib/api-client'
 import {
   acceptBrandedIngredient,
   createManualIngredient,
@@ -23,7 +24,7 @@ import type {
   BrandedSuggestion,
   CanonicalMatch,
 } from '@/lib/resolve-ingredient'
-import type { BowlAnalysisItem, Food, MealType } from '@/lib/types'
+import { per100g, type BowlAnalysisItem, type Food, type MealType } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import {
@@ -219,18 +220,14 @@ function VariantChoice({
     if (variants || isLoading) return
     setIsLoading(true)
     try {
-      const response = await fetch(
-        `/api/ingredients/grouped-search?canonical_id=${encodeURIComponent(
-          canonical.canonicalId
-        )}`
-      )
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not load options')
-      setVariants((data.variants ?? []) as Food[])
+      // Through the shared REST client, never a raw fetch: the route is
+      // Bearer-authenticated (lib/server/rest-auth.ts), so a cookie-only
+      // request would 401 even for a logged-in owner.
+      setVariants(await apiClient.ingredients.variants(canonical.canonicalId))
     } catch (error) {
       console.error('Variant load error:', error)
       toast.error(
-        error instanceof Error ? error.message : 'Could not load options'
+        error instanceof ApiError ? error.message : 'Could not load options'
       )
       setIsOpen(false)
     } finally {
@@ -295,8 +292,13 @@ function VariantChoice({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{food.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {Math.round(Number(food.calories_per_serving))} kcal
-                          {food.fat_g != null && ` · ${food.fat_g}g fat`}
+                          {/* Normalized — never assume serving_size is 100 g */}
+                          {Math.round(
+                            per100g(food.calories_per_serving, food.serving_size) ?? 0
+                          )}{' '}
+                          kcal
+                          {food.fat_g != null &&
+                            ` · ${(per100g(food.fat_g, food.serving_size) ?? 0).toFixed(1)}g fat`}
                           {food.preparation_state && ` · ${food.preparation_state}`}
                           {' / 100g'}
                         </span>

@@ -1,4 +1,5 @@
 import { checkDogSafety } from '@/lib/dog-toxic-foods'
+import { parseFoodName } from '@/lib/food-name-parser'
 import {
   convertOFFToIngredient,
   fetchOFFByBarcode,
@@ -15,6 +16,39 @@ import {
  * (lib/ingredient-actions.ts) and future REST routes for the mobile app.
  * No Next.js imports allowed here — auth resolution belongs to callers.
  */
+
+/**
+ * Attach a newly created food to the canonical layer by EXACT slug match.
+ *
+ * Rows created after a scripts/026 build used to stay canonical_id = NULL
+ * until the next full rebuild — invisible to grouped search and, worse,
+ * exempt from the bowl variant-choice safety gate. Exact match only: fuzzy
+ * matching and canonical creation stay offline in scripts/026, where the
+ * audit (scripts/027) can replay them. No match is fine — the row waits for
+ * the next build. Best-effort by design (returns null on any error): failing
+ * to attach must never block creating the ingredient.
+ *
+ * Known limit: attaching does not re-derive the group's pessimistic
+ * is_safe_for_dogs rollup; a newly attached toxic variant is still flagged
+ * row-level, and the group flag catches up on the next 026 run.
+ */
+async function lookupCanonicalId(
+  supabase: SupabaseClient<Database>,
+  name: string
+): Promise<string | null> {
+  try {
+    const { slug } = parseFoodName(name)
+    if (!slug) return null
+    const { data } = await supabase
+      .from('canonical_ingredients')
+      .select('id')
+      .eq('slug', slug)
+      .maybeSingle()
+    return (data?.id as string | undefined) ?? null
+  } catch {
+    return null
+  }
+}
 
 export interface ManualIngredientInput {
   name: string
@@ -52,11 +86,13 @@ export async function createManualIngredient(
       : 0
 
   const safety = checkDogSafety(name)
+  const canonicalId = await lookupCanonicalId(supabase, name)
 
   const { data, error } = await supabase
     .from('foods')
     .insert({
       name,
+      canonical_id: canonicalId,
       serving_size: 100,
       serving_unit: 'g',
       calories_per_serving: kcal,
@@ -100,12 +136,16 @@ export async function acceptBrandedIngredient(
   if (!product) throw new Error('Product no longer available on Open Food Facts')
   const row = convertOFFToIngredient(product)
   if (!row) throw new Error('Product reports no calorie data — log it as a custom ingredient instead')
+  const canonicalId = await lookupCanonicalId(supabase, row.name)
 
   const { data, error } = await supabase
     .from('foods')
     // OFF rows carry null macros where unreported; the runtime schema allows
     // this (nullable columns) even though the legacy Insert type says number.
-    .insert(row as unknown as Database['public']['Tables']['foods']['Insert'])
+    .insert({
+      ...row,
+      canonical_id: canonicalId,
+    } as unknown as Database['public']['Tables']['foods']['Insert'])
     .select('*')
     .single()
   if (error) throw error

@@ -37,6 +37,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { auditPath } from './_audit-path'
+import { fetchAllActiveFoods } from './_fetch-all'
 import { writeFileSync } from 'node:fs'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -132,23 +133,12 @@ async function countReferences(foodId: string): Promise<{ meals: number; recipes
 }
 
 async function main() {
-  const rows: FoodRow[] = []
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase
-      .from('foods')
-      .select(
-        ['id', 'name', 'fdc_id', 'source', 'usda_data_type', 'is_verified', 'created_at']
-          .concat(NUTRIENT_COLUMNS as unknown as string[])
-          .join(',')
-      )
-      .eq('is_active', true)
-      .order('name')
-      .range(offset, offset + 999)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    rows.push(...(data as unknown as FoodRow[]))
-    if (data.length < 1000) break
-  }
+  const rows = await fetchAllActiveFoods<FoodRow>(
+    supabase,
+    ['id', 'name', 'fdc_id', 'source', 'usda_data_type', 'is_verified', 'created_at']
+      .concat(NUTRIENT_COLUMNS as unknown as string[])
+      .join(',')
+  )
   console.error(`Scanned ${rows.length} active rows.`)
 
   const groups = new Map<string, FoodRow[]>()

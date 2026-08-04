@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS public.canonical_ingredients (
     part         TEXT,                   -- 'round'; NULL for whole foods
     -- Majority FDC food_category across the group, for filter chips
     category     TEXT,
-    -- FALSE when EVERY variant is toxic — lets the picker warn at group level
+    -- FALSE when ANY variant is explicitly toxic (pessimistic rollup, set by
+    -- scripts/026) — lets the picker warn at group level. Comment updated
+    -- 2026-08-03 when the rollup direction flipped; DDL itself is unchanged.
     is_safe_for_dogs BOOLEAN NOT NULL DEFAULT TRUE,
     -- Denormalized count of active variants; refreshed by scripts/026
     variant_count INT NOT NULL DEFAULT 0,

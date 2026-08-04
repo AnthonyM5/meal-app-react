@@ -1,3 +1,7 @@
+// Explicit jest globals, matching every other suite in __tests__/: without
+// this, Cypress's chai `Assertion` type wins the ambient `expect` and
+// `tsc --noEmit` fails with 40 "Property 'toBe' does not exist" errors.
+import { describe, expect, it } from '@jest/globals'
 import { parseFoodName, slugify } from '@/lib/food-name-parser'
 
 describe('slugify', () => {
@@ -144,6 +148,22 @@ describe('parseFoodName', () => {
       expect(parsed.slug).toBe('beef_round')
       expect(parsed.attrs.residual).toContain('shoulder clod')
       expect(parsed.attrs.residual).toContain('arm')
+    })
+
+    it('never promotes an unknown modifier to the canonical key', () => {
+      // The part slot is gazetteer-gated: fat percentage, species, and colour
+      // are not parts, so they must not fragment the key (this behavior
+      // previously produced `milk_325_milkfat` and made 54% of canonicals
+      // singletons). They land in residual, where the coverage report can
+      // surface them for deliberate promotion into PARTS.
+      expect(
+        parseFoodName('Milk, whole, 3.25% milkfat, with added vitamin D').slug
+      ).toBe('milk')
+      expect(parseFoodName('Grapes, red or green, raw').slug).toBe('grape')
+      const salmon = parseFoodName('Salmon, Atlantic, farmed, raw')
+      expect(salmon.slug).toBe('salmon')
+      expect(salmon.attrs.residual).toContain('atlantic')
+      expect(salmon.attrs.origin).toContain('farmed')
     })
   })
 })

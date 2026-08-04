@@ -29,17 +29,14 @@
 // canonicals instead of 958 rows — the right granularity for a dog-food
 // picker.
 
-/** Attributes that distinguish variants sharing one canonical key. */
-export interface VariantAttrs {
-  prep: string[]
-  trim: string[]
-  grade: string[]
-  origin: string[]
-  /** USDA grouping segments that carry no nutritional meaning */
-  grouping: string[]
-  /** Segments no gazetteer claimed — the parser's measurable blind spots */
-  residual: string[]
-}
+import type { FoodVariantAttrs } from '@pawplate/core/types'
+
+/**
+ * Attributes that distinguish variants sharing one canonical key. The shape
+ * is defined once in @pawplate/core (`FoodVariantAttrs` — it crosses the API
+ * boundary to mobile); this alias keeps the parser's local vocabulary.
+ */
+export type VariantAttrs = FoodVariantAttrs
 
 export interface ParsedFoodName {
   /** Base food, lowercased: 'beef', 'sweet potato' */
@@ -340,13 +337,13 @@ function applySynonym(term: string): string {
 }
 
 /**
- * Words ending in `s` that are not plurals. Without these, naive stripping
- * turns asparagus into "asparagu" and molasses into "molasse".
+ * Words ending in `s` that are not plurals AND that the rule chain below
+ * would otherwise mangle. Most -ss/-us/-is words (asparagus, hummus, bass)
+ * are already protected by the `/(ss|us|is)$/` guard and do NOT belong here —
+ * only words an EARLIER rule catches first ("molasses" matches `/(ch|sh|s|x|z)es$/`)
+ * or that no guard covers ("brussels", "sassafras").
  */
-const NOT_PLURAL = new Set([
-  'molasses', 'asparagus', 'hummus', 'couscous', 'watercress', 'cress',
-  'bass', 'grass', 'glass', 'swiss', 'brussels', 'anise', 'sassafras',
-])
+const NOT_PLURAL = new Set(['molasses', 'brussels', 'sassafras'])
 
 /**
  * Collapse an English plural to its singular.
@@ -484,9 +481,18 @@ export function parseFoodName(name: string): ParsedFoodName {
     }
   }
 
-  // Classify the remaining segments. The first unclaimed segment becomes the
-  // part (when the head didn't already supply one); later unclaimed segments
-  // are residual — the parser's measurable blind spots.
+  // Classify the remaining segments. A segment becomes the part ONLY when it
+  // resolves to a known PARTS word (when the head didn't already supply one);
+  // everything unclaimed is residual — the parser's measurable blind spots.
+  //
+  // The gazetteer gate matters: without it the first unclaimed segment became
+  // the part wholesale, so fat percentage, colour, and species turned into
+  // canonical keys (`milk_325_milkfat`, `salmon_atlantic`,
+  // `grape_red_or_green`) — the exact fragmentation the canonical layer
+  // exists to remove, and the reason 54% of keys were singletons. To keep a
+  // genuine variety distinct (say Greek yogurt), add the variety word to
+  // PARTS — the residual report in audits/canonical-ingredients.md shows
+  // which words are worth promoting, by frequency.
   for (const rawSegment of rawSegments.slice(1)) {
     const segment = normalizeSegment(rawSegment)
     if (!segment) continue
@@ -501,7 +507,7 @@ export function parseFoodName(name: string): ParsedFoodName {
       attrs.trim.push(segment)
     } else if (matchesAny(segment, PREP)) {
       attrs.prep.push(segment)
-    } else if (part === null) {
+    } else if (part === null && PART_SET.has(toPrimal(segment))) {
       part = toPrimal(segment)
     } else {
       attrs.residual.push(segment)

@@ -8,7 +8,9 @@ import type {
 import {
   computeMealNutrients,
   findUnsafeIngredients,
+  per100g,
   type BowlAnalysisItem,
+  type CanonicalMatch,
   type Ingredient,
   type MealType,
 } from '@pawplate/core'
@@ -73,6 +75,15 @@ interface Row {
   brandedCode: string | null
   grams: string
   estimatedGrams: number | null
+  /** Canonical group this row's ingredient belongs to, when it has one */
+  canonical: CanonicalMatch | null
+  /**
+   * True once the owner has explicitly picked a variant (or re-affirmed the
+   * pre-filled one). While a row's group `requiresChoice` and this is false,
+   * logging is blocked — the pre-filled variant is a guess, not a measurement.
+   * Mirrors apps/web/components/bowl-confirmation.tsx.
+   */
+  variantChosen: boolean
 }
 
 function toRow(item: AnalyzedBowlItem, index: number): Row {
@@ -85,7 +96,126 @@ function toRow(item: AnalyzedBowlItem, index: number): Row {
     brandedCode: item.branded_suggestion?.code ?? null,
     grams: item.estimated_grams != null ? String(item.estimated_grams) : '',
     estimatedGrams: item.estimated_grams ?? null,
+    canonical: item.canonical ?? null,
+    // Never pre-satisfied — when the group is ambiguous the owner must pick,
+    // even if they end up picking the pre-filled variant.
+    variantChosen: false,
   }
+}
+
+/**
+ * Explicit variant choice for an ambiguous canonical group — the mobile
+ * counterpart of web's VariantChoice. The vision model reports "ground beef"
+ * but cannot see the lean/fat ratio, which moves the group's energy 121-332
+ * kcal/100 g; logging is blocked until the owner says which one they served.
+ * Variants load lazily through the shared REST client on first expand.
+ */
+function VariantChoice({
+  canonical,
+  selectedId,
+  onChoose,
+}: {
+  canonical: CanonicalMatch
+  selectedId: string | null
+  onChoose: (food: Ingredient) => void
+}) {
+  const [variants, setVariants] = useState<Ingredient[] | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+
+  async function open() {
+    setIsOpen(true)
+    if (variants || isLoading) return
+    setIsLoading(true)
+    try {
+      setVariants(await api.ingredients.variants(canonical.canonicalId))
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? error.message : 'Could not load options'
+      )
+      setIsOpen(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const kcalSpread = canonical.kcalRange
+    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(canonical.kcalRange[1])} kcal`
+    : null
+  const fatSpread = canonical.fatRange
+    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
+    : null
+
+  return (
+    <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Which {canonical.displayName.toLowerCase()} did you use?
+            </p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+              The photo can&apos;t show this. {canonical.variantCount} options
+              span {[kcalSpread, fatSpread].filter(Boolean).join(' and ')} per
+              100 g — picking the wrong one skews the whole bowl.
+            </p>
+          </div>
+
+          {!isOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={open}
+              data-testid="variant-choice-open"
+            >
+              Choose an option
+            </Button>
+          ) : isLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading options…
+            </div>
+          ) : (
+            <div className="max-h-56 overflow-y-auto rounded-md border bg-background">
+              <ul className="divide-y">
+                {(variants ?? []).map(food => (
+                  <li key={food.id}>
+                    <button
+                      type="button"
+                      onClick={() => onChoose(food)}
+                      className={`flex w-full items-center justify-between gap-2 p-2 text-left text-sm hover:bg-muted${
+                        food.id === selectedId ? ' bg-muted' : ''
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{food.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {/* Normalized — never assume serving_size is 100 g */}
+                          {Math.round(
+                            per100g(food.calories_per_serving, food.serving_size) ?? 0
+                          )}{' '}
+                          kcal
+                          {food.fat_g != null &&
+                            ` · ${(per100g(food.fat_g, food.serving_size) ?? 0).toFixed(1)}g fat`}
+                          {food.preparation_state && ` · ${food.preparation_state}`}
+                          {' / 100g'}
+                        </span>
+                      </span>
+                      {food.id === selectedId && (
+                        <Check className="h-4 w-4 shrink-0 text-primary" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /** Grab a photo: native camera/library prompt, or a file input on web dev. */
@@ -201,6 +331,10 @@ export function BowlPhotoScreen() {
     [numericItems]
   )
   const unmatchedCount = rows.filter(r => !r.ingredient).length
+  /** Rows whose canonical group is ambiguous and still unconfirmed. */
+  const pendingVariantRows = rows.filter(
+    r => r.canonical?.requiresChoice && !r.variantChosen
+  )
 
   function setGrams(key: string, grams: string) {
     setRows(current =>
@@ -217,7 +351,15 @@ export function BowlPhotoScreen() {
     setRows(current =>
       current.map(r =>
         r.key === key
-          ? { ...r, ingredient, grams: r.grams || '100', brandedCode: null }
+          ? {
+              ...r,
+              ingredient,
+              grams: r.grams || '100',
+              brandedCode: null,
+              // An explicit pick (variant choice or search) supersedes the
+              // group gate: the owner named the exact row they want.
+              variantChosen: true,
+            }
           : r
       )
     )
@@ -239,6 +381,14 @@ export function BowlPhotoScreen() {
   async function handleSubmit() {
     if (unmatchedCount > 0) {
       toast.error('Resolve every item: search an ingredient or remove it')
+      return
+    }
+    if (pendingVariantRows.length > 0) {
+      toast.error(
+        `Pick which ${pendingVariantRows
+          .map(r => r.canonical?.displayName.toLowerCase())
+          .join(' and ')} you used — the photo can't tell us`
+      )
       return
     }
     if (rows.some(r => !(Number(r.grams) > 0))) {
@@ -449,6 +599,16 @@ export function BowlPhotoScreen() {
                       <p className="text-xs text-muted-foreground">estimate</p>
                     )}
 
+                    {row.canonical?.requiresChoice && (
+                      <VariantChoice
+                        canonical={row.canonical}
+                        selectedId={
+                          row.variantChosen ? (row.ingredient?.id ?? null) : null
+                        }
+                        onChoose={food => assignIngredient(row.key, food)}
+                      />
+                    )}
+
                     {!row.ingredient && (
                       <div className="space-y-2">
                         {row.brandedCode && (
@@ -543,10 +703,22 @@ export function BowlPhotoScreen() {
             </p>
           </div>
 
+          {pendingVariantRows.length > 0 && (
+            <p className="text-center text-xs text-amber-600 dark:text-amber-400">
+              Pick an option for{' '}
+              {pendingVariantRows
+                .map(r => r.canonical?.displayName.toLowerCase())
+                .join(', ')}{' '}
+              before logging.
+            </p>
+          )}
+
           <Button
             className="w-full"
             onClick={handleSubmit}
-            disabled={submitting || rows.length === 0}
+            disabled={
+              submitting || rows.length === 0 || pendingVariantRows.length > 0
+            }
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Log {mealType} from photo

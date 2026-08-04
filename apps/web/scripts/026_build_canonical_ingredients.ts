@@ -18,7 +18,8 @@
  * NON-DESTRUCTIVE: only writes canonical_id / variant_attrs /
  * is_canonical_default on `foods`. No name is rewritten, no row is deleted,
  * no nutrient value is touched. Re-runnable: `--reset` clears the layer and
- * rebuilds from scratch.
+ * rebuilds from scratch — except RESOLVED review-queue rows, which are human
+ * judgment and survive every reset (only 'pending' rows are cleared).
  *
  * Usage:
  *   set -a && source .env.local && set +a
@@ -30,6 +31,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { writeFileSync } from 'node:fs'
 import { auditPath } from './_audit-path'
+import {
+  AUTO_MERGE_SIMILARITY,
+  REVIEW_SIMILARITY,
+  similarity,
+} from './_canonical-similarity'
+import { fetchAllActiveFoods, fetchAllRows } from './_fetch-all'
 import { parseFoodName, type ParsedFoodName } from '../lib/food-name-parser'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -43,11 +50,6 @@ if (!url || !serviceKey) {
 const APPLY = process.argv.includes('--apply')
 const RESET = process.argv.includes('--reset')
 const AUDIT_PATH = auditPath('canonical-ingredients.md')
-
-/** Above this, two slugs are the same ingredient. */
-const AUTO_MERGE_SIMILARITY = 0.9
-/** Below this, they are different ingredients. Between = human review. */
-const REVIEW_SIMILARITY = 0.75
 
 const CHUNK = 200
 
@@ -73,29 +75,6 @@ interface Canonical {
   baseFood: string
   part: string | null
   members: Array<{ row: FoodRow; parsed: ParsedFoodName }>
-}
-
-// ---------------------------------------------------------------------------
-// Trigram similarity — the same metric pg_trgm's similarity() computes, so
-// the thresholds here mean the same thing they would in SQL.
-// ---------------------------------------------------------------------------
-
-function trigrams(text: string): Set<string> {
-  const out = new Set<string>()
-  for (const word of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
-    const padded = `  ${word} `
-    for (let i = 0; i < padded.length - 2; i++) out.add(padded.slice(i, i + 3))
-  }
-  return out
-}
-
-function similarity(a: string, b: string): number {
-  const ta = trigrams(a)
-  const tb = trigrams(b)
-  if (ta.size === 0 || tb.size === 0) return 0
-  let shared = 0
-  for (const t of ta) if (tb.has(t)) shared++
-  return shared / (ta.size + tb.size - shared)
 }
 
 /** Most frequent non-null value, for rolling variant categories up. */
@@ -142,26 +121,6 @@ function pickDefault(members: Canonical['members']): FoodRow {
   return scored[0].row
 }
 
-async function fetchAllFoods(): Promise<FoodRow[]> {
-  const rows: FoodRow[] = []
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase
-      .from('foods')
-      .select(
-        'id,name,food_category,usda_data_type,source,is_verified,' +
-          'is_safe_for_dogs,preparation_state,fdc_id'
-      )
-      .eq('is_active', true)
-      .order('name')
-      .range(offset, offset + 999)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    rows.push(...(data as unknown as FoodRow[]))
-    if (data.length < 1000) break
-  }
-  return rows
-}
-
 async function reset() {
   console.error('Resetting canonical layer...')
   const { error: foodsError } = await supabase
@@ -169,10 +128,19 @@ async function reset() {
     .update({ canonical_id: null, variant_attrs: null, is_canonical_default: false })
     .not('canonical_id', 'is', null)
   if (foodsError) throw foodsError
-  for (const table of ['canonical_review_queue', 'canonical_ingredients'] as const) {
-    const { error } = await supabase.from(table).delete().neq('id', NIL_UUID)
-    if (error) throw error
-  }
+  // Only PENDING queue rows are cleared. Resolved rows ('merged' /
+  // 'kept_separate') are a human's judgment — hours of review that the
+  // pipeline cannot recompute — and must survive every rebuild.
+  const { error: queueError } = await supabase
+    .from('canonical_review_queue')
+    .delete()
+    .eq('status', 'pending')
+  if (queueError) throw queueError
+  const { error: canonicalsError } = await supabase
+    .from('canonical_ingredients')
+    .delete()
+    .neq('id', NIL_UUID)
+  if (canonicalsError) throw canonicalsError
 }
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
@@ -180,7 +148,11 @@ const NIL_UUID = '00000000-0000-0000-0000-000000000000'
 async function main() {
   if (RESET && APPLY) await reset()
 
-  const rows = await fetchAllFoods()
+  const rows = await fetchAllActiveFoods<FoodRow>(
+    supabase,
+    'id,name,food_category,usda_data_type,source,is_verified,' +
+      'is_safe_for_dogs,preparation_state,fdc_id'
+  )
   console.error(`Parsing ${rows.length} active rows...\n`)
 
   // ---- 1. parse + 2. bucket by slug, with 3. fuzzy matching for near-misses
@@ -323,9 +295,14 @@ async function main() {
     base_food: c.baseFood,
     part: c.part,
     category: majority(c.members.map(m => m.row.food_category)),
-    // Only flag the GROUP unsafe when every variant is — a group holding one
-    // toxic variant among safe ones must not read as toxic wholesale.
-    is_safe_for_dogs: c.members.some(m => m.row.is_safe_for_dogs !== false),
+    // PESSIMISTIC rollup: one explicitly-unsafe variant marks the whole group,
+    // so a picker can never present a group containing a toxic member as safe.
+    // For a dog app the failure direction must be toward caution — the parser
+    // still groups by variety at times, so "any variant unsafe" is the only
+    // rollup that can't hide a grape among raisins. Row-level flags stay
+    // authoritative for the actually-selected variant; NULL (unknown) does
+    // not trip the group flag.
+    is_safe_for_dogs: !c.members.some(m => m.row.is_safe_for_dogs === false),
     variant_count: c.members.length,
   }))
 
@@ -336,22 +313,18 @@ async function main() {
     if (error) throw error
   }
 
-  // MUST paginate: PostgREST caps an unbounded select at 1,000 rows, and
-  // there are ~1,432 canonicals. Fetching without a range silently truncated
-  // this map, so every canonical past the first 1,000 was skipped in the
-  // attach loop below and its rows kept canonical_id = NULL.
+  // MUST paginate (see _fetch-all.ts): PostgREST caps an unbounded select at
+  // 1,000 rows, and there are ~1,432 canonicals. Fetching without a range
+  // silently truncated this map, so every canonical past the first 1,000 was
+  // skipped in the attach loop below and its rows kept canonical_id = NULL.
   const idBySlug = new Map<string, string>()
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase
-      .from('canonical_ingredients')
-      .select('id,slug')
-      .order('slug')
-      .range(offset, offset + 999)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    for (const r of data) idBySlug.set(r.slug as string, r.id as string)
-    if (data.length < 1000) break
-  }
+  const canonicalIds = await fetchAllRows<{ id: string; slug: string }>(
+    supabase,
+    'canonical_ingredients',
+    'id,slug',
+    { orderBy: 'slug' }
+  )
+  for (const r of canonicalIds) idBySlug.set(r.slug, r.id)
   if (idBySlug.size !== canonicalRows.length) {
     throw new Error(
       `Canonical id map is incomplete: ${idBySlug.size} fetched vs ` +
@@ -401,9 +374,15 @@ async function main() {
       status: 'pending' as const,
     }))
     for (let i = 0; i < queueRows.length; i += CHUNK) {
+      // ignoreDuplicates: a food_id that already has a queue row keeps it.
+      // Resolved rows ('merged'/'kept_separate') are human review work that a
+      // rebuild must never flip back to 'pending'.
       const { error } = await supabase
         .from('canonical_review_queue')
-        .upsert(queueRows.slice(i, i + CHUNK), { onConflict: 'food_id' })
+        .upsert(queueRows.slice(i, i + CHUNK), {
+          onConflict: 'food_id',
+          ignoreDuplicates: true,
+        })
       if (error) throw error
     }
   }
