@@ -18,7 +18,13 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 const MIN_QUERY_LENGTH = 2
 const GROUP_LIMIT = 25
-const VARIANT_LIMIT = 100
+// Must exceed the largest canonical group, or the variant gate can demand a
+// choice it cannot display: the owner is blocked from logging until they pick,
+// so a truncated list may structurally exclude what they actually served.
+// Largest group as of the 2026-07-30 build is beef_round at 165
+// (audits/canonical-ingredients.md); 200 leaves headroom. Longer-term fix is
+// search/pagination inside the variant picker.
+const VARIANT_LIMIT = 200
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request)

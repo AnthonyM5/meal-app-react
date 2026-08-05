@@ -91,8 +91,9 @@ export interface Food {
 }
 
 /**
- * Attributes that distinguish variants sharing one canonical key. Mirrors
- * VariantAttrs in apps/web/lib/food-name-parser.ts, which is what writes it.
+ * Attributes that distinguish variants sharing one canonical key. This is the
+ * single source of truth; apps/web/lib/food-name-parser.ts (which writes it)
+ * aliases this type as `VariantAttrs`.
  */
 export interface FoodVariantAttrs {
   prep: string[]
@@ -118,11 +119,62 @@ export interface CanonicalIngredient {
   /** Primal cut / organ; null for whole foods */
   part: string | null
   category: string | null
-  /** FALSE only when EVERY variant in the group is toxic */
+  /**
+   * FALSE when ANY variant in the group is explicitly unsafe (pessimistic
+   * rollup — for a dog app the failure direction must be toward caution).
+   * NULL/unknown variant safety does not trip the flag.
+   */
   is_safe_for_dogs: boolean
   variant_count: number
   created_at: string
   updated_at: string
+}
+
+/**
+ * The canonical group a matched ingredient landed in, plus whether its
+ * variants disagree enough that the owner must choose one explicitly.
+ *
+ * The vision model reports "ground beef" and cannot see the lean/fat ratio —
+ * but that ratio spans 121-332 kcal/100 g. When `requiresChoice` is true the
+ * client MUST make the owner pick a variant (expand the group via the
+ * grouped-search variants endpoint) before logging the meal; the pre-filled
+ * ingredient is a guess, not a measurement.
+ *
+ * Ranges and `variantCount` are scoped to variants matching the matched row's
+ * preparation state (raw vs cooked legitimately differ per 100 g by water
+ * loss, and that difference is not the owner's choice to make here), and are
+ * normalized to per-100 g via `per100g`.
+ */
+export interface CanonicalMatch {
+  canonicalId: string
+  displayName: string
+  variantCount: number
+  /** Owner must explicitly choose a variant before the bowl can be logged */
+  requiresChoice: boolean
+  /** [min, max] kcal per 100 g across the comparable variants */
+  kcalRange: [number, number] | null
+  /** [min, max] fat g per 100 g across the comparable variants */
+  fatRange: [number, number] | null
+}
+
+/**
+ * Normalize a per-serving value to per-100 g.
+ *
+ * Every writer in this codebase sets `serving_size = 100` ('g'), so this is
+ * usually the identity — but that convention was previously assumed, not
+ * enforced. Any code that DISPLAYS or COMPARES "per 100 g" numbers must go
+ * through this instead of reading `*_per_serving` raw. Null/zero/missing
+ * serving sizes fall back to the schema default of 100.
+ */
+export function per100g(
+  value: number | null | undefined,
+  servingSize: number | null | undefined
+): number | null {
+  const v = Number(value)
+  if (!Number.isFinite(v)) return null
+  const size = Number(servingSize)
+  if (!Number.isFinite(size) || size <= 0) return v
+  return (v * 100) / size
 }
 
 /** One row of grouped search: the canonical plus its default variant. */

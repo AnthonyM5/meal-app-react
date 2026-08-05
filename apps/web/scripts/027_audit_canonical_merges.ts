@@ -30,6 +30,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { writeFileSync } from 'node:fs'
 import { auditPath } from './_audit-path'
+// The audit replays scripts/026's decisions, so it MUST run the exact
+// similarity code and thresholds 026 ran — shared via _canonical-similarity.
+import {
+  AUTO_MERGE_SIMILARITY,
+  REVIEW_SIMILARITY,
+  similarity,
+} from './_canonical-similarity'
+import { fetchAllActiveFoods } from './_fetch-all'
 import { parseFoodName } from '../lib/food-name-parser'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -40,33 +48,11 @@ if (!url || !serviceKey) {
   process.exit(1)
 }
 
-/** Must mirror scripts/026 — this replays that script's decisions. */
-const AUTO_MERGE_SIMILARITY = 0.9
-const REVIEW_SIMILARITY = 0.75
-
 const AUDIT_PATH = auditPath('canonical-merge-audit.md')
 
 const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
-
-function trigrams(text: string): Set<string> {
-  const out = new Set<string>()
-  for (const word of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
-    const padded = `  ${word} `
-    for (let i = 0; i < padded.length - 2; i++) out.add(padded.slice(i, i + 3))
-  }
-  return out
-}
-
-function similarity(a: string, b: string): number {
-  const ta = trigrams(a)
-  const tb = trigrams(b)
-  if (ta.size === 0 || tb.size === 0) return 0
-  let shared = 0
-  for (const t of ta) if (tb.has(t)) shared++
-  return shared / (ta.size + tb.size - shared)
-}
 
 interface Decision {
   from: string
@@ -76,19 +62,10 @@ interface Decision {
 }
 
 async function main() {
-  const rows: Array<{ id: string; name: string }> = []
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase
-      .from('foods')
-      .select('id,name')
-      .eq('is_active', true)
-      .order('name')
-      .range(offset, offset + 999)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    rows.push(...data)
-    if (data.length < 1000) break
-  }
+  const rows = await fetchAllActiveFoods<{ id: string; name: string }>(
+    supabase,
+    'id,name'
+  )
 
   const canonicals = new Set<string>()
   const merges: Decision[] = []
