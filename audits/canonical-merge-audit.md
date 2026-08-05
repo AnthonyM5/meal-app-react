@@ -1,13 +1,13 @@
 # Canonical merge audit
 
-_Generated 2026-08-04 by scripts/027_audit_canonical_merges.ts._
+_Generated 2026-08-05 by scripts/027_audit_canonical_merges.ts._
 
 | Metric | Value |
 |---|---|
 | Active rows | 4700 |
-| Canonicals | 695 |
+| Canonicals | 707 |
 | Auto-merged (>= 0.9) | 0 |
-| Queued for review | 8 |
+| Queued for review | 9 |
 | Highest queued (kept apart) | 0.857 |
 | Lowest auto-merge | 1.000 |
 | Threshold separates cleanly | yes |

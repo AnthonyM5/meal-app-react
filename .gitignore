@@ -45,3 +45,16 @@ coverage/
 .DS_Store
 Thumbs.db
 tsconfig.tsbuildinfo
+
+# Eval fixture photos are user images, not repo assets (see apps/web/scripts/fixtures/README.md).
+# Covers scripts/ as well as scripts/fixtures/: a photo copied one directory
+# short of the fixtures dir slipped past a fixtures-only rule and reached a
+# pushed commit.
+apps/web/scripts/*.jpg
+apps/web/scripts/*.jpeg
+apps/web/scripts/*.png
+apps/web/scripts/*.webp
+apps/web/scripts/fixtures/*.jpg
+apps/web/scripts/fixtures/*.jpeg
+apps/web/scripts/fixtures/*.png
+apps/web/scripts/fixtures/*.webp

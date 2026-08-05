@@ -92,8 +92,9 @@ const GROUPING = [
   /^light or dark meat$/,
   /^retail parts?$/,
   /^from whole$/,
-  /^composite of separable fat$/,
-  /^separable fat$/,
+  // NOTE: "separable fat" and "composite of separable fat" were here until
+  // 2026-08-04. They are not scaffolding — they name a different food. See
+  // PARTS below.
 ]
 
 /** Country / husbandry provenance. Nutritionally minor, taxonomically noisy. */
@@ -152,7 +153,6 @@ const TRIM = [
   /^skin-?less$/,
   /^with(out)? skin$/,
   /^without skin and bones?$/,
-  /^giblets$/,
   /^peeled$/,
   /^unpeeled$/,
   /^seeded$/,
@@ -164,6 +164,8 @@ const TRIM = [
   /^salted$/,
   /^with(out)? added salt$/,
   /^with(out)? salt added$/,
+  // NOTE: /^giblets$/ was here until 2026-08-04 — giblets are an organ, not a
+  // trim state. See PARTS below.
   // "no X" phrasing — FDC uses it interchangeably with "without X", and
   // missing it was not cosmetic: "Sweet potato, cooked, no skin" fell through
   // to the part slot and keyed the row as `sweet_potato_skin`, i.e. sweet
@@ -258,7 +260,18 @@ const PARTS = [
   // organs
   'liver', 'kidney', 'kidneys', 'heart', 'hearts', 'gizzard', 'gizzards',
   'tongue', 'tripe', 'spleen', 'lung', 'lungs', 'brain', 'brains',
-  'sweetbread', 'sweetbreads', 'pancreas', 'thymus',
+  'sweetbread', 'sweetbreads', 'pancreas', 'thymus', 'giblet', 'giblets',
+  // Rendered/adipose tissue. 'fat' is a PART, not a modifier: measured
+  // 2026-08-04, "Chicken, broilers or fryers, separable fat, raw" is 629
+  // kcal/100 g against 109-170 for the muscle-meat rows, yet it was landing
+  // in the `chicken` canonical AND winning pickDefault — so it sat at the top
+  // of the variant picker, one tap from a 4-6x calorie error.
+  //
+  // Safe to list despite how often "fat" appears in FDC descriptions: TRIM is
+  // tested BEFORE the part slot, so "lean and fat", "separable lean and fat",
+  // "85% lean / 15% fat", "fat free", "reduced fat", "external fat" and
+  // "seam fat" are all claimed there and never reach this gazetteer.
+  'fat',
   // poultry cuts
   'breast', 'breasts', 'thigh', 'thighs', 'wing', 'wings', 'drumstick',
   'drumsticks', 'leg', 'legs', 'neck', 'necks', 'feet', 'foot', 'tail',
@@ -310,6 +323,7 @@ const SYNONYMS: Record<string, string> = {
   kidneys: 'kidney',
   hearts: 'heart',
   gizzards: 'gizzard',
+  giblets: 'giblet',
   breasts: 'breast',
   thighs: 'thigh',
   wings: 'wing',

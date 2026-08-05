@@ -166,4 +166,45 @@ describe('parseFoodName', () => {
       expect(salmon.attrs.origin).toContain('farmed')
     })
   })
+
+  // The mirror image of the test above: gating the part slot stopped the key
+  // from over-FRAGMENTING, but left it over-MERGING in the other direction.
+  // Adipose tissue and giblets were classified as scaffolding/trim, so they
+  // collapsed into the muscle-meat canonical of the same animal — measured
+  // 2026-08-04 at 629 kcal/100 g inside a `chicken` group whose real rows run
+  // 109-170, and elected by pickDefault to represent the whole group.
+  describe('foods that are not modifiers', () => {
+    it('keys separable fat to its own canonical, not the muscle meat', () => {
+      const fat = parseFoodName('Chicken, broilers or fryers, separable fat, raw')
+      expect(fat.part).toBe('fat')
+      expect(fat.slug).toBe('chicken_fat')
+      expect(parseFoodName('Beef, composite of separable fat, raw').slug).toBe(
+        'beef_fat'
+      )
+    })
+
+    it('keys giblets to their own canonical', () => {
+      const giblets = parseFoodName('Turkey, whole, giblets, raw')
+      expect(giblets.part).toBe('giblet')
+      expect(giblets.slug).toBe('turkey_giblet')
+      // Singular/plural must not split the group.
+      expect(parseFoodName('Chicken giblets, raw').slug).toBe('chicken_giblet')
+    })
+
+    it('still treats fat DESCRIPTORS as trim, never as a part', () => {
+      // TRIM is tested before the part slot, which is the whole reason a bare
+      // 'fat' is safe to list in PARTS. If that ordering ever changes, every
+      // one of these silently becomes a `*_fat` canonical.
+      for (const name of [
+        'Beef, ground, 85% lean meat / 15% fat, raw',
+        'Beef, chuck, separable lean and fat, raw',
+        'Pork, fresh, loin, separable lean only, raw',
+        'Yogurt, plain, low fat',
+        'Milk, fat free, fluid',
+        'Beef, brisket, trimmed to 1/8" fat, raw',
+      ]) {
+        expect(parseFoodName(name).part).not.toBe('fat')
+      }
+    })
+  })
 })

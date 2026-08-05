@@ -1,14 +1,14 @@
 # Canonical ingredient build
 
-_Generated 2026-08-04 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
+_Generated 2026-08-05 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
 
 | Metric | Value |
 |---|---|
 | Active rows | 4700 |
-| Canonical keys | 695 |
-| Singleton keys | 294 |
-| Review-queue items | 8 |
-| Rows with unparsed segments | 3052 |
+| Canonical keys | 707 |
+| Singleton keys | 299 |
+| Review-queue items | 9 |
+| Rows with unparsed segments | 3044 |
 
 ## Largest groups
 
@@ -19,18 +19,18 @@ _Generated 2026-08-04 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
   118  pork_loin
   107  beef_loin
   106  bean
-   95  nut
    94  beef_rib
+   94  nut
    91  pork_ham
-   86  cheese
-   78  chicken
-   76  oil
-   71  lamb
+   83  cheese
    71  potato
+   69  oil
+   68  chicken
    66  beef_ribeye
    64  lamb_shoulder
    62  lamb_leg
-   59  beef
+   61  lamb
+   55  beef
    51  yogurt
    49  seed
    47  milk
@@ -40,10 +40,10 @@ _Generated 2026-08-04 by scripts/026_build_canonical_ingredients.ts (APPLIED)._
    42  beef_brisket
    40  pepper
    37  game_meat
-   37  pork
-   35  turkey
+   33  turkey
    30  beef_sirloin
    29  lamb_loin
+   29  pork
    28  beef_plate
    28  mollusk
    28  mushroom
@@ -105,13 +105,14 @@ ones there is the cheapest way to improve grouping quality.
 
 ## Review queue
 
-8 rows landed between 0.75 and 0.9 similarity against an existing canonical. They were KEPT SEPARATE (the conservative choice) and queued. Resolve each by adding a
+9 rows landed between 0.75 and 0.9 similarity against an existing canonical. They were KEPT SEPARATE (the conservative choice) and queued. Resolve each by adding a
 SYNONYMS entry in `lib/food-name-parser.ts`, then re-run with `--reset`.
 
 ```
 0.857  hormel_always_tender_tenderloin  ~  hormel_always_tender_loin
 0.808  hormel_always_tender  ~  hormel_always_tender_loin
 0.806  silk_strawberry_soy_yogurt  ~  silk_banana_strawberry_soy_yogurt
+0.778  cottage_cheese_fat  ~  cottage_cheese
 0.778  game_meat_round  ~  game_meat_ground
 0.765  silk_very_vanilla  ~  silk_vanilla
 0.750  mungo_bean  ~  mung_bean

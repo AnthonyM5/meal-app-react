@@ -108,11 +108,20 @@ function pickDefault(members: Canonical['members']): FoodRow {
     if (row.source === 'usda' || row.source === 'curated') score += 50
     // Prefer the least-qualified variant: every extra attribute is a
     // specialization the owner did not ask for.
+    //
+    // `grouping` is counted too, and its omission was a real defect: USDA
+    // scaffolding segments were the ONE axis carrying no penalty, so the row
+    // with the most scaffolding and the least real description won. Measured
+    // 2026-08-04 (scripts/028_search_eval.ts), that elected
+    // "Chicken, broilers or fryers, separable fat, raw" to represent all 78
+    // chicken variants and "Turkey, whole, giblets, raw" to represent 35
+    // turkey ones — the group's worst possible ambassador, twice.
     const specificity =
       parsed.attrs.trim.length +
       parsed.attrs.grade.length +
       parsed.attrs.origin.length +
-      parsed.attrs.residual.length
+      parsed.attrs.residual.length +
+      parsed.attrs.grouping.length
     score -= specificity * 10
     score -= row.name.length / 100
     return { row, score }

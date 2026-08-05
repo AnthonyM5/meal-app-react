@@ -67,12 +67,19 @@ const RELEVANCE_CASES: Array<{
     why: 'a generic beef cut, not a 9-segment Wagyu marble-score variant',
   },
   {
+    // KNOWN RED as of 2026-08-04. The top hit is "Chicken, feet, raw", which
+    // the old predicate (`^chicken,` + <= 3 segments) accepted — so this gate
+    // reported green on the exact bug it exists to catch. The extremity/organ
+    // rejection below is the honest expectation; see
+    // audits/search-eval-*.md (scripts/028_search_eval.ts) for the measured
+    // flat-vs-grouped comparison and the ranking fix it points to.
     query: 'chicken',
     expect: n =>
       /^chicken,/i.test(n) &&
       segments(n) <= 3 &&
-      !/meatless|canned/i.test(n),
-    why: 'real chicken — NOT "Chicken, meatless" (a soy product)',
+      !/meatless|canned/i.test(n) &&
+      !/feet|foot|skin|gizzard|giblet|heart|liver|neck|back|tail/i.test(n),
+    why: 'muscle meat — not feet, skin, giblets, or "Chicken, meatless" (a soy product)',
   },
   {
     query: 'pork',
