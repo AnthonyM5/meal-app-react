@@ -7,6 +7,7 @@ import type {
 } from '@pawplate/api-client'
 import {
   computeMealNutrients,
+  describeVariantChoice,
   findUnsafeIngredients,
   per100g,
   type BowlAnalysisItem,
@@ -139,12 +140,6 @@ function VariantChoice({
     }
   }
 
-  const kcalSpread = canonical.kcalRange
-    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(canonical.kcalRange[1])} kcal`
-    : null
-  const fatSpread = canonical.fatRange
-    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
-    : null
 
   return (
     <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
@@ -156,9 +151,7 @@ function VariantChoice({
               Which {canonical.displayName.toLowerCase()} did you use?
             </p>
             <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
-              The photo can&apos;t show this. {canonical.variantCount} options
-              span {[kcalSpread, fatSpread].filter(Boolean).join(' and ')} per
-              100 g — picking the wrong one skews the whole bowl.
+              {describeVariantChoice(canonical)}
             </p>
           </div>
 

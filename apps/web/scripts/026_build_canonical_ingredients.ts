@@ -38,6 +38,7 @@ import {
 } from './_canonical-similarity'
 import { fetchAllActiveFoods, fetchAllRows } from './_fetch-all'
 import { parseFoodName, type ParsedFoodName } from '../lib/food-name-parser'
+import { isNutritionallyUsable } from '../lib/usda-canine'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -67,6 +68,11 @@ interface FoodRow {
   is_safe_for_dogs: boolean | null
   preparation_state: string | null
   fdc_id: number | null
+  // Read solely so pickDefault can refuse to elect a nutritionally broken row.
+  calories_per_serving: number | null
+  protein_g: number | null
+  fat_g: number | null
+  carbs_g: number | null
 }
 
 interface Canonical {
@@ -102,6 +108,13 @@ function majority(values: Array<string | null>): string | null {
 function pickDefault(members: Canonical['members']): FoodRow {
   const scored = members.map(({ row, parsed }) => {
     let score = 0
+    // Broken nutrition disqualifies a row from representing anything. The
+    // +500 Foundation bonus below actively SELECTED for these before
+    // scripts/029: Foundation rows were the ones missing energy, so 47 of 707
+    // groups — `butter`, `yogurt`, `spinach` — were represented by a 0 kcal
+    // row. A large negative rather than a filter, so a group consisting only
+    // of broken rows still yields a default instead of crashing.
+    if (!isNutritionallyUsable(row)) score -= 100_000
     if (row.is_verified) score += 1000
     if (row.usda_data_type === 'Foundation') score += 500 // better micro coverage
     if (row.preparation_state === 'raw') score += 100 // fresh-feeding default
@@ -160,7 +173,8 @@ async function main() {
   const rows = await fetchAllActiveFoods<FoodRow>(
     supabase,
     'id,name,food_category,usda_data_type,source,is_verified,' +
-      'is_safe_for_dogs,preparation_state,fdc_id'
+      'is_safe_for_dogs,preparation_state,fdc_id,' +
+      'calories_per_serving,protein_g,fat_g,carbs_g'
   )
   console.error(`Parsing ${rows.length} active rows...\n`)
 

@@ -5,6 +5,7 @@ import {
   countExtractedNutrients,
   extractCanineNutrients,
   inferPreparationState,
+  isNutritionallyUsable,
   type USDAFoodLike,
 } from '@/lib/usda-canine'
 // Captured live from FDC on 2026-07-06: GET /v1/food/171060?format=full
@@ -199,5 +200,115 @@ describe('checkDogSafety', () => {
     expect(checkDogSafety('Rum, 80 proof').isSafe).toBe(false)
     expect(checkDogSafety('Leeks, cooked, boiled').isSafe).toBe(false)
     expect(checkDogSafety('Wine, table, red').isSafe).toBe(false)
+  })
+})
+
+// Foundation foods do not carry nutrient 1008. Reading only 1008 wrote 0 kcal
+// for 245 of 4,700 live rows — 176 of them with >1 g protein, and 47 elected
+// as the default variant of a canonical group. These pin the fallback chain.
+describe('energy resolution across FDC report shapes', () => {
+  const withNutrients = (
+    entries: Array<{ id: number; amount: number }>
+  ): USDAFoodLike => ({
+    fdcId: 1,
+    description: 'Test food, raw',
+    foodNutrients: entries.map(e => ({
+      nutrient: { id: e.id },
+      amount: e.amount,
+    })),
+  })
+
+  test('prefers 1008 when present (SR Legacy shape)', () => {
+    const n = extractCanineNutrients(
+      withNutrients([
+        { id: 1008, amount: 148 },
+        { id: 2047, amount: 999 },
+        { id: 2048, amount: 888 },
+      ]).foodNutrients
+    )
+    expect(n.calories_per_serving).toBe(148)
+  })
+
+  test('falls back to Atwater specific (2048) then general (2047)', () => {
+    expect(
+      extractCanineNutrients(
+        withNutrients([
+          { id: 2047, amount: 382.998 },
+          { id: 2048, amount: 371.99469 },
+        ]).foodNutrients
+      ).calories_per_serving
+    ).toBe(371.99469)
+    // 2047 alone still resolves — it covers more of the corpus than 2048.
+    expect(
+      extractCanineNutrients(
+        withNutrients([{ id: 2047, amount: 382.998 }]).foodNutrients
+      ).calories_per_serving
+    ).toBe(382.998)
+  })
+
+  test('derives 4/4/9 from macros when no energy nutrient exists at all', () => {
+    // Real shape: "Beans, Dry, Dark Red Kidney" — macros, zero energy rows.
+    const n = extractCanineNutrients(
+      withNutrients([
+        { id: 1003, amount: 25.9 }, // protein
+        { id: 1005, amount: 10 }, // carbs
+        { id: 1004, amount: 1.31 }, // fat
+      ]).foodNutrients
+    )
+    expect(n.calories_per_serving).toBeCloseTo(25.9 * 4 + 10 * 4 + 1.31 * 9, 2)
+  })
+
+  test('stays 0 when the record states no energy and no macros', () => {
+    // Preserved rather than guessed — these 18 rows need a re-fetch.
+    expect(
+      extractCanineNutrients(withNutrients([{ id: 1087, amount: 20 }]).foodNutrients)
+        .calories_per_serving
+    ).toBe(0)
+  })
+
+  test('a zero energy value never wins over a real one', () => {
+    // FDC does emit explicit 0 amounts; treating that as "present" was the
+    // bug's twin — it would pin the row at 0 despite 2047 carrying a value.
+    expect(
+      extractCanineNutrients(
+        withNutrients([
+          { id: 1008, amount: 0 },
+          { id: 2047, amount: 382.998 },
+        ]).foodNutrients
+      ).calories_per_serving
+    ).toBe(382.998)
+  })
+})
+
+describe('isNutritionallyUsable', () => {
+  test('rejects the physically impossible: 0 kcal carrying macros', () => {
+    // The live chickpea row an owner actually got served.
+    expect(
+      isNutritionallyUsable({
+        calories_per_serving: 0,
+        protein_g: 21.28,
+        fat_g: 6.27,
+        carbs_g: 60.36,
+      })
+    ).toBe(false)
+  })
+
+  test('accepts ordinary rows', () => {
+    expect(
+      isNutritionallyUsable({ calories_per_serving: 148, protein_g: 19.66 })
+    ).toBe(true)
+  })
+
+  test('accepts a genuinely zero food, and tolerates nulls', () => {
+    // Eggshell powder is a calcium supplement: 0 across the board is correct.
+    expect(
+      isNutritionallyUsable({
+        calories_per_serving: 0,
+        protein_g: 0,
+        fat_g: 0,
+        carbs_g: 0,
+      })
+    ).toBe(true)
+    expect(isNutritionallyUsable({})).toBe(true)
   })
 })

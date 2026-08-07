@@ -36,6 +36,20 @@ export const BowlItemSchema = z.object({
   confidence: z.number().min(0).max(1),
   /** Where this item sits in the image — feeds the portion estimator */
   box_2d: Box2DSchema.nullish(),
+  /**
+   * Raw or cooked, when the model can actually tell — EVIDENCE, never a
+   * default. Null means "cannot tell", and null is the honest answer for most
+   * vegetables.
+   *
+   * This field exists because its absence was being silently substituted for.
+   * Nothing observed preparation state, yet every bowl resolved to a raw row:
+   * the flat search score rewards short names and few comma segments, and
+   * "Carrots, raw" is simply a shorter string than "Carrots, cooked, boiled,
+   * drained, without salt". The app was asserting a fact it had never checked.
+   * When this comes back null, lib/resolve-ingredient.ts demands an explicit
+   * owner choice rather than picking one (see requiresChoice).
+   */
+  preparation_state: z.enum(['raw', 'cooked']).nullish(),
 })
 
 /** Known-size objects the model is asked to look for near the bowl. */
@@ -81,8 +95,17 @@ const GEMINI_RESPONSE_SCHEMA = {
           estimated_proportion: { type: 'NUMBER' },
           confidence: { type: 'NUMBER' },
           box_2d: GEMINI_BOX_SCHEMA,
+          // Nullable on purpose: the model must be able to say "I can't tell"
+          // rather than being forced into a guess we would then commit.
+          preparation_state: { type: 'STRING', nullable: true, enum: ['raw', 'cooked'] },
         },
-        required: ['label', 'estimated_proportion', 'confidence', 'box_2d'],
+        required: [
+          'label',
+          'estimated_proportion',
+          'confidence',
+          'box_2d',
+          'preparation_state',
+        ],
       },
     },
     notes: { type: 'STRING' },
@@ -110,6 +133,7 @@ Rules:
 - For every item, return box_2d: its bounding box as [ymin, xmin, ymax, xmax], integers normalized to 0-1000 of the image. Box the visible extent of that specific food, not the whole bowl.
 - Return bowl_box_2d: the bounding box of the food bowl itself (outer rim), same format.
 - Look for a scale reference lying flat near the bowl: a credit/bank card (85.6 x 54.0 mm) or a coin (assume a US quarter, 24.26 mm diameter). If one is clearly present, return reference_object with its kind, box_2d, and your confidence it is that object. If none is present, omit reference_object entirely — never invent one.
+- For every item, return preparation_state: "raw" or "cooked" ONLY when the image gives you real evidence — browned or shrunken meat, wilted or glossy vegetables, a visibly cooked mixed dish. Otherwise return null. Null is the correct, expected answer whenever you are unsure; do NOT guess, and do not infer "raw" merely because an ingredient is commonly eaten raw. A wrong preparation_state is worse than null, because null makes the owner confirm while a wrong value is taken as fact.
 - If you cannot distinguish similar foods (spinach vs kale), pick the most likely label, lower the confidence, and mention the ambiguity in notes.
 - Only describe food items. The bowl and reference object are returned as boxes only, never as food items.
 - Do not estimate grams, calories, or any nutrient values. Downstream code derives portion estimates from your boxes deterministically.

@@ -151,10 +151,53 @@ export interface CanonicalMatch {
   variantCount: number
   /** Owner must explicitly choose a variant before the bowl can be logged */
   requiresChoice: boolean
+  /**
+   * The preparation state was never observed, and this group offers more than
+   * one. The owner is asked rather than defaulted into a guess: nothing in the
+   * pipeline can see whether a bowl was cooked unless the vision model says
+   * so, and a raw-vs-cooked mix-up is a factual error about the meal, not a
+   * rounding difference. When true, `requiresChoice` is also true.
+   */
+  prepUnresolved: boolean
+  /** Preparation states this group actually contains, e.g. ['cooked','raw'] */
+  availablePreparations: string[]
   /** [min, max] kcal per 100 g across the comparable variants */
   kcalRange: [number, number] | null
   /** [min, max] fat g per 100 g across the comparable variants */
   fatRange: [number, number] | null
+}
+
+/**
+ * Why the owner is being asked to choose, in their words.
+ *
+ * Shared by the web and mobile variant pickers so the two cannot drift. The
+ * reason matters: "raw or cooked?" and "which cut?" are different questions,
+ * and the old copy explained every prompt as a nutrient spread — which reads
+ * as nonsense on a group like carrots, where the spread is 35-41 kcal and the
+ * real ambiguity is that nobody ever established whether they were cooked.
+ */
+export function describeVariantChoice(canonical: CanonicalMatch): string {
+  const kcal = canonical.kcalRange
+    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(canonical.kcalRange[1])} kcal`
+    : null
+  const fat = canonical.fatRange
+    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
+    : null
+  const spread = [kcal, fat].filter(Boolean).join(' and ')
+
+  if (canonical.prepUnresolved) {
+    const states = canonical.availablePreparations.join(' or ')
+    return (
+      `The photo doesn't show whether this was ${states || 'raw or cooked'}, ` +
+      `and we won't guess — cooking changes the numbers per 100 g` +
+      (spread ? ` (${spread} across ${canonical.variantCount} options)` : '') +
+      '.'
+    )
+  }
+  return (
+    `The photo can't show this. ${canonical.variantCount} options span ` +
+    `${spread} per 100 g — picking the wrong one skews the whole bowl.`
+  )
 }
 
 /**
