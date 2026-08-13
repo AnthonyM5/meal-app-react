@@ -47,16 +47,21 @@ describe('Mobile REST API', () => {
         strangerToken = accessToken
       })
     })
-    // /api/foods is behind middleware's auth gate unless the guestMode
-    // cookie is set (see middleware.ts GUEST_ALLOWED_ROUTES) — this lookup
-    // needs no user context, so guest mode is the simplest way in.
-    cy.setCookie('guestMode', 'true')
+    // The food catalog is global, not user-scoped, so this lookup needs no
+    // credentials at all: middleware exempts the read-only /api/foods/ subtree
+    // via isBearerFoodRead(). No guestMode cookie required.
+    //
+    // (This previously set and cleared a guestMode cookie, on the belief that
+    // GUEST_ALLOWED_ROUTES was what let /api/foods through. It wasn't — the
+    // isBearerFoodRead branch matches first and returns before the guest list
+    // is consulted. The '/api/foods' entry in GUEST_ALLOWED_ROUTES has since
+    // been removed, because its only unique effect was exposing the
+    // now-deleted POST /api/foods/import-external to unauthenticated callers.)
     cy.request('/api/foods/unified-search?q=chicken%20breast')
       .its('body.foods')
       .then((foods: Food[]) => {
         food = foods[0]
       })
-    cy.clearCookie('guestMode')
   })
 
   after(() => {
@@ -336,6 +341,47 @@ describe('Mobile REST API', () => {
       expect(status).to.eq(401)
       expect(body.error).to.match(/not authenticated/i)
     })
+  })
+
+  // Security regression guard, against a real running server.
+  //
+  // These two routes performed service-role writes to the shared `foods` table
+  // with no auth check of their own. /api/foods/import-external was reachable
+  // by ANY unauthenticated caller: middleware prefix-matched '/api/foods' in
+  // GUEST_ALLOWED_ROUTES, so setting the client-side `guestMode` cookie on
+  // yourself was enough to POST to it. Both are deleted — imports are
+  // script-only now (see docs/api-integration.md).
+  //
+  // __tests__/middleware.test.ts pins the middleware lists in isolation; this
+  // asserts the deployed surface, including with the cookie that used to be
+  // the way in. Anything other than 404/405 means an import endpoint is back.
+  // The two paths fail differently, and both are acceptable:
+  //   /api/foods/import-external  -> passes the gate (isBearerFoodRead exempts
+  //                                  the whole read-only /api/foods/ subtree),
+  //                                  then 404s because the route is gone.
+  //   /api/ingredients/import     -> never reaches routing at all; it is not
+  //                                  enumerated in BEARER_AUTH_ROUTES, so the
+  //                                  cookie gate 307s it to /auth/login.
+  // followRedirect:false is required — otherwise Cypress chases that 307 to
+  // the login page and reports a perfectly healthy 200.
+  it('does not expose HTTP import endpoints', () => {
+    cy.setCookie('guestMode', 'true')
+    for (const url of ['/api/foods/import-external', '/api/ingredients/import']) {
+      cy.request({
+        method: 'POST',
+        url,
+        body: { query: 'chicken' },
+        failOnStatusCode: false,
+        followRedirect: false,
+      }).then(({ status, body }) => {
+        expect(status, `${url} must not accept writes`).to.be.oneOf([
+          307, 404, 405,
+        ])
+        // Whatever the status, nothing may look like an import result.
+        expect(body ?? {}).to.not.have.property('imported')
+      })
+    }
+    cy.clearCookie('guestMode')
   })
 
   it("refuses to let one user touch another user's dog", () => {

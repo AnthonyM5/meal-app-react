@@ -35,6 +35,7 @@ import {
   Camera as CameraIcon,
   Check,
   Loader2,
+  Plus,
   Search,
   X,
 } from 'lucide-react'
@@ -267,6 +268,9 @@ export function BowlPhotoScreen() {
   const [submitting, setSubmitting] = useState(false)
   // Which row (by key) is currently running an inline ingredient search.
   const [searchingRow, setSearchingRow] = useState<string | null>(null)
+  /** True while the "add another ingredient" search box is open. */
+  const [addingItem, setAddingItem] = useState(false)
+  const addedSeq = useRef(0)
   const [query, setQuery] = useState('')
   const { results, isSearching } = useIngredientSearch(query)
 
@@ -338,6 +342,37 @@ export function BowlPhotoScreen() {
   function removeRow(key: string) {
     setRows(current => current.filter(r => r.key !== key))
     if (searchingRow === key) setSearchingRow(null)
+  }
+
+  /**
+   * Add an ingredient the model never reported. The photo is evidence, not a
+   * manifest: submerged, mixed-in or shredded foods routinely go unseen, and
+   * without this the owner's only options were to accept an incomplete bowl
+   * or re-analyze with a note. Mirrors web's "Missed something?".
+   *
+   * proportion/confidence are 0 — the owner supplies grams directly, and a
+   * fabricated proportion would pollute the correction signal in
+   * bowl_analyses.user_corrected.
+   */
+  function addRow(ingredient: Ingredient) {
+    setRows(current => [
+      ...current,
+      {
+        key: `added-${addedSeq.current++}`,
+        label: ingredient.name,
+        proportion: 0,
+        confidence: 0,
+        ingredient,
+        brandedCode: null,
+        grams: '',
+        estimatedGrams: null,
+        // Owner-chosen rows carry no group gate: they named the exact row.
+        canonical: null,
+        variantChosen: true,
+      },
+    ])
+    setAddingItem(false)
+    setQuery('')
   }
 
   function assignIngredient(key: string, ingredient: Ingredient) {
@@ -602,9 +637,16 @@ export function BowlPhotoScreen() {
                       />
                     )}
 
-                    {!row.ingredient && (
+                    {/*
+                      Search is available whether or not the row matched. It
+                      used to sit behind `!row.ingredient`, which meant a
+                      WRONGLY matched item could not be corrected on mobile at
+                      all — only deleted and lost. The photo is evidence, not a
+                      verdict.
+                    */}
+                    {(
                       <div className="space-y-2">
-                        {row.brandedCode && (
+                        {!row.ingredient && row.brandedCode && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -623,7 +665,11 @@ export function BowlPhotoScreen() {
                             <Input
                               autoFocus
                               className="pl-9"
-                              placeholder="Search an ingredient…"
+                              placeholder={
+                                row.ingredient
+                                  ? 'Search to replace…'
+                                  : 'Search an ingredient…'
+                              }
                               value={query}
                               onChange={e => setQuery(e.target.value)}
                             />
@@ -661,7 +707,7 @@ export function BowlPhotoScreen() {
                             }}
                           >
                             <Search className="mr-2 h-4 w-4" />
-                            Find a match
+                            {row.ingredient ? 'Replace this ingredient' : 'Find a match'}
                           </Button>
                         )}
                       </div>
@@ -671,6 +717,75 @@ export function BowlPhotoScreen() {
               </li>
             ))}
           </ul>
+
+          {/*
+            Add an ingredient the model missed. Mirrors web's "Missed
+            something?" block — mobile previously had no way to add at all, so
+            a submerged or mixed-in food could only be captured by re-analyzing
+            with a note.
+          */}
+          <div className="space-y-2 rounded-md border border-dashed p-3">
+            <p className="text-sm font-medium">Missed something?</p>
+            {addingItem ? (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    placeholder="Add another ingredient…"
+                    className="pl-9"
+                  />
+                  {isSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {results.length > 0 && (
+                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-1">
+                    {results.map(food => (
+                      <button
+                        key={food.id}
+                        type="button"
+                        className="flex w-full items-center justify-between rounded-md p-2 text-left text-sm hover:bg-muted"
+                        onClick={() => addRow(food)}
+                      >
+                        <span>{food.name}</span>
+                        <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                          {Math.round(food.calories_per_serving)} kcal
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    setAddingItem(false)
+                    setQuery('')
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setAddingItem(true)
+                  setSearchingRow(null)
+                  setQuery('')
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add another ingredient
+              </Button>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 items-end gap-4">
             <div className="space-y-2">

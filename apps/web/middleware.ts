@@ -19,12 +19,25 @@ const PUBLIC_ROUTES = [
 // anything user-scoped, and, for /api/bowl, an explicit guest branch that is
 // read-only and rate-limited (see app/api/bowl/analyze/route.ts). The
 // `guestMode` cookie is client-set, so treat these as public routes.
+//
+// Entries are matched by PREFIX (see isGuestAllowedRoute below), so an entry
+// here opens every path beneath it, for every HTTP method. Keep this list to
+// page routes and API prefixes whose entire subtree is safe to expose
+// unauthenticated — an `/api/...` prefix added for one read route also admits
+// any write route that later lands under it.
+//
+// Deliberately NOT listed: '/api/foods'. It admitted the whole subtree
+// including POST /api/foods/import-external — an unauthenticated, service-role
+// write (that route has since been deleted; the catalog is populated by
+// scripts/ run with explicit operator credentials). The genuine guest food
+// reads (/unified-search, /nutrient-search, the /<uuid> lookup) never depended
+// on it: they are matched earlier by isBearerFoodRead and return before this
+// list is consulted.
 const GUEST_ALLOWED_ROUTES = [
   '/dashboard',
   '/dogs',
   '/foods',
   '/food-details',
-  '/api/foods',
   '/bowl',
   '/api/bowl',
 ]
@@ -36,10 +49,11 @@ const GUEST_ALLOWED_ROUTES = [
 // lib/server/rest-auth.ts) and return a JSON 401, so middleware must not
 // intercept them and redirect to the HTML login page first.
 //
-// Listed as exact prefixes, NOT a blanket '/api/ingredients' — that prefix
-// would also match /api/ingredients/import, which (unlike these) has no
-// route-level auth check of its own and currently relies entirely on this
-// middleware's cookie gate to stay non-public.
+// Listed as exact prefixes, NOT a blanket '/api/ingredients'. Every route
+// under that prefix must be enumerated here deliberately: a blanket entry
+// would auto-exempt any route later added beneath it, including one with no
+// auth of its own. (This is what happened on the /api/foods side — see
+// GUEST_ALLOWED_ROUTES above.)
 const BEARER_AUTH_ROUTES = [
   '/api/dogs',
   '/api/meals',
@@ -61,13 +75,13 @@ const BEARER_AUTH_ROUTES = [
 // (/<uuid>). The data is global (not user-scoped) and served via the service
 // role, so a Bearer/CORS exemption exposes nothing private. Matched by prefix
 // rather than listed in BEARER_AUTH_ROUTES because the lookup's dynamic segment
-// has no fixed prefix — and `/api/foods/import-external` is deliberately
-// EXCLUDED: it's an unauthenticated WRITE that still relies on the cookie gate.
+// has no fixed prefix.
+//
+// This is a prefix over the whole /api/foods/ subtree, so it is only safe while
+// every route under it stays a READ. Anything that writes needs its own auth
+// check and an explicit exclusion here — do not add one without both.
 function isBearerFoodRead(path: string): boolean {
-  return (
-    path.startsWith('/api/foods/') &&
-    !path.startsWith('/api/foods/import-external')
-  )
+  return path.startsWith('/api/foods/')
 }
 
 // CORS for the Bearer-token routes. The mobile shell runs from a WebView

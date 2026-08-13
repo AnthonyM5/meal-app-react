@@ -6,13 +6,25 @@ on:
   pull_request:
     branches: [main]
 
+# SECRET SCOPING POLICY
+#
+# Job-level `env:` is visible to EVERY process in EVERY step of that job —
+# including `pnpm install`, `pnpm build`, and any transitive dependency's build
+# script or bundler plugin that runs during them. A single compromised package
+# anywhere in the tree could therefore read anything declared at job level.
+#
+# So: only the two NEXT_PUBLIC_* values live at job level. They are inlined into
+# the client bundle by design and are already public, so exposure costs nothing.
+#
+# SUPABASE_SERVICE_ROLE_KEY (bypasses RLS; can read/write/delete any row) and
+# GEMINI_API_KEY (metered spend) are declared on the SINGLE step that needs
+# them, never at job level. Do not hoist them back up for convenience.
 jobs:
   test:
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v3
       - uses: pnpm/action-setup@v4
@@ -42,7 +54,6 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v3
       - uses: pnpm/action-setup@v4
@@ -64,10 +75,6 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # The e2e specs exercise /api/bowl/analyze, which 503s without this
-      # (see route.ts: the GEMINI_API_KEY guard runs before dog validation).
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - uses: actions/checkout@v3
       - uses: pnpm/action-setup@v4
@@ -113,11 +120,32 @@ jobs:
 
       # Boots `next start` on :3000, waits for it, then runs `cypress run`
       # (bundled Electron, headless). The e2e specs create/delete throwaway
-      # confirmed users against the live Supabase project via the three
-      # secrets above.
+      # confirmed users against the live Supabase project.
+      #
+      # This is the ONLY step that gets the privileged secrets, and it needs
+      # both: cypress.config.ts's auth tasks use the service role to create and
+      # confirm throwaway users, and the `next start` server this boots reads
+      # both at request time (/api/bowl/analyze 503s without GEMINI_API_KEY —
+      # its guard runs before dog validation). Declared here rather than at job
+      # level so `pnpm install`, `cypress install`, and `next build` — the steps
+      # that execute third-party code — never see them. See the policy note at
+      # the top of this file.
       - name: Run Cypress e2e tests
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: pnpm --filter web test:e2e:ci
 
-      # Delete throwaway pawplate.e2e.* users from the live project. The specs
-      # clean up after themselves, but a run that dies before its after() hook
-      # leaks users — always() ensures they're swept even when tests fail.
+      # NOTE: there is deliberately no automated cleanup step here.
+      #
+      # The specs delete their own throwaway pawplate.e2e.* users in after()
+      # hooks. A run that dies before those hooks fire leaks users, which is
+      # swept manually with:
+      #
+      #   pnpm --filter web test:e2e:cleanup            # dry run
+      #   pnpm --filter web test:e2e:cleanup -- --delete
+      #
+      # Kept manual on purpose: the sweep needs the service-role key, and
+      # adding an always() step to run it would put that key back in a step
+      # that also runs on failure paths — the exact exposure the scoping above
+      # exists to prevent.

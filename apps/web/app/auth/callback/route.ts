@@ -1,3 +1,4 @@
+import { safeRedirectPath } from '@/lib/safe-redirect'
 import type { Database } from '@/lib/types'
 import type { CookieOptions } from '@supabase/ssr'
 import { createServerClient } from '@supabase/ssr'
@@ -10,7 +11,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  // `next` is attacker-controlled; safeRedirectPath keeps us on this origin.
+  // See lib/safe-redirect.ts for why a startsWith('/') check is not enough.
+  const next = safeRedirectPath(searchParams.get('next'), origin)
 
   if (!code) {
     return NextResponse.redirect(new URL('/auth/login?error=oauth', origin))
