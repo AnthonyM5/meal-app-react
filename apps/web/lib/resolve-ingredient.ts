@@ -42,8 +42,11 @@ export const MATCH_THRESHOLD = 0.5
  *
  * Was 1. Raising it does NOT change ranking — the loop still takes the first
  * row that clears every bar — it only gives the matcher somewhere to go when
- * the best-named row is unsafe or carries broken nutrition, instead of
- * returning it anyway.
+ * the best-named row carries broken nutrition, instead of returning it anyway.
+ *
+ * Note this is NOT a way past an unsafe top hit. A toxic row that outranks
+ * everything safe aborts the match entirely rather than falling through to
+ * the next candidate; see matchLocalIngredient.
  */
 const CANDIDATE_LIMIT = 10
 
@@ -187,7 +190,13 @@ export async function matchIngredientWithCanonical(
       .single(),
     supabase
       .from('foods')
-      .select('id,name,calories_per_serving,fat_g,serving_size,preparation_state')
+      // protein_g/carbs_g/is_safe_for_dogs are not displayed — they are what
+      // the swap below needs to apply the SAME eligibility bars
+      // matchLocalIngredient applies. Selecting only the display columns is
+      // how the swap silently became the one unguarded path into a match.
+      .select(
+        'id,name,calories_per_serving,protein_g,carbs_g,fat_g,serving_size,preparation_state,is_safe_for_dogs'
+      )
       .eq('canonical_id', matched.canonical_id)
       .eq('is_active', true),
   ])
@@ -207,9 +216,18 @@ export async function matchIngredientWithCanonical(
   // not reach a same-prep row (see pickPrepVariant). Correct it from within
   // the group, which is the first time the canonical layer decides anything
   // an owner sees.
+  //
+  // The candidate set is filtered by the same two bars matchLocalIngredient
+  // enforces. Without this the swap could override a safe, nutritionally
+  // usable match with a group sibling the matcher had already refused —
+  // group membership only asserts "same food", not "fit to log". Correcting
+  // raw->cooked is not worth reintroducing a 0-kcal row or a toxic one.
   let resolvedId = ingredientId
   if (prepObserved && matched.preparation_state !== prep) {
-    const swap = pickPrepVariant(variants, prep)
+    const swappable = variants.filter(
+      v => v.is_safe_for_dogs !== false && isNutritionallyUsable(v)
+    )
+    const swap = pickPrepVariant(swappable, prep)
     if (swap) resolvedId = swap.id
   }
 
@@ -253,6 +271,10 @@ export async function matchIngredientWithCanonical(
       requiresChoice: prepUnresolved || kcalAmbiguous || fatAmbiguous,
       prepUnresolved,
       availablePreparations: [...preparations].sort(),
+      // Scopes the picker to the same set variantCount and the ranges
+      // describe. Null when prep was never observed, in which case
+      // `comparable` is every variant and no filtering applies.
+      observedPreparation: prepObserved ? (prep as 'raw' | 'cooked') : null,
       kcalRange,
       fatRange,
     },
@@ -294,7 +316,22 @@ export async function matchLocalIngredient(
     // was disqualified. Candidates arrive sorted, so the first one below the
     // floor ends the search.
     if (row.similarity != null && row.similarity < MATCH_THRESHOLD) break
-    if (row.is_safe_for_dogs === false) continue
+    if (row.is_safe_for_dogs === false) {
+      // An unsafe row that outranks everything safe must NOT be quietly
+      // replaced by the next-best candidate. The confirmation UI keys its
+      // toxicity banner off the RESOLVED row, so substituting here would do
+      // two harmful things at once: log a food the bowl does not contain, and
+      // suppress the warning for the one it does. Photograph a bowl with
+      // onion in it and the owner would be told it is fine.
+      //
+      // Refusing to auto-match leaves the label visibly unresolved, which the
+      // owner can then resolve deliberately — and picking the toxic row on
+      // purpose DOES surface the banner.
+      if (eligible.length === 0) return null
+      // Something safe already scored higher, so this row was never going to
+      // be the match. Just a worse candidate; skip it.
+      continue
+    }
     // A row reporting 0 kcal while carrying macros is broken data, not a low
     // calorie food. Committing one understates the meal by 100%, and 245 such
     // rows were live before scripts/029 (see lib/usda-canine.ts). Skipping to

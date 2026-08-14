@@ -19,13 +19,20 @@ const base: CanonicalMatch = {
   requiresChoice: true,
   prepUnresolved: false,
   availablePreparations: ['cooked', 'raw'],
+  // The nutrient-spread prompts below describe a group whose preparation WAS
+  // observed — that is the only way variantCount/ranges are prep-scoped.
+  observedPreparation: 'cooked',
   kcalRange: [35, 41],
   fatRange: [0.13, 0.35],
 }
 
 describe('describeVariantChoice', () => {
   it('names preparation as the reason when that is the reason', () => {
-    const text = describeVariantChoice({ ...base, prepUnresolved: true })
+    const text = describeVariantChoice({
+      ...base,
+      prepUnresolved: true,
+      observedPreparation: null,
+    })
     expect(text).toMatch(/cooked or raw/)
     expect(text).toMatch(/won't guess/)
     // The old copy explained EVERY prompt as a nutrient spread, which reads as
@@ -49,6 +56,7 @@ describe('describeVariantChoice', () => {
     const text = describeVariantChoice({
       ...base,
       prepUnresolved: true,
+      observedPreparation: null,
       kcalRange: null,
       fatRange: null,
     })
@@ -60,6 +68,7 @@ describe('describeVariantChoice', () => {
     const text = describeVariantChoice({
       ...base,
       prepUnresolved: true,
+      observedPreparation: null,
       availablePreparations: [],
     })
     expect(text).toMatch(/raw or cooked/)

@@ -229,7 +229,19 @@ function VariantChoice({
       // Through the shared REST client, never a raw fetch: the route is
       // Bearer-authenticated (lib/server/rest-auth.ts), so a cookie-only
       // request would 401 even for a logged-in owner.
-      setVariants(await apiClient.ingredients.variants(canonical.canonicalId))
+      const all = await apiClient.ingredients.variants(canonical.canonicalId)
+      // list_canonical_variants returns EVERY variant, but variantCount and
+      // the kcal/fat ranges in the copy above are scoped to the observed
+      // preparation. Showing the unfiltered list makes that copy describe a
+      // different set than the one on screen, and lets the owner undo the
+      // model's observation by picking a raw row for a cooked meal. Filtering
+      // here keeps the two in agreement; "Search to replace" remains the way
+      // out when the observation itself is wrong.
+      setVariants(
+        canonical.observedPreparation
+          ? all.filter(v => v.preparation_state === canonical.observedPreparation)
+          : all
+      )
     } catch (error) {
       console.error('Variant load error:', error)
       toast.error(

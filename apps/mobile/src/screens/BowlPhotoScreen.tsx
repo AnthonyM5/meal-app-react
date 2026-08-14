@@ -130,7 +130,18 @@ function VariantChoice({
     if (variants || isLoading) return
     setIsLoading(true)
     try {
-      setVariants(await api.ingredients.variants(canonical.canonicalId))
+      const all = await api.ingredients.variants(canonical.canonicalId)
+      // Mirrors the web picker. The endpoint returns EVERY variant, but
+      // variantCount and the kcal/fat ranges in the copy above are scoped to
+      // the observed preparation — so an unfiltered list describes a
+      // different set than the copy, and lets the owner undo the model's
+      // observation by picking a raw row for a cooked meal. See the
+      // CanonicalMatch docs in @pawplate/core.
+      setVariants(
+        canonical.observedPreparation
+          ? all.filter(v => v.preparation_state === canonical.observedPreparation)
+          : all
+      )
     } catch (error) {
       toast.error(
         error instanceof ApiError ? error.message : 'Could not load options'
