@@ -282,8 +282,29 @@ export function BowlPhotoScreen() {
   /** True while the "add another ingredient" search box is open. */
   const [addingItem, setAddingItem] = useState(false)
   const addedSeq = useRef(0)
+  // NOTE: `query`/`results` are shared by BOTH search boxes above — the
+  // per-row one and the "add another ingredient" one. Only one may be open at
+  // a time, or a click in one result list runs the other's handler: opening a
+  // row's search while "add another" was still open made picking a result
+  // APPEND a new row instead of replacing the mis-matched one, which is the
+  // opposite of what the owner asked for. Open them only via the two helpers
+  // below so that exclusivity can't be half-applied again.
   const [query, setQuery] = useState('')
   const { results, isSearching } = useIngredientSearch(query)
+
+  /** Open the inline search for one row, closing the other search box. */
+  function openRowSearch(key: string) {
+    setSearchingRow(key)
+    setAddingItem(false)
+    setQuery('')
+  }
+
+  /** Open the "add another ingredient" search, closing any row search. */
+  function openAddSearch() {
+    setAddingItem(true)
+    setSearchingRow(null)
+    setQuery('')
+  }
 
   const backTo = `/dogs/${dogId}`
 
@@ -712,10 +733,7 @@ export function BowlPhotoScreen() {
                             variant="outline"
                             size="sm"
                             className="w-full"
-                            onClick={() => {
-                              setSearchingRow(row.key)
-                              setQuery('')
-                            }}
+                            onClick={() => openRowSearch(row.key)}
                           >
                             <Search className="mr-2 h-4 w-4" />
                             {row.ingredient ? 'Replace this ingredient' : 'Find a match'}
@@ -786,11 +804,7 @@ export function BowlPhotoScreen() {
                 variant="outline"
                 size="sm"
                 className="w-full"
-                onClick={() => {
-                  setAddingItem(true)
-                  setSearchingRow(null)
-                  setQuery('')
-                }}
+                onClick={openAddSearch}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add another ingredient
