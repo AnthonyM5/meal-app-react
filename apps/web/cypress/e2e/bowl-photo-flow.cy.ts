@@ -232,6 +232,10 @@ describe('Bowl photo flow', () => {
                   displayName: 'Beef ground',
                   variantCount: 45,
                   requiresChoice: true,
+                  // Preparation WAS observed here — this gate is about the
+                  // lean/fat ratio, nothing to do with raw vs cooked.
+                  prepUnresolved: false,
+                  availablePreparations: ['raw'],
                   kcalRange: [121, 332],
                   fatRange: [3, 30],
                 },
@@ -276,6 +280,181 @@ describe('Bowl photo flow', () => {
 
         // Choosing clears the gate.
         cy.contains('button', /Log breakfast from photo/i).should('not.be.disabled')
+      })
+  })
+
+  it('blocks logging when preparation was never observed, even if the calories barely differ', () => {
+    // The preparation gate, which is a DIFFERENT question from the lean/fat
+    // one above. Nothing in the pipeline can see whether a bowl was cooked
+    // unless the vision model says so, and flat search silently answered
+    // "raw" for everything: USDA names the raw row in fewer, shorter segments
+    // ("Carrots, raw" vs "Carrots, cooked, boiled, drained, without salt"), so
+    // brevity alone decided a question nobody had asked.
+    //
+    // Carrots are the sharp case on purpose. Their group spans 35-41 kcal —
+    // far under the 20% ambiguity ratio — so the nutrient gate does NOT fire.
+    // If preparation were not its own trigger, this bowl would log raw
+    // carrots for a cooked meal without ever pausing.
+    cy.login(owner.email, owner.password)
+    cy.url().should('include', '/dashboard')
+
+    cy.request('/api/foods/unified-search?q=carrots')
+      .its('body.foods')
+      .should('have.length.greaterThan', 0)
+      .then((foods: Food[]) => {
+        const food = foods[0]
+
+        cy.intercept('POST', '/api/bowl/analyze', {
+          statusCode: 200,
+          body: {
+            analysis_id: '00000000-0000-4000-8000-0000000000fb',
+            image_url: '/icon-192.png',
+            notes: '',
+            items: [
+              {
+                label: 'carrots',
+                estimated_proportion: 1,
+                confidence: 0.9,
+                normalized_ingredient_id: food.id,
+                ingredient: food,
+                estimated_grams: 100,
+                canonical: {
+                  canonicalId: '00000000-0000-4000-8000-0000000000cc',
+                  displayName: 'Carrot',
+                  variantCount: 4,
+                  requiresChoice: true,
+                  // The model returned null for preparation_state, and this
+                  // group offers both states — so the owner is asked.
+                  prepUnresolved: true,
+                  availablePreparations: ['cooked', 'raw'],
+                  kcalRange: [35, 41],
+                  fatRange: [0.13, 0.35],
+                },
+              },
+            ],
+          },
+        }).as('analyze')
+
+        cy.intercept('GET', '/api/ingredients/grouped-search?canonical_id=*', {
+          statusCode: 200,
+          body: {
+            variants: [
+              {
+                ...food,
+                id: food.id,
+                name: 'Carrots, raw',
+                calories_per_serving: 41,
+                fat_g: 0.24,
+                preparation_state: 'raw',
+              },
+              {
+                ...food,
+                id: '00000000-0000-4000-8000-0000000000cd',
+                name: 'Carrots, cooked, boiled, drained, without salt',
+                calories_per_serving: 35,
+                fat_g: 0.18,
+                preparation_state: 'cooked',
+              },
+            ],
+          },
+        }).as('variants')
+
+        cy.visit('/bowl')
+        cy.get('[data-testid="bowl-photo-input"]').selectFile(
+          'cypress/fixtures/bowl.png',
+          { force: true }
+        )
+        cy.get('[data-testid="bowl-analyze-button"]').click()
+        cy.wait('@analyze')
+        cy.contains('Confirm this bowl', { timeout: 10000 }).should('be.visible')
+
+        // The prompt must name PREPARATION as the reason. The old copy
+        // explained every gate as a nutrient spread, which reads as nonsense
+        // here: 35-41 kcal is not why we are asking.
+        cy.contains(/doesn't show whether this was cooked or raw/i).should(
+          'be.visible'
+        )
+        cy.contains(/won't guess/i).should('be.visible')
+        cy.contains(/skews the whole bowl/i).should('not.exist')
+
+        // Logging is blocked, and the reason is named.
+        cy.contains('button', /Log breakfast from photo/i).should('be.disabled')
+        cy.contains(/pick an option for carrot/i).should('be.visible')
+
+        // Both preparations are actually offered.
+        cy.get('[data-testid="variant-choice-open"]').click()
+        cy.wait('@variants')
+        cy.contains('button', /Carrots, raw/).should('be.visible')
+        cy.contains('button', /cooked, boiled, drained/).should('be.visible')
+
+        // Choosing the cooked variant clears the gate.
+        cy.contains('button', /cooked, boiled, drained/).click()
+        cy.contains('button', /Log breakfast from photo/i).should(
+          'not.be.disabled'
+        )
+      })
+  })
+
+  it('does NOT ask about preparation when the model actually observed it', () => {
+    // The other half of the rule, and the one that keeps the gate from being
+    // merely annoying: an observed preparation state is EVIDENCE, not a
+    // default, so it must not trigger a prompt. 237 of 707 canonical groups
+    // span both raw and cooked; if this regressed, a third of every bowl's
+    // items would demand a pointless tap.
+    cy.login(owner.email, owner.password)
+    cy.url().should('include', '/dashboard')
+
+    cy.request('/api/foods/unified-search?q=carrots')
+      .its('body.foods')
+      .should('have.length.greaterThan', 0)
+      .then((foods: Food[]) => {
+        const food = foods[0]
+
+        cy.intercept('POST', '/api/bowl/analyze', {
+          statusCode: 200,
+          body: {
+            analysis_id: '00000000-0000-4000-8000-0000000000fc',
+            image_url: '/icon-192.png',
+            notes: '',
+            items: [
+              {
+                label: 'carrots',
+                estimated_proportion: 1,
+                confidence: 0.9,
+                normalized_ingredient_id: food.id,
+                ingredient: food,
+                estimated_grams: 100,
+                // Model said "cooked", nutrient spread is trivial => the
+                // resolver returns no gate at all.
+                canonical: {
+                  canonicalId: '00000000-0000-4000-8000-0000000000cc',
+                  displayName: 'Carrot',
+                  variantCount: 2,
+                  requiresChoice: false,
+                  prepUnresolved: false,
+                  availablePreparations: ['cooked', 'raw'],
+                  kcalRange: [35, 41],
+                  fatRange: [0.13, 0.35],
+                },
+              },
+            ],
+          },
+        }).as('analyze')
+
+        cy.visit('/bowl')
+        cy.get('[data-testid="bowl-photo-input"]').selectFile(
+          'cypress/fixtures/bowl.png',
+          { force: true }
+        )
+        cy.get('[data-testid="bowl-analyze-button"]').click()
+        cy.wait('@analyze')
+        cy.contains('Confirm this bowl', { timeout: 10000 }).should('be.visible')
+
+        cy.get('[data-testid="variant-choice-open"]').should('not.exist')
+        cy.contains(/doesn't show whether this was/i).should('not.exist')
+        cy.contains('button', /Log breakfast from photo/i).should(
+          'not.be.disabled'
+        )
       })
   })
 

@@ -140,10 +140,20 @@ export interface CanonicalIngredient {
  * grouped-search variants endpoint) before logging the meal; the pre-filled
  * ingredient is a guess, not a measurement.
  *
- * Ranges and `variantCount` are scoped to variants matching the matched row's
+ * Ranges and `variantCount` are scoped to variants matching the OBSERVED
  * preparation state (raw vs cooked legitimately differ per 100 g by water
  * loss, and that difference is not the owner's choice to make here), and are
  * normalized to per-100 g via `per100g`.
+ *
+ * When `observedPreparation` is set, a client rendering the picker MUST filter
+ * the variant list to it. `variantCount` and the ranges describe that filtered
+ * set, so listing every variant makes the copy produced by
+ * `describeVariantChoice` describe a different set than the one on screen —
+ * "3 options span 121–332 kcal" above a list of nine, four of them raw. It
+ * also lets the owner silently undo the model's observation by picking a raw
+ * row for a meal seen as cooked. Owners who need a genuinely different food
+ * still have the row-level "Search to replace" affordance, which deliberately
+ * supersedes this gate.
  */
 export interface CanonicalMatch {
   canonicalId: string
@@ -151,10 +161,60 @@ export interface CanonicalMatch {
   variantCount: number
   /** Owner must explicitly choose a variant before the bowl can be logged */
   requiresChoice: boolean
+  /**
+   * The preparation state was never observed, and this group offers more than
+   * one. The owner is asked rather than defaulted into a guess: nothing in the
+   * pipeline can see whether a bowl was cooked unless the vision model says
+   * so, and a raw-vs-cooked mix-up is a factual error about the meal, not a
+   * rounding difference. When true, `requiresChoice` is also true.
+   */
+  prepUnresolved: boolean
+  /** Preparation states this group actually contains, e.g. ['cooked','raw'] */
+  availablePreparations: string[]
+  /**
+   * The preparation state the pipeline OBSERVED, or null if it never did.
+   * When set, `variantCount`/`kcalRange`/`fatRange` cover only variants in
+   * this state, and the picker must filter to it (see the interface docs).
+   * Mutually exclusive with `prepUnresolved` being true.
+   */
+  observedPreparation: 'raw' | 'cooked' | null
   /** [min, max] kcal per 100 g across the comparable variants */
   kcalRange: [number, number] | null
   /** [min, max] fat g per 100 g across the comparable variants */
   fatRange: [number, number] | null
+}
+
+/**
+ * Why the owner is being asked to choose, in their words.
+ *
+ * Shared by the web and mobile variant pickers so the two cannot drift. The
+ * reason matters: "raw or cooked?" and "which cut?" are different questions,
+ * and the old copy explained every prompt as a nutrient spread — which reads
+ * as nonsense on a group like carrots, where the spread is 35-41 kcal and the
+ * real ambiguity is that nobody ever established whether they were cooked.
+ */
+export function describeVariantChoice(canonical: CanonicalMatch): string {
+  const kcal = canonical.kcalRange
+    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(canonical.kcalRange[1])} kcal`
+    : null
+  const fat = canonical.fatRange
+    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
+    : null
+  const spread = [kcal, fat].filter(Boolean).join(' and ')
+
+  if (canonical.prepUnresolved) {
+    const states = canonical.availablePreparations.join(' or ')
+    return (
+      `The photo doesn't show whether this was ${states || 'raw or cooked'}, ` +
+      `and we won't guess — cooking changes the numbers per 100 g` +
+      (spread ? ` (${spread} across ${canonical.variantCount} options)` : '') +
+      '.'
+    )
+  }
+  return (
+    `The photo can't show this. ${canonical.variantCount} options span ` +
+    `${spread} per 100 g — picking the wrong one skews the whole bowl.`
+  )
 }
 
 /**

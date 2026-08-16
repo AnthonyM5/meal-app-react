@@ -7,6 +7,7 @@ import type {
 } from '@pawplate/api-client'
 import {
   computeMealNutrients,
+  describeVariantChoice,
   findUnsafeIngredients,
   per100g,
   type BowlAnalysisItem,
@@ -34,6 +35,7 @@ import {
   Camera as CameraIcon,
   Check,
   Loader2,
+  Plus,
   Search,
   X,
 } from 'lucide-react'
@@ -128,7 +130,18 @@ function VariantChoice({
     if (variants || isLoading) return
     setIsLoading(true)
     try {
-      setVariants(await api.ingredients.variants(canonical.canonicalId))
+      const all = await api.ingredients.variants(canonical.canonicalId)
+      // Mirrors the web picker. The endpoint returns EVERY variant, but
+      // variantCount and the kcal/fat ranges in the copy above are scoped to
+      // the observed preparation — so an unfiltered list describes a
+      // different set than the copy, and lets the owner undo the model's
+      // observation by picking a raw row for a cooked meal. See the
+      // CanonicalMatch docs in @pawplate/core.
+      setVariants(
+        canonical.observedPreparation
+          ? all.filter(v => v.preparation_state === canonical.observedPreparation)
+          : all
+      )
     } catch (error) {
       toast.error(
         error instanceof ApiError ? error.message : 'Could not load options'
@@ -139,12 +152,6 @@ function VariantChoice({
     }
   }
 
-  const kcalSpread = canonical.kcalRange
-    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(canonical.kcalRange[1])} kcal`
-    : null
-  const fatSpread = canonical.fatRange
-    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
-    : null
 
   return (
     <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
@@ -156,9 +163,7 @@ function VariantChoice({
               Which {canonical.displayName.toLowerCase()} did you use?
             </p>
             <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
-              The photo can&apos;t show this. {canonical.variantCount} options
-              span {[kcalSpread, fatSpread].filter(Boolean).join(' and ')} per
-              100 g — picking the wrong one skews the whole bowl.
+              {describeVariantChoice(canonical)}
             </p>
           </div>
 
@@ -274,8 +279,32 @@ export function BowlPhotoScreen() {
   const [submitting, setSubmitting] = useState(false)
   // Which row (by key) is currently running an inline ingredient search.
   const [searchingRow, setSearchingRow] = useState<string | null>(null)
+  /** True while the "add another ingredient" search box is open. */
+  const [addingItem, setAddingItem] = useState(false)
+  const addedSeq = useRef(0)
+  // NOTE: `query`/`results` are shared by BOTH search boxes above — the
+  // per-row one and the "add another ingredient" one. Only one may be open at
+  // a time, or a click in one result list runs the other's handler: opening a
+  // row's search while "add another" was still open made picking a result
+  // APPEND a new row instead of replacing the mis-matched one, which is the
+  // opposite of what the owner asked for. Open them only via the two helpers
+  // below so that exclusivity can't be half-applied again.
   const [query, setQuery] = useState('')
   const { results, isSearching } = useIngredientSearch(query)
+
+  /** Open the inline search for one row, closing the other search box. */
+  function openRowSearch(key: string) {
+    setSearchingRow(key)
+    setAddingItem(false)
+    setQuery('')
+  }
+
+  /** Open the "add another ingredient" search, closing any row search. */
+  function openAddSearch() {
+    setAddingItem(true)
+    setSearchingRow(null)
+    setQuery('')
+  }
 
   const backTo = `/dogs/${dogId}`
 
@@ -345,6 +374,37 @@ export function BowlPhotoScreen() {
   function removeRow(key: string) {
     setRows(current => current.filter(r => r.key !== key))
     if (searchingRow === key) setSearchingRow(null)
+  }
+
+  /**
+   * Add an ingredient the model never reported. The photo is evidence, not a
+   * manifest: submerged, mixed-in or shredded foods routinely go unseen, and
+   * without this the owner's only options were to accept an incomplete bowl
+   * or re-analyze with a note. Mirrors web's "Missed something?".
+   *
+   * proportion/confidence are 0 — the owner supplies grams directly, and a
+   * fabricated proportion would pollute the correction signal in
+   * bowl_analyses.user_corrected.
+   */
+  function addRow(ingredient: Ingredient) {
+    setRows(current => [
+      ...current,
+      {
+        key: `added-${addedSeq.current++}`,
+        label: ingredient.name,
+        proportion: 0,
+        confidence: 0,
+        ingredient,
+        brandedCode: null,
+        grams: '',
+        estimatedGrams: null,
+        // Owner-chosen rows carry no group gate: they named the exact row.
+        canonical: null,
+        variantChosen: true,
+      },
+    ])
+    setAddingItem(false)
+    setQuery('')
   }
 
   function assignIngredient(key: string, ingredient: Ingredient) {
@@ -609,9 +669,16 @@ export function BowlPhotoScreen() {
                       />
                     )}
 
-                    {!row.ingredient && (
+                    {/*
+                      Search is available whether or not the row matched. It
+                      used to sit behind `!row.ingredient`, which meant a
+                      WRONGLY matched item could not be corrected on mobile at
+                      all — only deleted and lost. The photo is evidence, not a
+                      verdict.
+                    */}
+                    {(
                       <div className="space-y-2">
-                        {row.brandedCode && (
+                        {!row.ingredient && row.brandedCode && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -630,7 +697,11 @@ export function BowlPhotoScreen() {
                             <Input
                               autoFocus
                               className="pl-9"
-                              placeholder="Search an ingredient…"
+                              placeholder={
+                                row.ingredient
+                                  ? 'Search to replace…'
+                                  : 'Search an ingredient…'
+                              }
                               value={query}
                               onChange={e => setQuery(e.target.value)}
                             />
@@ -662,13 +733,10 @@ export function BowlPhotoScreen() {
                             variant="outline"
                             size="sm"
                             className="w-full"
-                            onClick={() => {
-                              setSearchingRow(row.key)
-                              setQuery('')
-                            }}
+                            onClick={() => openRowSearch(row.key)}
                           >
                             <Search className="mr-2 h-4 w-4" />
-                            Find a match
+                            {row.ingredient ? 'Replace this ingredient' : 'Find a match'}
                           </Button>
                         )}
                       </div>
@@ -678,6 +746,71 @@ export function BowlPhotoScreen() {
               </li>
             ))}
           </ul>
+
+          {/*
+            Add an ingredient the model missed. Mirrors web's "Missed
+            something?" block — mobile previously had no way to add at all, so
+            a submerged or mixed-in food could only be captured by re-analyzing
+            with a note.
+          */}
+          <div className="space-y-2 rounded-md border border-dashed p-3">
+            <p className="text-sm font-medium">Missed something?</p>
+            {addingItem ? (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    placeholder="Add another ingredient…"
+                    className="pl-9"
+                  />
+                  {isSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {results.length > 0 && (
+                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-1">
+                    {results.map(food => (
+                      <button
+                        key={food.id}
+                        type="button"
+                        className="flex w-full items-center justify-between rounded-md p-2 text-left text-sm hover:bg-muted"
+                        onClick={() => addRow(food)}
+                      >
+                        <span>{food.name}</span>
+                        <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                          {Math.round(food.calories_per_serving)} kcal
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    setAddingItem(false)
+                    setQuery('')
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={openAddSearch}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add another ingredient
+              </Button>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 items-end gap-4">
             <div className="space-y-2">

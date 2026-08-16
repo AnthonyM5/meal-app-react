@@ -212,7 +212,14 @@ async function identifyBowl(
     canonical: CanonicalMatch | null
   })[] = await Promise.all(
     result.items.map(async item => {
-      const matched = await matchIngredientWithCanonical(supabase, item.label)
+      // The model's OBSERVED preparation state, or null. Null makes the
+      // confirmation screen ask rather than letting search's short-name bias
+      // decide (it reliably picks "Carrots, raw" over the cooked row).
+      const matched = await matchIngredientWithCanonical(
+        supabase,
+        item.label,
+        item.preparation_state
+      )
       return {
         ...item,
         normalized_ingredient_id: matched.ingredientId,

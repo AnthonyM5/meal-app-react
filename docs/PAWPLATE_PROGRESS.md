@@ -76,7 +76,8 @@ Supabase Integration below.
   detection → `is_verified = false`.
 - `lib/dog-toxic-foods.ts`: cited toxic list + `checkDogSafety()` name matcher.
 - `app/api/ingredients/import/route.ts`: Foundation/SR-Legacy import with
-  `fdc_id` dedupe and safety pass.
+  `fdc_id` dedupe and safety pass. *(Deleted 2026-08-10 — imports are
+  script-only; see `docs/api-integration.md`.)*
 - 24 Jest tests against the captured fixture.
 
 ### Phase 4 — Vision pipeline (scaffold, live-tested)
@@ -475,6 +476,16 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   `/api/ingredients/import`, which has no auth check of its own and
   currently relies entirely on this middleware's cookie gate to stay
   non-public).
+  - **Update (2026-08-10):** `/api/ingredients/import` has since been
+    **deleted**, along with `/api/foods/import-external`. The "relies
+    entirely on the middleware cookie gate" arrangement described above
+    turned out to be exactly the wrong pattern: on the `/api/foods` side the
+    same reasoning failed, because `GUEST_ALLOWED_ROUTES` prefix-matched
+    `/api/foods` and let anyone reach `POST /api/foods/import-external` — an
+    unauthenticated service-role write — just by setting the client-side
+    `guestMode` cookie. Imports are script-only now. See
+    `docs/api-integration.md` ("Imports are script-only") and the invariant
+    tests in `apps/web/__tests__/middleware.test.ts`.
 - **Found and fixed a second real bug, in `lib/services/dog-service.ts` and
   `lib/services/meal-service.ts`**: every existence/ownership-check query
   used `.single()`, which throws Postgrest's raw "no rows" error on a

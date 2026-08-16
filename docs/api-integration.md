@@ -40,8 +40,28 @@ Open Food Facts requires no key (identify via User-Agent, set in
 | `lib/source-payloads.ts` | Archives every raw API response into `source_payloads` so re-derivation never re-fetches |
 | `scripts/022_bulk_import_usda_wholefoods.ts` | Filtered bulk import of the whole-food corpus (category whitelist + safety pass; `--dry-run`/`--category`/`--refresh`) |
 | `scripts/020_seed_staple_gaps.ts` | Pinned fdc_id seed for the pre-bulk staple set (kept for provenance) |
-| `app/api/ingredients/import/route.ts` | Query-triggered single-search import (legacy path, still canine-safe) |
 | `app/api/foods/unified-search/route.ts` | Search endpoint over `fuzzy_search_foods` used by `use-ingredient-search` |
+
+### Imports are script-only
+
+Catalog imports run from `scripts/` with explicit operator credentials — there
+is **no HTTP import endpoint**, by design.
+
+`app/api/ingredients/import` and `app/api/foods/import-external` used to expose
+query-triggered imports over HTTP. Both were deleted: they had no auth check of
+their own, wrote to the shared `foods` table with the service-role key, and had
+no caller in the app. `/api/foods/import-external` was additionally reachable
+unauthenticated, because `middleware.ts` prefix-matched `/api/foods` as a
+guest-allowed route. `import-external` also predated the canine normalization
+work — it never set `fdc_id` or `is_safe_for_dogs` and bypassed
+`convertUSDAToIngredient` entirely, so its rows were malformed relative to the
+current schema.
+
+Use `scripts/022_bulk_import_usda_wholefoods.ts` (bulk, category-filtered),
+`scripts/018_import_raw_counterparts.ts`, or
+`scripts/import-cooked-ingredients.ts` instead. If an HTTP import is ever
+needed again, it requires its own authentication and authorization — a
+middleware prefix list is not a substitute.
 
 ## FDC endpoints used
 

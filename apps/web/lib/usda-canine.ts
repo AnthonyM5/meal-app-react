@@ -18,7 +18,15 @@ import { checkDogSafety } from '@/lib/dog-toxic-foods'
 
 /** Verified FDC nutrient IDs (see header). Amounts are per 100 g. */
 export const USDA_CANINE_NUTRIENT_IDS = {
-  ENERGY_KCAL: 1008, // Energy (kcal)
+  ENERGY_KCAL: 1008, // Energy (kcal) — SR Legacy reports energy here
+  // Foundation foods DO NOT report 1008. They report energy only under the
+  // Atwater nutrients below, so reading 1008 alone yielded 0 kcal for every
+  // Foundation row: 245 of 4,700 active foods, 176 of them carrying >1 g
+  // protein (impossible at 0 kcal), and 47 of them elected as the DEFAULT
+  // variant of a canonical group — `butter`, `yogurt` and `spinach` among
+  // them. A bowl item matching one of those logged as zero calories.
+  ENERGY_ATWATER_SPECIFIC: 2048, // Energy (Atwater Specific Factors) (kcal)
+  ENERGY_ATWATER_GENERAL: 2047, // Energy (Atwater General Factors) (kcal)
   PROTEIN: 1003, // Protein (g)
   CARBS: 1005, // Carbohydrate, by difference (g)
   FAT: 1004, // Total lipid (fat) (g)
@@ -100,6 +108,81 @@ function buildAmountMap(entries: USDANutrientEntry[]): Map<number, number> {
   return map
 }
 
+/** Atwater general factors, kcal per gram. Used only as a last resort. */
+const ATWATER_KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 } as const
+
+/**
+ * Energy in kcal per 100 g, from whichever nutrient the record actually
+ * carries. Exported for the backfill in scripts/029.
+ *
+ * Preference order, and why:
+ *  1. 1008 — the canonical "Energy". SR Legacy rows have it; trust it first.
+ *  2. 2048 — Atwater SPECIFIC factors: per-food coefficients, so it is the
+ *     closer analogue of what 1008 already represents for these foods. Using
+ *     it keeps Foundation rows comparable with the SR Legacy rows they sit
+ *     beside in one table (they differ by ~3%: chickpeas are 372 vs 383).
+ *  3. 2047 — Atwater GENERAL factors. Broader coverage than 2048 in practice
+ *     (195 vs 174 of the 244 broken rows), so it is a real fallback, not a
+ *     formality.
+ *  4. Derived 4/4/9 from macros, for the 31 rows carrying macros but no
+ *     energy nutrient at all.
+ *
+ * Returns 0 only when the record states no energy AND no macros — 18 rows
+ * that are empty shells. 0 is preserved rather than guessed at, and
+ * `isNutritionallyUsable()` is what stops those reaching an owner.
+ */
+export function resolveEnergyKcal(
+  amounts: Map<number, number>,
+  macros: { protein: number; carbs: number; fat: number }
+): number {
+  const ids = USDA_CANINE_NUTRIENT_IDS
+  for (const id of [
+    ids.ENERGY_KCAL,
+    ids.ENERGY_ATWATER_SPECIFIC,
+    ids.ENERGY_ATWATER_GENERAL,
+  ]) {
+    const value = amounts.get(id)
+    if (value != null && value > 0) return value
+  }
+  const derived =
+    macros.protein * ATWATER_KCAL_PER_G.protein +
+    macros.carbs * ATWATER_KCAL_PER_G.carbs +
+    macros.fat * ATWATER_KCAL_PER_G.fat
+  return derived > 0 ? Math.round(derived * 100) / 100 : 0
+}
+
+/**
+ * Is this row safe to put in front of an owner as a nutrition figure?
+ *
+ * A food reporting 0 kcal while carrying macronutrients is not "low calorie",
+ * it is broken — 4 g of protein cannot exist at 0 kcal. Logging it silently
+ * understates a meal by 100%, which is worse than showing no match at all.
+ * Used by the bowl resolver (never auto-match one) and by pickDefault (never
+ * elect one to represent a group).
+ *
+ * DELIBERATE LIMIT: a row that is zero on energy AND every macro passes. That
+ * shape is legitimate for some foods (eggshell powder, a calcium supplement),
+ * and nothing in the row itself distinguishes those from the 18 measured
+ * empty shells like "Oil, peanut" — which is 100% fat in reality. Those need
+ * a re-fetch, not a predicate; scripts/029 reports them by name rather than
+ * guessing. This function only rejects the PROVABLY impossible.
+ */
+export function isNutritionallyUsable(food: {
+  calories_per_serving?: number | null
+  protein_g?: number | null
+  fat_g?: number | null
+  carbs_g?: number | null
+}): boolean {
+  const kcal = Number(food.calories_per_serving ?? 0)
+  if (kcal > 0) return true
+  // 0 kcal is only credible when nothing energy-bearing is present either.
+  const macros =
+    Number(food.protein_g ?? 0) +
+    Number(food.fat_g ?? 0) +
+    Number(food.carbs_g ?? 0)
+  return macros <= 0
+}
+
 export interface CanineIngredientNutrients {
   calories_per_serving: number
   protein_g: number
@@ -163,11 +246,15 @@ export function extractCanineNutrients(
   // Linoleic acid: prefer the explicit n-6 isomer, else total 18:2
   const linoleicG = amounts.get(ids.PUFA_LA) ?? get(ids.PUFA_18_2)
 
+  const protein = get(ids.PROTEIN)
+  const carbs = get(ids.CARBS)
+  const fat = get(ids.FAT)
+
   return {
-    calories_per_serving: get(ids.ENERGY_KCAL),
-    protein_g: get(ids.PROTEIN),
-    carbs_g: get(ids.CARBS),
-    fat_g: get(ids.FAT),
+    calories_per_serving: resolveEnergyKcal(amounts, { protein, carbs, fat }),
+    protein_g: protein,
+    carbs_g: carbs,
+    fat_g: fat,
     fiber_g: get(ids.FIBER),
     sugar_g: get(ids.SUGAR),
     cholesterol_mg: get(ids.CHOLESTEROL),

@@ -24,7 +24,13 @@ import type {
   BrandedSuggestion,
   CanonicalMatch,
 } from '@/lib/resolve-ingredient'
-import { per100g, type BowlAnalysisItem, type Food, type MealType } from '@/lib/types'
+import {
+  describeVariantChoice,
+  per100g,
+  type BowlAnalysisItem,
+  type Food,
+  type MealType,
+} from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import {
@@ -223,7 +229,19 @@ function VariantChoice({
       // Through the shared REST client, never a raw fetch: the route is
       // Bearer-authenticated (lib/server/rest-auth.ts), so a cookie-only
       // request would 401 even for a logged-in owner.
-      setVariants(await apiClient.ingredients.variants(canonical.canonicalId))
+      const all = await apiClient.ingredients.variants(canonical.canonicalId)
+      // list_canonical_variants returns EVERY variant, but variantCount and
+      // the kcal/fat ranges in the copy above are scoped to the observed
+      // preparation. Showing the unfiltered list makes that copy describe a
+      // different set than the one on screen, and lets the owner undo the
+      // model's observation by picking a raw row for a cooked meal. Filtering
+      // here keeps the two in agreement; "Search to replace" remains the way
+      // out when the observation itself is wrong.
+      setVariants(
+        canonical.observedPreparation
+          ? all.filter(v => v.preparation_state === canonical.observedPreparation)
+          : all
+      )
     } catch (error) {
       console.error('Variant load error:', error)
       toast.error(
@@ -235,14 +253,6 @@ function VariantChoice({
     }
   }
 
-  const kcalSpread = canonical.kcalRange
-    ? `${Math.round(canonical.kcalRange[0])}–${Math.round(
-        canonical.kcalRange[1]
-      )} kcal`
-    : null
-  const fatSpread = canonical.fatRange
-    ? `${canonical.fatRange[0]}–${canonical.fatRange[1]} g fat`
-    : null
 
   return (
     <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
@@ -254,10 +264,7 @@ function VariantChoice({
               Which {canonical.displayName.toLowerCase()} did you use?
             </p>
             <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
-              The photo can&apos;t show this. {canonical.variantCount} options
-              span{' '}
-              {[kcalSpread, fatSpread].filter(Boolean).join(' and ')} per 100 g —
-              picking the wrong one skews the whole bowl.
+              {describeVariantChoice(canonical)}
             </p>
           </div>
 

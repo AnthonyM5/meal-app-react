@@ -1,33 +1,38 @@
 {
   "image": "apps/web/scripts/fixtures/farmers-dog-turkey.jpg",
-  "capturedAt": "2026-08-04T22:39:19.304Z",
+  "capturedAt": "2026-08-06T00:49:48.320Z",
   "modelVersion": "gemini-2.5-flash",
-  "notes": "The food is Buddy's Turkey Recipe.",
+  "notes": "The food is a mixed 'Turkey Recipe' from 'The Farmer's Dog' package. It appears to contain ground turkey, carrots, spinach, broccoli, and chickpeas.",
   "items": [
     {
       "label": "ground turkey",
       "estimated_proportion": 0.6,
-      "confidence": 0.95
+      "confidence": 0.95,
+      "preparation_state": "cooked"
     },
     {
       "label": "carrots",
       "estimated_proportion": 0.15,
-      "confidence": 0.9
+      "confidence": 0.9,
+      "preparation_state": "cooked"
     },
     {
       "label": "spinach",
       "estimated_proportion": 0.1,
-      "confidence": 0.85
+      "confidence": 0.8,
+      "preparation_state": "cooked"
     },
     {
       "label": "broccoli",
       "estimated_proportion": 0.08,
-      "confidence": 0.85
+      "confidence": 0.85,
+      "preparation_state": "cooked"
     },
     {
       "label": "chickpeas",
       "estimated_proportion": 0.07,
-      "confidence": 0.8
+      "confidence": 0.75,
+      "preparation_state": "cooked"
     }
   ]
 }

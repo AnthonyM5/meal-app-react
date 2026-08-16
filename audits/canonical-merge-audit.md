@@ -1,6 +1,6 @@
 # Canonical merge audit
 
-_Generated 2026-08-05 by scripts/027_audit_canonical_merges.ts._
+_Generated 2026-08-06 by scripts/027_audit_canonical_merges.ts._
 
 | Metric | Value |
 |---|---|

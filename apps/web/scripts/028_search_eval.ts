@@ -56,6 +56,7 @@ import {
   type ExpectedPrep,
 } from './_search-eval-cases'
 import { MATCH_THRESHOLD } from '../lib/resolve-ingredient'
+import { isNutritionallyUsable } from '../lib/usda-canine'
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -95,6 +96,13 @@ interface VisionLabel {
   label: string
   estimated_proportion: number
   confidence: number
+  /**
+   * The model's OBSERVED preparation state, or null for "cannot tell".
+   * Captured because null is the interesting answer: it is what makes
+   * lib/resolve-ingredient.ts demand an explicit owner choice instead of
+   * letting flat search's short-name bias pick a raw row.
+   */
+  preparation_state?: 'raw' | 'cooked' | null
 }
 
 interface LabelsFixture {
@@ -112,6 +120,10 @@ interface FlatRow {
   preparation_state: string | null
   is_safe_for_dogs: boolean | null
   similarity: number
+  calories_per_serving: number | null
+  protein_g: number | null
+  fat_g: number | null
+  carbs_g: number | null
 }
 
 interface GroupRow {
@@ -133,6 +145,10 @@ interface VariantRow {
   name: string
   preparation_state: string | null
   is_canonical_default: boolean
+  calories_per_serving: number | null
+  protein_g: number | null
+  fat_g: number | null
+  carbs_g: number | null
 }
 
 /** One scored side of one query. `null` when that path is unavailable. */
@@ -144,6 +160,13 @@ interface SideResult {
   part: boolean
   prep: boolean
   fully: boolean
+  /**
+   * Is the row's nutrition physically possible? A 0 kcal row carrying macros
+   * is broken data, and scoring only names let 245 such rows pass unnoticed —
+   * this harness reported "chickpeas" as a mere PREP failure while the row it
+   * matched reported 0 kcal against 21 g of protein.
+   */
+  usable: boolean
   /** Is a fully-correct answer reachable at all (top-K / within the group)? */
   withinReach: boolean
   /** Extra line for the report: the group / variant that made reach true. */
@@ -422,6 +445,7 @@ async function loadOrCaptureLabels(): Promise<LabelsFixture | null> {
       label: i.label,
       estimated_proportion: i.estimated_proportion,
       confidence: i.confidence,
+      preparation_state: i.preparation_state ?? null,
     })),
   }
   mkdirSync(dirname(LABELS_FIXTURE), { recursive: true })
@@ -440,7 +464,9 @@ async function loadOrCaptureLabels(): Promise<LabelsFixture | null> {
  */
 async function evalFlat(
   query: string,
-  c: EvalCase
+  c: EvalCase,
+  /** The model's observed preparation state for this item, if any. */
+  observedPrep?: 'raw' | 'cooked' | null
 ): Promise<{ side: SideResult | null; autoMatchFired: boolean; rows: FlatRow[] }> {
   const { data, error } = await db().rpc('fuzzy_search_foods', {
     search_query: query,
@@ -448,13 +474,27 @@ async function evalFlat(
   })
   if (error) throw new Error(`fuzzy_search_foods(${query}): ${error.message}`)
   const rows = (data ?? []) as FlatRow[]
-  const top = rows[0]
+
+  // Score the row `matchLocalIngredient` would COMMIT, not merely the row the
+  // ranking put first — the two diverge now that the resolver skips unsafe or
+  // nutritionally broken candidates and honours an observed preparation
+  // state. Scoring raw rank order would flatter the app: it would report a
+  // raw hit as the outcome when the resolver actually commits the cooked one.
+  const eligible = rows.filter(
+    r =>
+      r.similarity >= MATCH_THRESHOLD &&
+      r.is_safe_for_dogs !== false &&
+      isNutritionallyUsable(r)
+  )
+  const top =
+    (observedPrep
+      ? eligible.find(r => r.preparation_state === observedPrep)
+      : undefined) ?? eligible[0]
   if (!top) return { side: null, autoMatchFired: false, rows }
 
-  // Mirror matchLocalIngredient's two rejections, so "auto-match fired"
-  // reports what the bowl resolver would actually have committed.
-  const autoMatchFired =
-    top.similarity >= MATCH_THRESHOLD && top.is_safe_for_dogs !== false
+  // `top` already survived every rejection matchLocalIngredient applies, so
+  // reaching here means the bowl resolver would have committed it.
+  const autoMatchFired = true
 
   const s = scoreAll(top.name, top.preparation_state, c)
   const reached = rows.find(r => scoreAll(r.name, r.preparation_state, c).fully)
@@ -465,6 +505,7 @@ async function evalFlat(
       topPrep: derivePrep(top.name, top.preparation_state),
       similarity: top.similarity,
       ...s,
+      usable: isNutritionallyUsable(top),
       withinReach: reached !== undefined,
       reachNote: reached ? `top-${rows.indexOf(reached) + 1}: ${reached.name}` : null,
     },
@@ -514,6 +555,7 @@ async function evalGrouped(
     part: defPart,
     prep: defPrep,
     fully: defBase && defPart && defPrep,
+    usable: await isRowUsable(top.food_id),
     withinReach: correctGroup !== undefined,
     reachNote: correctGroup
       ? `top-${rows.indexOf(correctGroup) + 1} group: ${correctGroup.display_name}`
@@ -540,7 +582,9 @@ async function evalGrouped(
   // without-salt row — a misleading picture of what a fixed pickDefault would
   // choose, since pickDefault's whole intent is the least-specialized variant.
   const winner = variants
-    .filter(v => scoreAll(v.name, v.preparation_state, c).fully)
+    .filter(
+      v => scoreAll(v.name, v.preparation_state, c).fully && isNutritionallyUsable(v)
+    )
     .sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name))[0]
   const shown = winner ?? variants.find(v => v.is_canonical_default) ?? variants[0]
 
@@ -550,12 +594,28 @@ async function evalGrouped(
         topPrep: derivePrep(shown.name, shown.preparation_state),
         similarity: correctGroup.similarity,
         ...scoreAll(shown.name, shown.preparation_state, c),
+        usable: isNutritionallyUsable(shown),
         withinReach: winner !== undefined,
         reachNote: `${variants.length} variant(s) in group`,
       }
     : null
 
   return { def, best, rows }
+}
+
+/**
+ * Nutrition sanity for a grouped-search hit. search_canonical_ingredients
+ * returns the default variant's kcal but not its macros, and "0 kcal" alone
+ * cannot distinguish broken data from a genuinely zero food — so fetch the
+ * macros for the one row being scored.
+ */
+async function isRowUsable(foodId: string): Promise<boolean> {
+  const { data } = await db()
+    .from('foods')
+    .select('calories_per_serving,protein_g,fat_g,carbs_g')
+    .eq('id', foodId)
+    .maybeSingle()
+  return data ? isNutritionallyUsable(data) : true
 }
 
 // ---------------------------------------------------------------------------
@@ -566,6 +626,7 @@ const METRIC_ROWS = [
   ['top-1 base correct', (s: SideResult) => s.base],
   ['top-1 plausible part', (s: SideResult) => s.part],
   ['top-1 prep correct', (s: SideResult) => s.prep],
+  ['top-1 nutrition usable', (s: SideResult) => s.usable],
   ['top-1 fully correct', (s: SideResult) => s.fully],
   ['correct within reach', (s: SideResult) => s.withinReach],
 ] as const
@@ -573,11 +634,16 @@ const METRIC_ROWS = [
 function tally(
   results: QueryResult[],
   pick: (r: QueryResult) => SideResult | null,
-  predicate: (s: SideResult) => boolean
+  predicate: (s: SideResult) => boolean | undefined
 ): string {
   const sides = results.map(pick)
   if (sides.every(s => s === null)) return 'n/a'
-  const hits = sides.filter(s => s !== null && predicate(s)).length
+  const present = sides.filter((s): s is SideResult => s !== null)
+  // A metric added after a snapshot was written is ABSENT from it, not failed.
+  // Reporting `0/8` for a field that did not exist yet turns a widened harness
+  // into a phantom regression in every --compare against an older snapshot.
+  if (present.every(s => predicate(s) === undefined)) return 'n/a'
+  const hits = present.filter(s => predicate(s) === true).length
   return `${hits}/${results.length}`
 }
 
@@ -638,13 +704,16 @@ function writeReport(snapshot: Snapshot): string {
     lines.push('')
     lines.push(`Model notes: ${fixture.notes || '_none_'}`)
     lines.push('')
-    lines.push('| label | proportion | confidence | ground truth |')
-    lines.push('|---|---:|---:|---|')
+    lines.push('| label | proportion | confidence | model prep | ground truth |')
+    lines.push('|---|---:|---:|---|---|')
     for (const item of fixture.items) {
       const c = findCaseForLabel(item.label)
+      const prep =
+        item.preparation_state ?? '**null** — owner must choose'
       lines.push(
         `| ${item.label} | ${item.estimated_proportion.toFixed(2)} | ` +
-          `${item.confidence.toFixed(2)} | ${c ? `\`${c.query}\`` : '**UNANNOTATED**'} |`
+          `${item.confidence.toFixed(2)} | ${prep} | ` +
+          `${c ? `\`${c.query}\`` : '**UNANNOTATED**'} |`
       )
     }
     lines.push('')
@@ -672,6 +741,17 @@ function writeReport(snapshot: Snapshot): string {
   }
   const fired = results.filter(r => r.autoMatchFired).length
   lines.push(`| auto-match fired | ${fired}/${results.length} | n/a | n/a |`)
+  lines.push('')
+  lines.push(
+    '**Scope boundary.** The `flat` column models `matchLocalIngredient` — ' +
+      'threshold, safety, nutrition usability, and preference for an observed ' +
+      'preparation state. It does NOT model the group-level correction in ' +
+      '`matchIngredientWithCanonical` (`pickPrepVariant`), which reaches ' +
+      'same-preparation siblings that score below MATCH_THRESHOLD. So this ' +
+      'column UNDER-reports the shipped resolver: `chickpeas` fails here ' +
+      'because every cooked chickpea row scores ~0.419, yet end-to-end the ' +
+      'resolver returns the cooked row via its canonical group.'
+  )
   lines.push('')
   lines.push(
     '`grouped best variant` is a **ceiling**, not a shipping number: it asks ' +
@@ -894,7 +974,13 @@ async function main() {
   // Photo cases run the MODEL'S OWN label as the query, not the tidy canonical
   // query — that is what matchLocalIngredient receives in production, and
   // label phrasing is itself part of what is being measured.
-  const plan: Array<{ query: string; case: EvalCase; source: 'photo' | 'static'; visionLabel: string | null }> = []
+  const plan: Array<{
+    query: string
+    case: EvalCase
+    source: 'photo' | 'static'
+    visionLabel: string | null
+    observedPrep?: 'raw' | 'cooked' | null
+  }> = []
   const unannotated: string[] = []
 
   for (const item of fixture?.items ?? []) {
@@ -903,7 +989,13 @@ async function main() {
       unannotated.push(item.label)
       continue
     }
-    plan.push({ query: item.label, case: c, source: 'photo', visionLabel: item.label })
+    plan.push({
+      query: item.label,
+      case: c,
+      source: 'photo',
+      visionLabel: item.label,
+      observedPrep: item.preparation_state ?? null,
+    })
   }
   for (const c of STATIC_CASES) {
     plan.push({ query: c.query, case: c, source: 'static', visionLabel: null })
@@ -911,7 +1003,7 @@ async function main() {
 
   const results: QueryResult[] = []
   for (const entry of plan) {
-    const flat = await evalFlat(entry.query, entry.case)
+    const flat = await evalFlat(entry.query, entry.case, entry.observedPrep)
     const grouped = health.ok
       ? await evalGrouped(entry.query, entry.case)
       : { def: null, best: null, rows: [] as GroupRow[] }

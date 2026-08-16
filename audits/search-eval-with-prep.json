@@ -1,0 +1,410 @@
+{
+  "label": "with-prep",
+  "generatedAt": "2026-08-06T00:55:48.033Z",
+  "health": {
+    "status": "HEALTHY",
+    "ok": true,
+    "detail": "707 groups over 4700 attached foods",
+    "groups": 707,
+    "attachedFoods": 4700,
+    "pendingMigrations": []
+  },
+  "corpus": {
+    "activeFoods": 4700,
+    "canonicalGroups": 707,
+    "attachedFoods": 4700
+  },
+  "fixture": {
+    "image": "apps/web/scripts/fixtures/farmers-dog-turkey.jpg",
+    "capturedAt": "2026-08-06T00:49:48.320Z",
+    "modelVersion": "gemini-2.5-flash",
+    "notes": "The food is a mixed 'Turkey Recipe' from 'The Farmer's Dog' package. It appears to contain ground turkey, carrots, spinach, broccoli, and chickpeas.",
+    "items": [
+      {
+        "label": "ground turkey",
+        "estimated_proportion": 0.6,
+        "confidence": 0.95,
+        "preparation_state": "cooked"
+      },
+      {
+        "label": "carrots",
+        "estimated_proportion": 0.15,
+        "confidence": 0.9,
+        "preparation_state": "cooked"
+      },
+      {
+        "label": "spinach",
+        "estimated_proportion": 0.1,
+        "confidence": 0.8,
+        "preparation_state": "cooked"
+      },
+      {
+        "label": "broccoli",
+        "estimated_proportion": 0.08,
+        "confidence": 0.85,
+        "preparation_state": "cooked"
+      },
+      {
+        "label": "chickpeas",
+        "estimated_proportion": 0.07,
+        "confidence": 0.75,
+        "preparation_state": "cooked"
+      }
+    ]
+  },
+  "unannotated": [],
+  "results": [
+    {
+      "query": "ground turkey",
+      "source": "photo",
+      "visionLabel": "ground turkey",
+      "why": "cooked ground turkey — not giblets, neck, skin or a turkey frankfurter",
+      "expectedPrep": "cooked",
+      "flat": {
+        "topName": "Turkey, Ground, cooked",
+        "topPrep": "cooked",
+        "similarity": 0.623825,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-2: Turkey, Ground, cooked"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Turkey ground  →  Turkey, Ground, raw",
+        "topPrep": "raw",
+        "similarity": 0.8,
+        "base": true,
+        "part": true,
+        "prep": false,
+        "fully": false,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Turkey ground"
+      },
+      "groupedBest": {
+        "topName": "Turkey ground  →  Turkey, Ground, cooked",
+        "topPrep": "cooked",
+        "similarity": 0.8,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "13 variant(s) in group"
+      }
+    },
+    {
+      "query": "carrots",
+      "source": "photo",
+      "visionLabel": "carrots",
+      "why": "cooked carrot, not carrot juice or baby-food carrot",
+      "expectedPrep": "cooked",
+      "flat": {
+        "topName": "Carrots, cooked, boiled, drained, with salt",
+        "topPrep": "cooked",
+        "similarity": 0.752404,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-4: Carrots, cooked, boiled, drained, with salt"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Carrot  →  Carrot, raw",
+        "topPrep": "raw",
+        "similarity": 0.666667,
+        "base": true,
+        "part": true,
+        "prep": false,
+        "fully": false,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Carrot"
+      },
+      "groupedBest": {
+        "topName": "Carrot  →  Carrots, cooked, boiled, drained, with salt",
+        "topPrep": "cooked",
+        "similarity": 0.666667,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "14 variant(s) in group"
+      }
+    },
+    {
+      "query": "spinach",
+      "source": "photo",
+      "visionLabel": "spinach",
+      "why": "cooked spinach, not spinach souffle or baby food",
+      "expectedPrep": "cooked",
+      "flat": {
+        "topName": "Spinach, cooked, boiled, drained, with salt",
+        "topPrep": "cooked",
+        "similarity": 0.7505,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-4: Spinach, cooked, boiled, drained, with salt"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Spinach  →  Spinach, baby",
+        "topPrep": null,
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": false,
+        "fully": false,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Spinach"
+      },
+      "groupedBest": {
+        "topName": "Spinach  →  Spinach, cooked, boiled, drained, with salt",
+        "topPrep": "cooked",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "11 variant(s) in group"
+      }
+    },
+    {
+      "query": "broccoli",
+      "source": "photo",
+      "visionLabel": "broccoli",
+      "why": "cooked broccoli — \"Broccoli raab\" is a different base food",
+      "expectedPrep": "cooked",
+      "flat": {
+        "topName": "Broccoli, chinese, cooked",
+        "topPrep": "cooked",
+        "similarity": 0.791217,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-5: Broccoli, chinese, cooked"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Broccoli  →  Broccoli, raw",
+        "topPrep": "raw",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": false,
+        "fully": false,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Broccoli"
+      },
+      "groupedBest": {
+        "topName": "Broccoli  →  Broccoli, chinese, cooked",
+        "topPrep": "cooked",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "13 variant(s) in group"
+      }
+    },
+    {
+      "query": "chickpeas",
+      "source": "photo",
+      "visionLabel": "chickpeas",
+      "why": "cooked chickpeas, not hummus or chickpea flour",
+      "expectedPrep": "cooked",
+      "flat": {
+        "topName": "Chickpeas, (garbanzo beans, bengal gram), dry",
+        "topPrep": null,
+        "similarity": 0.752996,
+        "base": true,
+        "part": true,
+        "prep": false,
+        "fully": false,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-7: Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, with salt"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Chickpea  →  Chickpeas (garbanzo beans, bengal gram), mature seeds, raw",
+        "topPrep": "raw",
+        "similarity": 0.727273,
+        "base": true,
+        "part": true,
+        "prep": false,
+        "fully": false,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Chickpea"
+      },
+      "groupedBest": {
+        "topName": "Chickpea  →  Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, with salt",
+        "topPrep": "cooked",
+        "similarity": 0.727273,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "9 variant(s) in group"
+      }
+    },
+    {
+      "query": "chicken",
+      "source": "static",
+      "visionLabel": null,
+      "why": "the headline case — flat search returns \"Chicken, feet, raw\" as top-1",
+      "expectedPrep": "any",
+      "flat": {
+        "topName": "Chicken, ground, raw",
+        "topPrep": "raw",
+        "similarity": 0.800141,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1: Chicken, ground, raw"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Chicken  →  Chicken, stewing, meat only, raw",
+        "topPrep": "raw",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Chicken"
+      },
+      "groupedBest": {
+        "topName": "Chicken  →  Chicken, stewing, meat only, raw",
+        "topPrep": "raw",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "68 variant(s) in group"
+      }
+    },
+    {
+      "query": "chicken breast",
+      "source": "static",
+      "visionLabel": null,
+      "why": "a breast cut, not breaded tenders",
+      "expectedPrep": "any",
+      "flat": {
+        "topName": "Chicken breast, boneless skinless, raw",
+        "topPrep": "raw",
+        "similarity": 0.810189,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1: Chicken breast, boneless skinless, raw"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Chicken breast  →  Chicken, broiler or fryers, breast, skinless, boneless, meat only, cooked, braised",
+        "topPrep": "cooked",
+        "similarity": 0.813333,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Chicken breast"
+      },
+      "groupedBest": {
+        "topName": "Chicken breast  →  Chicken, breast, meat and skin, raw",
+        "topPrep": "raw",
+        "similarity": 0.813333,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "21 variant(s) in group"
+      }
+    },
+    {
+      "query": "turkey",
+      "source": "static",
+      "visionLabel": null,
+      "why": "turkey meat, not turkey giblets or turkey neck",
+      "expectedPrep": "any",
+      "flat": {
+        "topName": "Turkey, Ground, raw",
+        "topPrep": "raw",
+        "similarity": 0.790492,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1: Turkey, Ground, raw"
+      },
+      "autoMatchFired": true,
+      "groupedDefault": {
+        "topName": "Turkey  →  Turkey, whole, meat only, raw",
+        "topPrep": "raw",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "top-1 group: Turkey"
+      },
+      "groupedBest": {
+        "topName": "Turkey  →  Turkey, whole, meat only, raw",
+        "topPrep": "raw",
+        "similarity": 1,
+        "base": true,
+        "part": true,
+        "prep": true,
+        "fully": true,
+        "usable": true,
+        "withinReach": true,
+        "reachNote": "33 variant(s) in group"
+      }
+    }
+  ]
+}
