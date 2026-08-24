@@ -249,7 +249,25 @@ Foundation foods report energy under FDC nutrients 2047/2048, never 1008. The im
 
 ## Not repairable from stored data
 
-These carry no energy nutrient AND no macros in the payload captured at import. Several are obviously wrong on their face — "Oil, peanut" is 100% fat in reality — so the payload itself is sparse, not the parsing. They need a fresh FDC fetch or manual curation.
+These carry no energy nutrient AND no macros in the payload captured at import. Several are obviously wrong on their face — "Oil, peanut" is 100% fat in reality — so the payload itself is sparse, not the parsing.
+
+> **Corrected 2026-08-18: a fresh FDC fetch does NOT recover these.** The live
+> API was probed for six of them and USDA publishes no energy and no proximates
+> either. fdc 748608 ("Oil, olive, extra virgin") returns 33 nutrients — the
+> full fatty acid profile and the tocopherols — and no total fat; fdc 2758998
+> (dry enriched spaghetti) returns 19 and no energy. These are partial
+> Foundation entries, not a fetch that was done wrong. They are soft-deleted by
+> `scripts/030_deactivate_unusable_food_shells.ts` instead, which hands each
+> query to the complete SR Legacy sibling already in the table. See
+> `.claude/reports/2026-08-18-zero-kcal-options.md`.
+>
+> The same pass found a second group this audit does not list: **12 rows the
+> `derived 4/4/9` fallback made worse**, not better. Their payloads carried
+> protein but neither fat nor carbohydrate, so energy was derived from protein
+> alone — leeks at 5.87 kcal against a real 61, prune juice at 1.69 against 71.
+> At 0 kcal with protein > 0 those rows were REFUSED by
+> `isNutritionallyUsable()` as physically impossible; above 0 they were
+> accepted. They are listed under "Repaired" above and are not repaired.
 
 | food | fdc_id | protein | fat | carbs | group default |
 |---|---:|---:|---:|---:|:---:|

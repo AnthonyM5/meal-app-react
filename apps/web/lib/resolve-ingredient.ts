@@ -195,7 +195,7 @@ export async function matchIngredientWithCanonical(
       // matchLocalIngredient applies. Selecting only the display columns is
       // how the swap silently became the one unguarded path into a match.
       .select(
-        'id,name,calories_per_serving,protein_g,carbs_g,fat_g,serving_size,preparation_state,is_safe_for_dogs'
+        'id,name,calories_per_serving,protein_g,carbs_g,fat_g,serving_size,preparation_state,is_safe_for_dogs,data_completeness'
       )
       .eq('canonical_id', matched.canonical_id)
       .eq('is_active', true),

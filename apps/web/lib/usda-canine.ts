@@ -152,35 +152,78 @@ export function resolveEnergyKcal(
 }
 
 /**
+ * The `data_completeness` value that declares a row's zeros to be MEASURED,
+ * not missing. Eggshell powder is a calcium supplement: 0 energy and 0 macros
+ * is its real composition. Nothing in the row's own numbers distinguishes it
+ * from "Oil, peanut" — which USDA also publishes as all-zero and which is
+ * 100% fat in reality — so the difference has to be asserted, not inferred.
+ */
+export const NON_CALORIC = 'non_caloric'
+
+/**
+ * `inactive_reason` for a row deactivated because it carries no usable energy
+ * figure. Shared by the importer and scripts/030 so both are revived by one
+ * predicate-shaped query.
+ */
+export const UNUSABLE_REASON = 'unusable:no_energy_data'
+
+/**
  * Is this row safe to put in front of an owner as a nutrition figure?
  *
- * A food reporting 0 kcal while carrying macronutrients is not "low calorie",
- * it is broken — 4 g of protein cannot exist at 0 kcal. Logging it silently
- * understates a meal by 100%, which is worse than showing no match at all.
- * Used by the bowl resolver (never auto-match one) and by pickDefault (never
- * elect one to represent a group).
+ * Three shapes are refused. All three understate a meal rather than overstate
+ * it, which is the direction that matters: an owner who is shown too few
+ * calories feeds more.
  *
- * DELIBERATE LIMIT: a row that is zero on energy AND every macro passes. That
- * shape is legitimate for some foods (eggshell powder, a calcium supplement),
- * and nothing in the row itself distinguishes those from the 18 measured
- * empty shells like "Oil, peanut" — which is 100% fat in reality. Those need
- * a re-fetch, not a predicate; scripts/029 reports them by name rather than
- * guessing. This function only rejects the PROVABLY impossible.
+ * 1. **Energy without a full macro payload.** Protein present while fat AND
+ *    carbohydrate are both exactly zero is a truncated import, not a food.
+ *    Tissue carries fat; even gelatin (85.6 g protein) reports 0.1 g. USDA
+ *    publishes ~12 partial Foundation rows in this shape, and scripts/029
+ *    derived energy from the protein alone — putting leeks at 5.87 kcal
+ *    against a real 61, and prune juice at 1.69 against 71. Because those
+ *    land ABOVE zero they satisfied the old predicate's first line, so the
+ *    backfill turned rows that had been correctly refused into accepted ones
+ *    understating by 90-97%. Verified against all 4,700 active rows: this
+ *    rule rejects exactly those 12 and no legitimate food.
+ *
+ * 2. **Zero energy while carrying macros.** Physically impossible — 4 g of
+ *    protein cannot exist at 0 kcal. This is the original rule.
+ *
+ * 3. **Zero energy and zero macros, unmarked.** Legitimate for a supplement
+ *    and wrong for everything else, and the row's numbers cannot tell the two
+ *    apart, so it must carry `data_completeness = NON_CALORIC` to pass. The
+ *    old code inferred the benign reading and let 18 measured empty shells
+ *    through — every cooking oil, both dry pastas, raisins. Fail closed: an
+ *    unmarked all-zero row is treated as missing data.
+ *
+ * Callers must SELECT `data_completeness`, or rule 3 rejects everything with
+ * all-zero nutrition. `fuzzy_search_foods` already returns it.
+ *
+ * Used by the bowl resolver (never auto-match one) and by pickDefault in
+ * scripts/026 (never elect one to represent a canonical group).
  */
 export function isNutritionallyUsable(food: {
   calories_per_serving?: number | null
   protein_g?: number | null
   fat_g?: number | null
   carbs_g?: number | null
+  data_completeness?: string | null
 }): boolean {
   const kcal = Number(food.calories_per_serving ?? 0)
+  const protein = Number(food.protein_g ?? 0)
+  const fat = Number(food.fat_g ?? 0)
+  const carbs = Number(food.carbs_g ?? 0)
+
+  // (1) Checked before the kcal>0 shortcut: these rows report positive energy,
+  // so testing energy first would pass them straight through.
+  if (protein > 0 && fat === 0 && carbs === 0) return false
+
   if (kcal > 0) return true
-  // 0 kcal is only credible when nothing energy-bearing is present either.
-  const macros =
-    Number(food.protein_g ?? 0) +
-    Number(food.fat_g ?? 0) +
-    Number(food.carbs_g ?? 0)
-  return macros <= 0
+
+  // (2) 0 kcal is only ever credible when nothing energy-bearing is present.
+  if (protein + fat + carbs > 0) return false
+
+  // (3) All zero. Credible only if the row says so.
+  return food.data_completeness === NON_CALORIC
 }
 
 export interface CanineIngredientNutrients {
@@ -345,6 +388,34 @@ export function convertUSDAToIngredient(usdaFood: USDAFoodLike) {
   // that the profile is too sparse to trust for gap math.
   const isComplete = countExtractedNutrients(usdaFood.foodNutrients) >= 21
 
+  // Refuse the row at the door rather than letting it reach a surface.
+  //
+  // `isNutritionallyUsable` gates the bowl resolver and pickDefault, but NOT
+  // the search routes an owner browses by hand — so before this, a truncated
+  // USDA payload landed in the table and stayed pickable. That is how every
+  // cooking oil, both dry spaghettis and raisins came to sit in `foods` at 0
+  // kcal, and how 12 more arrived carrying protein with no fat and no carbs
+  // (scripts/029 then derived energy from the protein alone, putting leeks at
+  // 5.87 kcal against a real 61). scripts/030 cleaned up those 30; this stops
+  // the next import recreating them.
+  //
+  // Deactivating rather than dropping keeps the row and its `fdc_id`, so a
+  // later fetch can revive it:
+  //   UPDATE foods SET is_active = true, inactive_reason = NULL
+  //    WHERE inactive_reason = 'unusable:no_energy_data';
+  //
+  // An all-zero row is refused here even though a supplement legitimately has
+  // that shape — `data_completeness` is not set at import, and the flag has to
+  // be a deliberate assertion (see NON_CALORIC). Mark such a row after import,
+  // then reactivate it.
+  //
+  // NOTE for re-imports: FDC serves these rows just as sparsely today as it
+  // did at first import, so re-running a bulk import over a row scripts/029
+  // repaired will overwrite the repaired energy with 0 AND now deactivate it.
+  // That hazard predates this flag — it just becomes visible instead of
+  // silent. Prefer a targeted re-fetch over a blanket re-import.
+  const usable = isNutritionallyUsable(nutrients)
+
   return {
     fdc_id: usdaFood.fdcId,
     name: usdaFood.description,
@@ -357,5 +428,8 @@ export function convertUSDAToIngredient(usdaFood: USDAFoodLike) {
     preparation_state: inferPreparationState(usdaFood.description),
     is_verified: isComplete,
     source: 'usda' as const,
+    is_active: usable,
+    // foods_inactive_reason_check: only a deactivated row may carry a reason.
+    inactive_reason: usable ? null : UNUSABLE_REASON,
   }
 }
