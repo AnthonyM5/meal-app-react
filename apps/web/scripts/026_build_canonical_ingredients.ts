@@ -73,6 +73,8 @@ interface FoodRow {
   protein_g: number | null
   fat_g: number | null
   carbs_g: number | null
+  // isNutritionallyUsable rule 3: an all-zero row passes only if marked.
+  data_completeness: string | null
 }
 
 interface Canonical {
@@ -174,7 +176,7 @@ async function main() {
     supabase,
     'id,name,food_category,usda_data_type,source,is_verified,' +
       'is_safe_for_dogs,preparation_state,fdc_id,' +
-      'calories_per_serving,protein_g,fat_g,carbs_g'
+      'calories_per_serving,protein_g,fat_g,carbs_g,data_completeness'
   )
   console.error(`Parsing ${rows.length} active rows...\n`)
 

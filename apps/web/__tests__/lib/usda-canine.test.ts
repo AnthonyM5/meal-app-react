@@ -6,6 +6,8 @@ import {
   extractCanineNutrients,
   inferPreparationState,
   isNutritionallyUsable,
+  NON_CALORIC,
+  UNUSABLE_REASON,
   type USDAFoodLike,
 } from '@/lib/usda-canine'
 // Captured live from FDC on 2026-07-06: GET /v1/food/171060?format=full
@@ -135,6 +137,61 @@ describe('convertUSDAToIngredient', () => {
 
   test('sets preparation_state from the description', () => {
     expect(convertUSDAToIngredient(fixture).preparation_state).toBe('raw')
+  })
+
+  // The importer is the only surface-independent gate. `isNutritionallyUsable`
+  // protects the bowl resolver and pickDefault, but NOT the search routes an
+  // owner browses by hand — so a truncated payload used to land in `foods` and
+  // stay pickable. scripts/030 cleaned up the 30 that got in; these keep the
+  // next import from recreating them.
+  describe('refuses unusable payloads at the door', () => {
+    const build = (
+      description: string,
+      nutrients: Array<[number, number]>
+    ): USDAFoodLike => ({
+      fdcId: 777777,
+      description,
+      foodNutrients: nutrients.map(([id, amount]) => ({
+        nutrient: { id, name: String(id) },
+        amount,
+      })),
+    })
+
+    test('deactivates an all-zero payload (the shape every oil arrived in)', () => {
+      // fdc 748608 "Oil, olive, extra virgin" as USDA actually serves it:
+      // 33 nutrients published, no energy and no total fat among them.
+      const row = convertUSDAToIngredient(build('Oil, olive, extra virgin', []))
+      expect(row.is_active).toBe(false)
+      expect(row.inactive_reason).toBe(UNUSABLE_REASON)
+    })
+
+    test('deactivates a protein-only payload', () => {
+      // fdc 2727584 "Leeks" — protein present, fat and carbs absent. 029 would
+      // derive 5.87 kcal from this against a real 61.
+      const row = convertUSDAToIngredient(
+        build('Leeks, bulb and greens, root removed, raw', [[1003, 1.4675]])
+      )
+      expect(row.is_active).toBe(false)
+      expect(row.inactive_reason).toBe(UNUSABLE_REASON)
+    })
+
+    test('admits an ordinary row with no reason set', () => {
+      const row = convertUSDAToIngredient(fixture)
+      expect(row.is_active).toBe(true)
+      // foods_inactive_reason_check rejects a reason on an active row.
+      expect(row.inactive_reason).toBeNull()
+    })
+
+    test('admits a pure fat, which is 0 protein and 0 carbs', () => {
+      const row = convertUSDAToIngredient(
+        build('Oil, olive, salad or cooking', [
+          [1008, 884],
+          [1004, 100],
+        ])
+      )
+      expect(row.is_active).toBe(true)
+      expect(row.inactive_reason).toBeNull()
+    })
   })
 })
 
@@ -295,20 +352,112 @@ describe('isNutritionallyUsable', () => {
 
   test('accepts ordinary rows', () => {
     expect(
-      isNutritionallyUsable({ calories_per_serving: 148, protein_g: 19.66 })
+      isNutritionallyUsable({
+        calories_per_serving: 148,
+        protein_g: 19.66,
+        fat_g: 4.83,
+        carbs_g: 0.73,
+      })
     ).toBe(true)
   })
 
-  test('accepts a genuinely zero food, and tolerates nulls', () => {
-    // Eggshell powder is a calcium supplement: 0 across the board is correct.
-    expect(
-      isNutritionallyUsable({
-        calories_per_serving: 0,
-        protein_g: 0,
-        fat_g: 0,
-        carbs_g: 0,
-      })
-    ).toBe(true)
-    expect(isNutritionallyUsable({})).toBe(true)
+  // Rule 1. scripts/029 derived energy from protein alone on ~12 Foundation
+  // rows whose payload omitted fat and carbohydrate entirely. The results sit
+  // above zero, so the old predicate's `kcal > 0` shortcut accepted them —
+  // the backfill turned correctly-refused rows into silently wrong ones.
+  describe('truncated payload: protein with no fat and no carbs', () => {
+    test('rejects the live leeks row (5.87 kcal against a real 61)', () => {
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 5.87,
+          protein_g: 1.4675,
+          fat_g: 0,
+          carbs_g: 0,
+        })
+      ).toBe(false)
+    })
+
+    test('rejects it even though energy is positive', () => {
+      // Guards the ordering: testing kcal > 0 first would pass this through.
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 1.69,
+          protein_g: 0.42,
+          fat_g: 0,
+          carbs_g: 0,
+        })
+      ).toBe(false)
+    })
+
+    test('accepts lean meat, which is 0 carbs but never 0 fat', () => {
+      // Chicken breast, boneless, skinless, raw — the shape rule 1 must not
+      // catch. Verified against all 4,700 active rows: no legitimate food has
+      // protein while both fat and carbohydrate are exactly zero.
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 112,
+          protein_g: 22.5,
+          fat_g: 2.6,
+          carbs_g: 0,
+        })
+      ).toBe(true)
+    })
+
+    test('accepts a pure fat, which is 0 protein and 0 carbs', () => {
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 884,
+          protein_g: 0,
+          fat_g: 100,
+          carbs_g: 0,
+        })
+      ).toBe(true)
+    })
+  })
+
+  // Rule 3. All-zero is legitimate for a supplement and wrong for everything
+  // else, and the numbers cannot tell them apart — so it must be asserted.
+  describe('all-zero rows must be marked', () => {
+    test('accepts eggshell powder, which declares its zeros', () => {
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 0,
+          protein_g: 0,
+          fat_g: 0,
+          carbs_g: 0,
+          data_completeness: NON_CALORIC,
+        })
+      ).toBe(true)
+    })
+
+    test('rejects an unmarked all-zero row', () => {
+      // "Oil, peanut" as USDA publishes it: all zero, and 100% fat in reality.
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 0,
+          protein_g: 0,
+          fat_g: 0,
+          carbs_g: 0,
+        })
+      ).toBe(false)
+    })
+
+    test('rejects an all-zero row marked with some other completeness', () => {
+      expect(
+        isNutritionallyUsable({
+          calories_per_serving: 0,
+          protein_g: 0,
+          fat_g: 0,
+          carbs_g: 0,
+          data_completeness: 'sparse',
+        })
+      ).toBe(false)
+    })
+
+    test('fails closed on an empty row', () => {
+      // A caller that forgot to SELECT the nutrition columns gets "unusable",
+      // not "fine". Nulls are indistinguishable from measured zeros here.
+      expect(isNutritionallyUsable({})).toBe(false)
+    })
   })
 })

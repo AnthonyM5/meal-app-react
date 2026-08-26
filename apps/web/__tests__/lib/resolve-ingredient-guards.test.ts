@@ -29,6 +29,7 @@ type Row = {
   fat_g?: number | null
   carbs_g?: number | null
   serving_size?: number | null
+  data_completeness?: string | null
 }
 
 /** A healthy, loggable row. Spread and override to make a broken one. */
@@ -96,17 +97,46 @@ describe('matchLocalIngredient — nutritionally unusable rows', () => {
     expect(id).toBe('good')
   })
 
-  it('accepts a row that is zero on energy AND every macro', async () => {
-    // Deliberate limit: only the PROVABLY impossible is rejected. Eggshell
-    // powder really is 0/0/0/0, and 18 "empty shells" share that shape (see
-    // audits/zero-calorie-backfill.md). Rejecting them would be a guess.
+  it('accepts an all-zero row that DECLARES its zeros are measured', async () => {
+    // Eggshell powder really is 0/0/0/0 — a calcium supplement. It carries
+    // data_completeness = 'non_caloric' to say so.
     const id = await matchLocalIngredient(
       searchClient([
-        ok({ id: 'shell', name: 'Eggshell powder', calories_per_serving: 0, protein_g: 0, fat_g: 0, carbs_g: 0 }),
+        ok({ id: 'shell', name: 'Eggshell powder', calories_per_serving: 0, protein_g: 0, fat_g: 0, carbs_g: 0, data_completeness: 'non_caloric' }),
       ]),
       'eggshell powder'
     )
     expect(id).toBe('shell')
+  })
+
+  it('skips an UNMARKED all-zero row', async () => {
+    // 18 truncated Foundation imports share eggshell powder's shape without
+    // sharing its truth — every cooking oil, both dry pastas, raisins. FDC
+    // publishes no energy and no proximates for them, so a re-fetch cannot
+    // tell them apart either; the benign reading has to be asserted per row.
+    // Unmarked now fails closed rather than logging olive oil at 0 kcal.
+    const id = await matchLocalIngredient(
+      searchClient([
+        ok({ id: 'shell', name: 'Oil, olive, extra virgin', calories_per_serving: 0, protein_g: 0, fat_g: 0, carbs_g: 0, similarity: 0.95 }),
+        ok({ id: 'good', name: 'Oil, olive, salad or cooking', calories_per_serving: 884, fat_g: 100, similarity: 0.9 }),
+      ]),
+      'olive oil'
+    )
+    expect(id).toBe('good')
+  })
+
+  it('skips a row whose energy was derived from protein alone', async () => {
+    // scripts/029's 4/4/9 fallback on a payload missing fat AND carbs. Lands
+    // above zero, so the old predicate accepted it — leeks at 5.87 kcal
+    // against a real 61.
+    const id = await matchLocalIngredient(
+      searchClient([
+        ok({ id: 'truncated', name: 'Leeks, bulb and greens, root removed, raw', calories_per_serving: 5.87, protein_g: 1.4675, fat_g: 0, carbs_g: 0, similarity: 0.95 }),
+        ok({ id: 'good', name: 'Leeks, bulb and lower leaf-portion, raw', calories_per_serving: 61, protein_g: 1.5, fat_g: 0.3, carbs_g: 14.15, similarity: 0.85 }),
+      ]),
+      'leeks'
+    )
+    expect(id).toBe('good')
   })
 })
 

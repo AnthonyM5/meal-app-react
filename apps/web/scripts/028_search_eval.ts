@@ -612,7 +612,7 @@ async function evalGrouped(
 async function isRowUsable(foodId: string): Promise<boolean> {
   const { data } = await db()
     .from('foods')
-    .select('calories_per_serving,protein_g,fat_g,carbs_g')
+    .select('calories_per_serving,protein_g,fat_g,carbs_g,data_completeness')
     .eq('id', foodId)
     .maybeSingle()
   return data ? isNutritionallyUsable(data) : true
