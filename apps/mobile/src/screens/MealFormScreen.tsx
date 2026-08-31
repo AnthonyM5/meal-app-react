@@ -180,7 +180,12 @@ export function MealFormScreen() {
       }))
       return variants
     } finally {
-      setLoadingCanonicalId(null)
+      // Only clear if THIS request is still the one showing a spinner — a
+      // later tap on another group may have moved the loading id on, and an
+      // unconditional clear would hide that request's spinner mid-flight.
+      setLoadingCanonicalId(current =>
+        current === canonicalId ? null : current
+      )
     }
   }
 
