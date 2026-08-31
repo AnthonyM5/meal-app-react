@@ -65,7 +65,7 @@ export async function signUp(prevState: { error: string } | null, formData: Form
     }
   )
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: formData.get('email') as string,
     password: formData.get('password') as string,
     options: {
@@ -79,7 +79,17 @@ export async function signUp(prevState: { error: string } | null, formData: Form
     return { error: error.message }
   }
 
-  redirect('/auth/verify')
+  // The project's email-confirmation setting decides what happens next. A
+  // returned session means confirmation is OFF, so log the user straight in;
+  // otherwise there is no session until the emailed link is clicked, so send
+  // them to login with a "check your email" notice. Mirrors the mobile
+  // SignupScreen flow. (The old target, /auth/verify, never existed — 404.)
+  if (data.session) {
+    cookieStore.set('guestMode', '', { path: '/', maxAge: 0 })
+    redirect('/dashboard')
+  }
+
+  redirect('/auth/login?message=check-email')
 }
 
 export async function signOut() {
