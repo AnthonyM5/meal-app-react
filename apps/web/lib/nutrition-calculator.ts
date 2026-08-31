@@ -9,10 +9,16 @@ export interface NutritionData {
   portion?: number
 }
 
+export type NutritionTotals = Required<Omit<NutritionData, 'portion'>>
+
 export function calculateNutritionTotals(
   foods: NutritionData[]
-): Required<Omit<NutritionData, 'portion'>> {
-  return foods.reduce(
+): NutritionTotals {
+  // Parameterize reduce explicitly: the seed object is assignable to
+  // NutritionData, so without <NutritionTotals> TS picks the non-generic
+  // reduce(cb, init: T): T overload and types the accumulator as the
+  // all-optional NutritionData (making totals.* possibly-undefined).
+  return foods.reduce<NutritionTotals>(
     (totals, food) => {
       const portion = food.portion || 1
       return {
