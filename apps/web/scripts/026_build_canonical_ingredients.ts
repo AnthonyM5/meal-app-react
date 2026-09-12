@@ -106,16 +106,31 @@ function majority(values: Array<string | null>): string | null {
 /**
  * Pick the variant the picker shows when a group is collapsed. Deterministic
  * and recomputable — never a stored human choice.
+ *
+ * Returns null when every member is nutritionally unusable — e.g. a manual
+ * entry (lib/services/ingredient-service.ts) can carry 0 kcal with
+ * data_completeness = 'sparse', not 'non_caloric', is_active TRUE by default,
+ * and is never routed through isNutritionallyUsable at insert time. Electing
+ * such a row as default would set is_canonical_default = true on an active,
+ * broken row, and search_canonical_ingredients joins on exactly
+ * `is_canonical_default AND is_active` — so it would surface, reintroducing
+ * the bug scripts/030 exists to close. Returning null instead leaves every
+ * member's is_canonical_default false, which is what the INNER JOIN comment
+ * in that migration already assumes: "a canonical with no default variant...
+ * must not surface in search."
  */
-function pickDefault(members: Canonical['members']): FoodRow {
+function pickDefault(members: Canonical['members']): FoodRow | null {
+  if (!members.some(({ row }) => isNutritionallyUsable(row))) return null
+
   const scored = members.map(({ row, parsed }) => {
     let score = 0
     // Broken nutrition disqualifies a row from representing anything. The
     // +500 Foundation bonus below actively SELECTED for these before
     // scripts/029: Foundation rows were the ones missing energy, so 47 of 707
     // groups — `butter`, `yogurt`, `spinach` — were represented by a 0 kcal
-    // row. A large negative rather than a filter, so a group consisting only
-    // of broken rows still yields a default instead of crashing.
+    // row. A large negative rather than a filter: this only ranks a broken
+    // row below a usable sibling in the same group, and the guard above
+    // already handles the all-broken case.
     if (!isNutritionallyUsable(row)) score -= 100_000
     if (row.is_verified) score += 1000
     if (row.usda_data_type === 'Foundation') score += 500 // better micro coverage
@@ -371,6 +386,9 @@ async function main() {
   for (const c of sorted) {
     const canonicalId = idBySlug.get(c.slug)
     if (!canonicalId) continue
+    // null when every member is unusable — no one gets elected, so the group
+    // is excluded from search_canonical_ingredients rather than surfacing a
+    // broken default. See pickDefault's docstring.
     const defaultRow = pickDefault(c.members)
 
     for (const { row, parsed } of c.members) {
@@ -379,7 +397,7 @@ async function main() {
         .update({
           canonical_id: canonicalId,
           variant_attrs: parsed.attrs,
-          is_canonical_default: row.id === defaultRow.id,
+          is_canonical_default: defaultRow !== null && row.id === defaultRow.id,
         })
         .eq('id', row.id)
       if (error) throw error

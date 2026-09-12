@@ -2,6 +2,7 @@ import type { DogMealResult } from '@pawplate/api-client'
 import {
   computeMealNutrients,
   findUnsafeIngredients,
+  type CanonicalSearchResult,
   type Ingredient,
   type MealType,
 } from '@pawplate/core'
@@ -34,14 +35,20 @@ interface MealItemDraft {
   grams: string
 }
 
-/** Debounced ingredient search over the Bearer-auth REST route. */
-function useIngredientSearch(query: string) {
-  const [results, setResults] = useState<Ingredient[]>([])
+/**
+ * Debounced GROUPED ingredient search over the Bearer-auth REST route. Returns
+ * one row per canonical food (e.g. "Beef, chuck") instead of the ~960
+ * near-duplicate USDA variants a flat search returns for "beef" — the picker
+ * experience the bowl screen already uses. Ambiguous groups are expanded to
+ * their variants lazily on tap (see `loadVariants` in the component).
+ */
+function useGroupedIngredientSearch(query: string) {
+  const [groups, setGroups] = useState<CanonicalSearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
   useEffect(() => {
     if (query.length < 2) {
-      setResults([])
+      setGroups([])
       setIsSearching(false)
       return
     }
@@ -49,8 +56,8 @@ function useIngredientSearch(query: string) {
     const timeout = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const foods = await api.ingredients.search(query)
-        if (!cancelled) setResults(foods)
+        const found = await api.ingredients.groupedSearch(query)
+        if (!cancelled) setGroups(found)
       } catch {
         if (!cancelled) toast.error('Ingredient search failed')
       } finally {
@@ -63,7 +70,13 @@ function useIngredientSearch(query: string) {
     }
   }, [query])
 
-  return { results, isSearching }
+  return { groups, isSearching }
+}
+
+/** kcal per 100 g from a normalized serving — servings are NOT always 100 g. */
+function kcalPer100g(calories: number, servingSize: number): number {
+  if (!servingSize) return 0
+  return Math.round((calories / servingSize) * 100)
 }
 
 export function MealFormScreen() {
@@ -81,7 +94,18 @@ export function MealFormScreen() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
-  const { results, isSearching } = useIngredientSearch(query)
+  const { groups, isSearching } = useGroupedIngredientSearch(query)
+  // Variant expansion for ambiguous groups (variant_count > 1). Variants are
+  // fetched once per canonical group and cached for the life of the search.
+  const [expandedCanonicalId, setExpandedCanonicalId] = useState<string | null>(
+    null
+  )
+  const [variantsByCanonical, setVariantsByCanonical] = useState<
+    Record<string, Ingredient[]>
+  >({})
+  const [loadingCanonicalId, setLoadingCanonicalId] = useState<string | null>(
+    null
+  )
 
   useEffect(() => {
     if (!mealId) return
@@ -131,6 +155,7 @@ export function MealFormScreen() {
 
   function addIngredient(ingredient: Ingredient) {
     setQuery('')
+    setExpandedCanonicalId(null)
     setItems(current => {
       if (current.some(item => item.ingredient.id === ingredient.id)) {
         toast.info(`${ingredient.name} is already in this meal`)
@@ -138,6 +163,53 @@ export function MealFormScreen() {
       }
       return [...current, { ingredient, grams: '100' }]
     })
+  }
+
+  /** Fetch (and cache) the full variant rows for a canonical group. Full rows
+   *  carry the micronutrients and toxicity flags the grouped result omits, so
+   *  the kcal preview and unsafe-ingredient warning stay accurate. */
+  async function loadVariants(canonicalId: string): Promise<Ingredient[]> {
+    const cached = variantsByCanonical[canonicalId]
+    if (cached) return cached
+    setLoadingCanonicalId(canonicalId)
+    try {
+      const variants = await api.ingredients.variants(canonicalId)
+      setVariantsByCanonical(current => ({
+        ...current,
+        [canonicalId]: variants,
+      }))
+      return variants
+    } finally {
+      // Only clear if THIS request is still the one showing a spinner — a
+      // later tap on another group may have moved the loading id on, and an
+      // unconditional clear would hide that request's spinner mid-flight.
+      setLoadingCanonicalId(current =>
+        current === canonicalId ? null : current
+      )
+    }
+  }
+
+  /** Tap a group: add it outright when it has a single variant, otherwise
+   *  toggle its variant list open so the owner picks the exact one. */
+  async function selectGroup(group: CanonicalSearchResult) {
+    if (expandedCanonicalId === group.canonical_id) {
+      setExpandedCanonicalId(null)
+      return
+    }
+    try {
+      const variants = await loadVariants(group.canonical_id)
+      if (variants.length <= 1) {
+        const only = variants[0]
+        if (only) addIngredient(only)
+        else toast.error('No options available for this ingredient')
+      } else {
+        setExpandedCanonicalId(group.canonical_id)
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Could not load options'
+      )
+    }
   }
 
   function setGrams(ingredientId: string, grams: string) {
@@ -272,22 +344,79 @@ export function MealFormScreen() {
               <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             )}
           </div>
-          {results.length > 0 && (
-            <div className="absolute z-10 max-h-64 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
-              {results.map(food => (
-                <button
-                  key={food.id}
-                  type="button"
-                  className="flex w-full items-baseline justify-between px-3 py-2 text-left text-sm hover:bg-accent"
-                  onClick={() => addIngredient(food)}
-                >
-                  <span>{food.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-muted-foreground">
-                    {Math.round(food.calories_per_serving)} kcal /{' '}
-                    {food.serving_size} {food.serving_unit}
-                  </span>
-                </button>
-              ))}
+          {query.length >= 2 && (isSearching || groups.length > 0) && (
+            <div className="absolute z-10 max-h-72 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
+              {groups.length === 0 && !isSearching ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  No matches
+                </p>
+              ) : (
+                groups.map(group => {
+                  const isExpanded = expandedCanonicalId === group.canonical_id
+                  const isLoading = loadingCanonicalId === group.canonical_id
+                  const variants = variantsByCanonical[group.canonical_id] ?? []
+                  return (
+                    <div
+                      key={group.canonical_id}
+                      className="border-b last:border-b-0"
+                    >
+                      <button
+                        type="button"
+                        className="flex w-full items-baseline justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+                        onClick={() => selectGroup(group)}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {group.display_name}
+                        </span>
+                        <span className="ml-2 flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                          <span>
+                            {kcalPer100g(
+                              group.calories_per_serving,
+                              group.serving_size
+                            )}{' '}
+                            kcal/100g
+                          </span>
+                          {group.variant_count > 1 && (
+                            <span className="rounded bg-muted px-1.5 py-0.5">
+                              {group.variant_count} options
+                            </span>
+                          )}
+                          {isLoading && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          )}
+                        </span>
+                      </button>
+                      {isExpanded && variants.length > 0 && (
+                        <ul className="divide-y border-t bg-background">
+                          {variants.map(variant => (
+                            <li key={variant.id}>
+                              <button
+                                type="button"
+                                className="flex w-full items-baseline justify-between py-2 pl-6 pr-3 text-left text-sm hover:bg-accent"
+                                onClick={() => addIngredient(variant)}
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {variant.name}
+                                </span>
+                                <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                                  {kcalPer100g(
+                                    variant.calories_per_serving,
+                                    variant.serving_size
+                                  )}{' '}
+                                  kcal/100g
+                                  {variant.preparation_state
+                                    ? ` · ${variant.preparation_state}`
+                                    : ''}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })
+              )}
             </div>
           )}
         </div>

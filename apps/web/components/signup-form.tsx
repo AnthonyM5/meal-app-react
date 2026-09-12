@@ -44,11 +44,8 @@ export default function SignUpForm() {
         </div>
       )}
 
-      {state?.success && (
-        <div className="rounded-md border border-primary/50 bg-primary/10 px-4 py-3 text-sm text-primary">
-          {state.success}
-        </div>
-      )}
+      {/* No success branch: signUp redirects to /auth/verify on success and
+          only ever returns { error }, so a success message never renders. */}
 
       <div className="space-y-4">
         <div className="space-y-2">

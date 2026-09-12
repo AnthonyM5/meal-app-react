@@ -45,10 +45,17 @@
  * delete would take an owner's logged history with it. Verified before
  * writing this: 0 meal_items and 0 recipe_ingredients reference any of the 30.
  *
- * Reversible:
+ * Reversible, but NOT by blind reactivation — these rows are still exactly
+ * as unusable as when they were deactivated (see WHY NOT RE-FETCH above), so
+ * running the naive form puts the same broken 0-kcal rows back in front of
+ * search_canonical_ingredients / fuzzy_search_foods, undoing this script's
+ * whole point:
  *   UPDATE foods SET is_active = true, inactive_reason = NULL
  *    WHERE inactive_reason LIKE 'unusable:%';
- * (the 3 canonical groups deleted below are rebuilt by scripts/026.)
+ * Only run that for a row whose energy has actually been repaired first
+ * (scripts/029, a fresh FDC fetch, or manual curation) — or re-check it
+ * against isNutritionallyUsable() before flipping is_active back on.
+ * (The 3 canonical groups deleted below are rebuilt by scripts/026.)
  *
  * Usage:
  *   set -a && source .env.local && set +a
@@ -63,7 +70,10 @@ import { fetchAllActiveFoods } from './_fetch-all'
 import {
   isNutritionallyUsable,
   NON_CALORIC,
+  resolveEnergyKcal,
   UNUSABLE_REASON,
+  USDA_CANINE_NUTRIENT_IDS,
+  type USDANutrientEntry,
 } from '../lib/usda-canine'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -99,6 +109,73 @@ function shape(r: FoodRow): 'truncated-payload' | 'empty-shell' {
   return Number(r.protein_g ?? 0) > 0 ? 'truncated-payload' : 'empty-shell'
 }
 
+/**
+ * Mirrors buildAmountMap in lib/usda-canine.ts, which is module-private;
+ * duplicating six lines is better than widening that module's API for one
+ * script. Same approach scripts/029 takes.
+ */
+function amountMap(entries: USDANutrientEntry[]): Map<number, number> {
+  const map = new Map<number, number>()
+  for (const entry of entries) {
+    const id = entry.nutrientId ?? entry.nutrient?.id
+    const amount = entry.value ?? entry.amount
+    if (id != null && amount != null && !map.has(id)) map.set(id, amount)
+  }
+  return map
+}
+
+/**
+ * ORDERING HAZARD. scripts/029 repairs a 0-kcal row from its stored FDC
+ * payload (source_payloads), but only among rows where `is_active = true`.
+ * If this script runs first, a row 029 could still have repaired gets
+ * deactivated here and 029's `.eq('is_active', true)` filter can never find
+ * it again — the repair opportunity is gone for good, not just deferred.
+ *
+ * This replicates 029's own repairability check (stored payload resolves to
+ * energy > 0) against the empty-shell rows this script is about to
+ * deactivate, and aborts if any still qualify.
+ */
+async function findStillRepairable(
+  rows: FoodRow[]
+): Promise<Array<{ name: string; fdc_id: number }>> {
+  const ids = USDA_CANINE_NUTRIENT_IDS
+  const candidates = rows.filter(
+    (r): r is FoodRow & { fdc_id: number } =>
+      Number(r.calories_per_serving ?? 0) === 0 && r.fdc_id != null
+  )
+  if (candidates.length === 0) return []
+
+  const payloads = new Map<string, USDANutrientEntry[]>()
+  for (let i = 0; i < candidates.length; i += CHUNK) {
+    const slice = candidates.slice(i, i + CHUNK).map(r => String(r.fdc_id))
+    const { data, error } = await supabase
+      .from('source_payloads')
+      .select('external_id,payload')
+      .eq('source', 'usda')
+      .in('external_id', slice)
+    if (error) throw error
+    for (const p of data ?? []) {
+      const nutrients = (p.payload as { foodNutrients?: USDANutrientEntry[] })
+        ?.foodNutrients
+      if (Array.isArray(nutrients)) payloads.set(String(p.external_id), nutrients)
+    }
+  }
+
+  return candidates
+    .filter(r => {
+      const entries = payloads.get(String(r.fdc_id))
+      if (!entries) return false
+      const amounts = amountMap(entries)
+      const macros = {
+        protein: amounts.get(ids.PROTEIN) ?? Number(r.protein_g ?? 0),
+        carbs: amounts.get(ids.CARBS) ?? Number(r.carbs_g ?? 0),
+        fat: amounts.get(ids.FAT) ?? Number(r.fat_g ?? 0),
+      }
+      return resolveEnergyKcal(amounts, macros) > 0
+    })
+    .map(r => ({ name: r.name, fdc_id: r.fdc_id }))
+}
+
 async function main() {
   const rows = await fetchAllActiveFoods<FoodRow>(
     supabase,
@@ -116,6 +193,19 @@ async function main() {
     throw new Error(
       'A row marked non_caloric was judged unusable — the predicate and this ' +
         'script disagree. Aborting rather than deactivating a supplement.'
+    )
+  }
+
+  // ORDERING HAZARD (029 before 030): see findStillRepairable's docstring.
+  const stillRepairable = await findStillRepairable(unusable)
+  if (stillRepairable.length > 0) {
+    throw new Error(
+      `${stillRepairable.length} row(s) about to be deactivated still have a ` +
+        `repairable energy figure in their stored FDC payload — ` +
+        `${stillRepairable.map(r => r.name).join(', ')}. Run ` +
+        'scripts/029_backfill_zero_calorie_foods.ts --apply first: once this ' +
+        'script deactivates them they drop out of that script\'s ' +
+        '`is_active = true` filter and can never be repaired.'
     )
   }
 

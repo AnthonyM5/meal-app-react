@@ -27,6 +27,7 @@ function LoadingSpinner() {
 function LoginPageContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
+  const message = searchParams.get('message')
 
   return (
     <>
@@ -36,6 +37,13 @@ function LoginPageContent() {
             {error === 'auth_required'
               ? 'Please sign in to access this page'
               : 'An error occurred. Please try again.'}
+          </AlertDescription>
+        </Alert>
+      )}
+      {message === 'check-email' && (
+        <Alert>
+          <AlertDescription>
+            Check your email to confirm your account, then sign in.
           </AlertDescription>
         </Alert>
       )}
