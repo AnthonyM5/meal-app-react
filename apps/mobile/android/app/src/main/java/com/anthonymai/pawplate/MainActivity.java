@@ -1,4 +1,4 @@
-package com.pawplate.app;
+package com.anthonymai.pawplate;
 
 import com.getcapacitor.BridgeActivity;
 

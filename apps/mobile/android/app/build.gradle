@@ -12,10 +12,10 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.pawplate.app"
+    namespace "com.anthonymai.pawplate"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.pawplate.app"
+        applicationId "com.anthonymai.pawplate"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

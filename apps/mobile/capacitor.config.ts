@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.pawplate.app',
+  appId: 'com.anthonymai.pawplate',
   appName: 'PawPlate',
   webDir: 'dist',
   // Dev convenience: the Android shell runs from https://localhost, so
