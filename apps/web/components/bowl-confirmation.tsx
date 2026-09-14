@@ -32,6 +32,12 @@ import {
   type MealType,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import {
+  filterAndRankVariants,
+  parseSearchQuery,
+  variantMatchesMethod,
+  type SearchFacets,
+} from '@pawplate/core/search-query'
 import { format } from 'date-fns'
 import {
   AlertTriangle,
@@ -41,8 +47,9 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -220,6 +227,12 @@ function VariantChoice({
   const [variants, setVariants] = useState<Food[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  // Refine-within-group (faceted search Phase A): free text parsed into the
+  // same facets the importer stored on each variant, applied client-side over
+  // the already-loaded list. Chips make the interpretation inspectable; a
+  // dismissed chip drops that facet without retyping. Typing resets dismissals.
+  const [refine, setRefine] = useState('')
+  const [dismissed, setDismissed] = useState<Set<keyof SearchFacets>>(new Set())
 
   const open = async () => {
     setIsOpen(true)
@@ -253,6 +266,43 @@ function VariantChoice({
     }
   }
 
+  const parsed = useMemo(() => parseSearchQuery(refine), [refine])
+
+  // Effective facets = what was understood minus anything the owner dismissed.
+  const facets = useMemo<SearchFacets>(() => {
+    const f: SearchFacets = { ...parsed.facets }
+    for (const key of dismissed) delete f[key]
+    return f
+  }, [parsed, dismissed])
+
+  // Hard facets filter; the cooking method only RANKS (soft — a group with no
+  // broiled row still shows its other cooked rows). Leftover words that
+  // weren't a facet narrow by name so "patty" or "crumbles" still work.
+  const visible = useMemo(() => {
+    if (!variants) return []
+    const ranked = filterAndRankVariants(variants, facets)
+    const tokens = parsed.retrievalTerms.split(' ').filter(Boolean)
+    if (!tokens.length) return ranked
+    return ranked.filter(food => {
+      const name = food.name.toLowerCase()
+      return tokens.every(t => name.includes(t))
+    })
+  }, [variants, facets, parsed.retrievalTerms])
+
+  const methodHits = facets.cookingMethod?.length
+    ? visible.filter(v => variantMatchesMethod(v, facets)).length
+    : null
+
+  const chips: Array<{ key: keyof SearchFacets; label: string }> = []
+  if (facets.prepState) chips.push({ key: 'prepState', label: facets.prepState })
+  if (facets.cookingMethod?.length)
+    chips.push({ key: 'cookingMethod', label: facets.cookingMethod.join(', ') })
+  if (facets.leanPct !== undefined)
+    chips.push({ key: 'leanPct', label: `${facets.leanPct}% lean` })
+  if (facets.trim?.length) chips.push({ key: 'trim', label: facets.trim.join(', ') })
+
+  const dismissChip = (key: keyof SearchFacets) =>
+    setDismissed(prev => new Set(prev).add(key))
 
   return (
     <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
@@ -284,39 +334,97 @@ function VariantChoice({
               Loading options…
             </div>
           ) : (
-            <div className="max-h-56 overflow-y-auto rounded-md border bg-background">
-              <ul className="divide-y">
-                {(variants ?? []).map(food => (
-                  <li key={food.id}>
-                    <button
-                      type="button"
-                      onClick={() => onChoose(food)}
-                      className={cn(
-                        'flex w-full items-center justify-between gap-2 p-2 text-left text-sm hover:bg-muted',
-                        food.id === selectedId && 'bg-muted'
-                      )}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{food.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {/* Normalized — never assume serving_size is 100 g */}
-                          {Math.round(
-                            per100g(food.calories_per_serving, food.serving_size) ?? 0
-                          )}{' '}
-                          kcal
-                          {food.fat_g != null &&
-                            ` · ${(per100g(food.fat_g, food.serving_size) ?? 0).toFixed(1)}g fat`}
-                          {food.preparation_state && ` · ${food.preparation_state}`}
-                          {' / 100g'}
-                        </span>
-                      </span>
-                      {food.id === selectedId && (
-                        <Check className="h-4 w-4 shrink-0 text-primary" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            <div className="space-y-2">
+              {(variants?.length ?? 0) > 1 && (
+                <div className="space-y-1.5">
+                  <Input
+                    value={refine}
+                    onChange={e => {
+                      setRefine(e.target.value)
+                      setDismissed(new Set())
+                    }}
+                    placeholder="Refine: e.g. 80% lean, broiled, raw"
+                    className="h-8 text-sm"
+                    aria-label={`Refine ${canonical.displayName} options`}
+                    data-testid="variant-refine"
+                  />
+                  {chips.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {chips.map(chip => (
+                        <Badge
+                          key={chip.key}
+                          variant="secondary"
+                          className="gap-1 pr-1 font-normal"
+                          data-testid={`variant-chip-${chip.key}`}
+                        >
+                          {chip.label}
+                          <button
+                            type="button"
+                            onClick={() => dismissChip(chip.key)}
+                            className="rounded-sm hover:bg-muted-foreground/20"
+                            aria-label={`Remove ${chip.label}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {methodHits === 0 && visible.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No {facets.cookingMethod?.join('/')} entry for this group —
+                      showing its other cooked options.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {visible.length === 0 && (variants?.length ?? 0) > 0 ? (
+                // A hard facet with no match is surfaced, never silently
+                // swapped for a different value.
+                <p
+                  className="rounded-md border bg-background p-2 text-xs text-muted-foreground"
+                  data-testid="variant-refine-empty"
+                >
+                  No {canonical.displayName.toLowerCase()} option matches these
+                  refinements. Remove a chip or clear the box.
+                </p>
+              ) : (
+                <div className="max-h-56 overflow-y-auto rounded-md border bg-background">
+                  <ul className="divide-y">
+                    {visible.map(food => (
+                      <li key={food.id}>
+                        <button
+                          type="button"
+                          onClick={() => onChoose(food)}
+                          className={cn(
+                            'flex w-full items-center justify-between gap-2 p-2 text-left text-sm hover:bg-muted',
+                            food.id === selectedId && 'bg-muted'
+                          )}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{food.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {/* Normalized — never assume serving_size is 100 g */}
+                              {Math.round(
+                                per100g(food.calories_per_serving, food.serving_size) ?? 0
+                              )}{' '}
+                              kcal
+                              {food.fat_g != null &&
+                                ` · ${(per100g(food.fat_g, food.serving_size) ?? 0).toFixed(1)}g fat`}
+                              {food.preparation_state && ` · ${food.preparation_state}`}
+                              {' / 100g'}
+                            </span>
+                          </span>
+                          {food.id === selectedId && (
+                            <Check className="h-4 w-4 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -76,8 +76,8 @@ Supabase Integration below.
   detection → `is_verified = false`.
 - `lib/dog-toxic-foods.ts`: cited toxic list + `checkDogSafety()` name matcher.
 - `app/api/ingredients/import/route.ts`: Foundation/SR-Legacy import with
-  `fdc_id` dedupe and safety pass. *(Deleted 2026-08-10 — imports are
-  script-only; see `docs/api-integration.md`.)*
+  `fdc_id` dedupe and safety pass. _(Deleted 2026-08-10 — imports are
+  script-only; see `docs/api-integration.md`.)_
 - 24 Jest tests against the captured fixture.
 
 ### Phase 4 — Vision pipeline (scaffold, live-tested)
@@ -490,7 +490,7 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   `lib/services/meal-service.ts`**: every existence/ownership-check query
   used `.single()`, which throws Postgrest's raw "no rows" error on a
   genuine miss instead of returning `null` — so the `if (!data) throw new
-  Error('...not found')` lines right below every one of them were dead
+Error('...not found')` lines right below every one of them were dead
   code. This was invisible on the web Server Actions (which had no
   HTTP-status mapping to expose the wrong error shape) but surfaced
   immediately as a 500 instead of 404/403 once the REST layer added
@@ -507,7 +507,7 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   Cypress spec's teardown. Migration `20260714010000` re-creates the
   constraint as `ON DELETE SET NULL` (matching `recipes.created_by`;
   CASCADE would be wrong — shared branded/manual rows can be referenced by
-  *other* users' `meal_items`, so the ingredient must outlive its creator).
+  _other_ users' `meal_items`, so the ingredient must outlive its creator).
   Applied live and verified end-to-end: created a throwaway user + a
   `foods` row they own, deleted the user with the row still present →
   succeeds, row survives with `created_by = null`. This was the exact
@@ -523,7 +523,7 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   dog+meal CRUD lifecycle over Bearer-token REST, manual-ingredient
   creation, a 401 with no token, and cross-user ownership (404 on
   owner-filtered reads, 403 on fetch-then-compare updates/deletes — the two
-  services differ in exactly *why*, see the fix above). Existing
+  services differ in exactly _why_, see the fix above). Existing
   `dog-nutrition-flow` (3/3) and `bowl-photo-flow` (6/6) re-verified
   unaffected by the `.maybeSingle()` change.
 - Stale `pawplate.e2e.*@example.com` test users from failed runs (their
@@ -532,7 +532,7 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
   `scripts/cleanup-stale-e2e-users.ts --delete`.
 - **Review hardening (PR #15 follow-up, 2026-07-15):** two issues from the
   code review, both addressed:
-  - *Request-body validation at the boundary.* Added `lib/server/rest-schemas.ts`
+  - _Request-body validation at the boundary._ Added `lib/server/rest-schemas.ts`
     (zod schemas mirroring the service input types) and a `readJson()` helper
     in `rest-auth.ts`. Every body-bearing route now parses through it, so a
     malformed/empty body and a well-typed-but-wrong-shape body (e.g.
@@ -542,7 +542,7 @@ unified-food-search,food-search}.tsx`, `hooks/use-food-actions.ts`, and
     (non-empty name, weight > 0, kcal ≥ 0) stay the single source of truth
     in `lib/services/*`. The parsed type is passed straight into the service,
     so tsc fails the build if a schema drifts from its interface.
-  - *404/403 consistency.* Foreign user-owned resources now return 404
+  - _404/403 consistency._ Foreign user-owned resources now return 404
     everywhere (was: dogs 404 via `getDog` but PATCH/DELETE + all meal/gaps
     routes 403). 404-for-foreign is the security-conscious default (a
     non-owner can't confirm an id exists) and gives the mobile client one
@@ -598,7 +598,7 @@ Repo restructured per the "Monorepo layout" plan below, on branch
   `Database` generic — caught by `tsc`, pinned back). `@jest/globals` is
   now a declared devDep (pnpm's strict layout doesn't hoist it).
 - **Real regression found and fixed by the e2e gate**: `packages/ui`'s
-  `react: ^19` peer made pnpm materialize a *second* React (19.2.7) peer
+  `react: ^19` peer made pnpm materialize a _second_ React (19.2.7) peer
   context; Next dedupes React itself via webpack alias, but sonner isn't
   aliased — `toast()` published to one sonner instance while `<Toaster>`
   subscribed on the other, so every toast in the app silently vanished
@@ -626,50 +626,51 @@ Repo restructured per the "Monorepo layout" plan below, on branch
 
 Branch `feat/mobile-scaffold` (off `main` 8a39fdc, post-monorepo-merge).
 First functional slice of the native app: Vite + React 19 + React Router 7
-+ Tailwind (same brand tokens as web) + Capacitor 7, consuming
-`@pawplate/ui`/`core`/`api-client`.
 
-- **New REST route on the web side: `GET /api/ingredients/search?q=`**
+- Tailwind (same brand tokens as web) + Capacitor 7, consuming
+  `@pawplate/ui`/`core`/`api-client`.
+
+* **New REST route on the web side: `GET /api/ingredients/search?q=`**
   (`app/api/ingredients/search/route.ts`, + `BEARER_AUTH_ROUTES` entry).
   The web meal builder searches via `/api/foods/unified-search`, which has
   no route-level auth (it relies on middleware's cookie/guest gate), so a
   Bearer-token native client could never reach it. The new route wraps the
   same `fuzzy_search_foods` RPC behind `authenticateRequest()`.
   `@pawplate/api-client` gained `ingredients.search(query)`.
-- **`apps/mobile` app structure**: `src/lib/supabase.ts` (client SDK
+* **`apps/mobile` app structure**: `src/lib/supabase.ts` (client SDK
   session, localStorage persistence — auth deliberately does NOT go through
   the REST layer, per the mobile-strategy notes above), `src/lib/api.ts`
   (`createPawPlateClient` with the session's access token), `AuthProvider`/
   `RequireAuth`, and screens: login, signup, dogs list, dog form
   (create/edit/delete, incl. `bowl_diameter_cm`), dog detail (per-day meals
-  + daily kcal + `GapBars` nutrient bars + unsafe-ingredient banner, date
-  paging), and a meal builder (debounced ingredient search, gram editing,
-  live kcal preview + client-side `findUnsafeIngredients` warning via
-  `@pawplate/core` — the server result stays authoritative on save).
-- **Theme parity**: `tailwind.config.ts`/`globals.css` mirror apps/web
+  - daily kcal + `GapBars` nutrient bars + unsafe-ingredient banner, date
+    paging), and a meal builder (debounced ingredient search, gram editing,
+    live kcal preview + client-side `findUnsafeIngredients` warning via
+    `@pawplate/core` — the server result stays authoritative on save).
+* **Theme parity**: `tailwind.config.ts`/`globals.css` mirror apps/web
   (same HSL tokens; keep in sync manually until a shared preset package
   exists). Fonts bundled via `@fontsource/{inter,fraunces}` instead of
   `next/font` — offline-safe inside the Capacitor shell.
-- **Capacitor**: `capacitor.config.ts` (`com.pawplate.app`, webDir `dist`),
+* **Capacitor**: `capacitor.config.ts` (`com.pawplate.app`, webDir `dist`),
   `ios/` + `android/` native projects generated and synced (CocoaPods
   1.17.0 installed via Homebrew for iOS; both projects ship Capacitor's
   stock .gitignores, so Pods/build outputs/copied web assets stay out of
   git). Camera plugin NOT wired yet — that's step 4b (bowl-photo flow),
   which also needs the analyze endpoint consumed from the client.
-- **Workspace plumbing**: `esbuild` added to `pnpm-workspace.yaml`
+* **Workspace plumbing**: `esbuild` added to `pnpm-workspace.yaml`
   `onlyBuiltDependencies` (vite needs its postinstall); turbo `build` task
   outputs now include `dist/**` and the `VITE_*` env vars. Mobile `lint`
   script is `tsc --noEmit` (no eslint config yet).
-- **Env**: `apps/mobile/.env.local` (gitignored) holds `VITE_SUPABASE_URL`
+* **Env**: `apps/mobile/.env.local` (gitignored) holds `VITE_SUPABASE_URL`
   / `VITE_SUPABASE_ANON_KEY` (same project as web) and `VITE_API_BASE_URL`
   (localhost:3000 for dev; a device needs the LAN IP or the Vercel URL —
   see `.env.example`).
-- **Verified**: `turbo run build lint test` 5/5 green (web build/lint/test
+* **Verified**: `turbo run build lint test` 5/5 green (web build/lint/test
   unaffected, mobile build + tsc clean); `mobile-rest-api.cy.ts` extended
   with a search-route test (200 with results, empty-list under 2 chars,
   401 JSON with no token) — 7/7 live; vite dev server serves the app
   (HTTP 200 + module transform OK).
-- **CORS for the Bearer routes (added while wiring the simulators)**: the
+* **CORS for the Bearer routes (added while wiring the simulators)**: the
   shell's WebView origin is `capacitor://localhost` (iOS) /
   `https://localhost` (Android) / `http://localhost:5173` (vite dev), so
   every REST call is cross-origin and the Authorization header forces a
@@ -680,12 +681,12 @@ First functional slice of the native app: Vite + React 19 + React Router 7
   (wildcard forbids credentialed requests anyway), so a foreign page can
   only use them with a token it already holds. Covered by a preflight test
   in `mobile-rest-api.cy.ts` (now 8/8 live).
-- **Simulator wiring**: `src/lib/api.ts` rewrites `localhost` →
+* **Simulator wiring**: `src/lib/api.ts` rewrites `localhost` →
   `10.0.2.2` at runtime on Android (one dist/ serves both shells);
   `capacitor.config.ts` sets `server.cleartext` +
   `android.allowMixedContent` (dev-only — drop for store builds);
   `android/local.properties` (gitignored) points at `~/Library/Android/sdk`.
-- Next: step 4b — bowl-photo flow on mobile (`@capacitor/camera`, consume
+* Next: step 4b — bowl-photo flow on mobile (`@capacitor/camera`, consume
   `/api/bowl/analyze` with Bearer auth, port the confirmation UI), then
   step 5 (optionally switch web auth call sites to the client SDK). A
   `packages/features` extraction (sharing DogMealBuilder etc. with
@@ -897,16 +898,18 @@ project.** The corpus went from "5,029 unusable rows" to a searchable,
 grouped catalogue.
 
 ### Why this was urgent
+
 `scripts/022` had been run against prod, taking `foods` from 61 rows to 5,029
 — and that silently broke search. `fuzzy_search_foods` scored with
 `word_similarity()`, which returns 1.0 whenever the query appears anywhere in
 the name; at 5,029 long USDA descriptions everything saturated at 1.00 and
 ordering collapsed to **alphabetical**. Observed on prod: `'beef'` returned
-*"Beans, baked, canned, with beef"*; `'rice'` returned noodles and rice-bran
+_"Beans, baked, canned, with beef"_; `'rice'` returned noodles and rice-bran
 oil above rice. The bowl auto-resolver (`match_limit: 1`, threshold 0.3) was
 therefore confidently matching the alphabetically-first row containing a label.
 
 ### What shipped
+
 - **Relevance ranking** (`20260729000100`) — blended score
   (base 0.50 / full 0.20 / word 0.15 / head 0.10 / brevity 0.05), fitted
   offline over a 5,966-point grid against all 5,029 live names with pg_trgm
@@ -928,38 +931,39 @@ therefore confidently matching the alphabetically-first row containing a label.
   flag; `BowlConfirmation` blocks logging until the owner picks. Gate fires on
   33% of groups (55% are single-variant).
 - **Analysis is now a manual action.** Choosing a photo stages it with a
-  preview; the owner writes the hint *with the photo visible*, then presses
+  preview; the owner writes the hint _with the photo visible_, then presses
   "Analyze this photo". Previously it fired on file-select, so the only way to
   add context was a re-analysis that resets entered grams.
 
 ### Live corpus state
 
-| | |
-|---|---|
-| `foods` rows | 5,029 (**0 deleted**) |
-| active | 4,700 |
-| soft-deleted | 329 — 274 pruned prepared foods + 55 merged duplicates |
-| Foundation / SR Legacy | 311 / 4,659 |
-| canonical groups | **1,409** |
-| review queue (pending) | 44 |
-| `'beef'` search | 960 rows → **8 groups** |
+|                        |                                                        |
+| ---------------------- | ------------------------------------------------------ |
+| `foods` rows           | 5,029 (**0 deleted**)                                  |
+| active                 | 4,700                                                  |
+| soft-deleted           | 329 — 274 pruned prepared foods + 55 merged duplicates |
+| Foundation / SR Legacy | 311 / 4,659                                            |
+| canonical groups       | **1,409**                                              |
+| review queue (pending) | 44                                                     |
+| `'beef'` search        | 960 rows → **8 groups**                                |
 
 ### Defects found during rollout (all fixed)
+
 1. `gin_trgm_ops` unresolvable in the migration runner — `pg_trgm` lives in
    `extensions`, which isn't on its `search_path`. Now resolved from
    `pg_opclass` at runtime.
 2. Audit reports wrote to `apps/web/audits/` and threw `ENOENT` — added
    `scripts/_audit-path.ts`.
 3. **PostgREST silently truncated a lookup at 1,000 rows**, so the first
-   canonical build attached only 4,268 of 4,700 variants *and reported
-   success*. Now paginated with a guard. Worth remembering beyond this branch:
+   canonical build attached only 4,268 of 4,700 variants _and reported
+   success_. Now paginated with a guard. Worth remembering beyond this branch:
    an unbounded PostgREST `select` is a silent correctness bug past 1,000 rows.
 4. Grouped search reintroduced the saturating score (`GREATEST(...,
-   word_similarity(...))`) — fixed in `20260730000000`.
+word_similarity(...))`) — fixed in `20260730000000`.
 5. `search_foods_by_nutrient` never learned about `is_active`, so pruned
    margarine/shortening stayed reachable in the Foods page's nutrient browser
    — fixed in `20260730000100`.
-6. Parser kept `"no skin"`/`"no salt added"` as anatomical *parts*, keying
+6. Parser kept `"no skin"`/`"no salt added"` as anatomical _parts_, keying
    "Sweet potato, cooked, no skin" as `sweet_potato_skin` — the opposite of
    its meaning. Fixed, plus number normalization so FDC's
    `"Mushrooms, portabella"` and `"Mushroom, portabella"` share a key.
@@ -971,6 +975,7 @@ backfilled onto the winner (12 columns salvaged), so merging never loses
 canine data the curated row had and USDA lacked.
 
 ### Verification
+
 - `scripts/023_search_relevance_check.ts` — 18/18, exit 0. Named expectations
   against the real RPC; the Jest suite can't test SQL ranking.
 - `scripts/027_audit_canonical_merges.ts` — replays the ≥0.90 **silent**
@@ -980,9 +985,10 @@ canine data the curated row had and USDA lacked.
 - Jest 189/189, `next lint` clean, `next build` clean, mobile `tsc` clean.
 
 ### Known gaps carried forward
+
 - **Cypress not run on this branch** — three specs changed, one added.
 - Default-variant selection is mediocre for large primal groups (`Beef round`
-  → *"New Zealand, imported, eye round"*): `is_verified` (+1000) swamps the
+  → _"New Zealand, imported, eye round"_): `is_verified` (+1000) swamps the
   specificity penalty in `pickDefault()`.
 - One wrong auto-merge at exactly 0.900: `soymilk_chocolate` →
   `silk_chocolate_soymilk` (generic absorbed into a branded group).
@@ -993,7 +999,111 @@ canine data the curated row had and USDA lacked.
 - `foods_source_check` still permits `'fatsecret'`, contradicting the
   CC0/ODbL-only storage rule.
 
+## Post-normalization hardening (done, 2026-08-03 → 2026-09-13)
+
+Follow-up fixes on `main` after the normalization merge, shipped across
+PRs #24–#27 and the Aug migrations. All applied live.
+
+- **Variant `serving_size` in the picker** (`20260803000000`):
+  `list_canonical_variants` now returns `serving_size`. The web/mobile variant
+  pickers and the ambiguity gate in `lib/resolve-ingredient.ts` had _assumed_
+  `serving_size = 100` for every variant when displaying "kcal / 100 g" —
+  wrong for any row whose serving wasn't 100 g.
+- **Live `variant_count`** (`20260803000100`, refined by `20260814000000`):
+  `search_canonical_ingredients` computes the count live instead of reading
+  the stale build-time snapshot in `canonical_ingredients.variant_count`
+  (which drifts the moment a variant is pruned/merged, or attached on creation
+  by `ingredient-service`). `20260814000000` moved that count to run **after**
+  the `LIMIT`, not before, so it isn't computed for groups that don't survive
+  ranking.
+- **Bowl-photo bucket read scope** (`20260813000000`, security): replaced the
+  original "Anyone can view bowl photos" storage policy that allowed anonymous
+  **enumeration** of the `bowl-photos` bucket with a scoped read policy.
+- **The 0-kcal / non-caloric fix** (`20260818000000` + `scripts/029`,
+  `scripts/030`, PRs #25–#27): the USDA bulk import had pulled in ~18 truncated
+  Foundation rows that FDC publishes with **no energy and no proximates** (every
+  cooking oil, both dry spaghettis, raisins, dried cranberries, canned beans,
+  …). `isNutritionallyUsable()` used to pass any all-zero row through as a
+  "supplement", so a bowl containing peanut oil logged at **0 kcal with no
+  warning**. Re-fetching can't help — the numbers aren't upstream. Fix: the
+  predicate now **fails closed** — an all-zero row is rejected unless explicitly
+  marked `data_completeness = 'non_caloric'` (a new enum value), which asserts
+  the zeros are the food's real composition. Only one row qualifies
+  (`Eggshell powder`, a calcium supplement). `scripts/029` backfills
+  zero-calorie foods; `scripts/030` deactivates the unusable shells.
+  `#25` also tightened the bowl **prep/variant choice** gate (`VariantChoice`
+  with `variant-choice.test.ts`; `resolve-ingredient.ts` expanded).
+
+## Faceted ingredient search — Phase A (code-complete 2026-09-13, smoke test pending)
+
+First slice of the hybrid refined-search plan (see "Next phase" below for the
+plan link). Decisions locked before building: **lean % is a string match**
+over `variant_attrs.trim` (no `lean_pct` column yet — exact matches work,
+numeric ranges are deferred), and **cooking method is a soft preference**
+inside a hard cooked-state filter (a group with no broiled row still shows its
+other cooked rows; never falls back to raw).
+
+- **Shared vocabulary → `packages/core/src/food-vocab.ts`.** The gazetteers
+  (`PREP`/`TRIM`/`GRADE`/`ORIGIN`/`PARTS`/`SYNONYMS`) and normalization helpers
+  moved out of `apps/web/lib/food-name-parser.ts` verbatim. The parser (the
+  _writer_ of `variant_attrs`) now imports them; the new query parser (the
+  _reader_) uses the same ones, so search can't recognize a facet the importer
+  wouldn't have stored. Parser behavior unchanged — its test suite passes
+  untouched; `slugify` is re-exported so callers didn't move.
+- **`packages/core/src/search-query.ts`** — `parseSearchQuery()` turns owner
+  text into `{ retrievalTerms, facets }`: `"beef, 80% lean"` → `beef` +
+  `leanPct 80`; `"broiled ground beef"` → `ground beef` + cooked/broiled
+  (`ground` stays a retrieval term — it's the canonical differentiator, never a
+  filter); accepts `80/20`, `80 lean`, `80%` (with "lean"); unqualified `lean`
+  is qualitative trim, never numeric; unrecognized words stay in retrieval
+  terms so a miss degrades to plain search. `QUERY_ALIASES` (`hamburger` →
+  `ground beef`) is deliberately separate from `SYNONYMS`, which would reshape
+  canonical slugs at import. Matchers: `leanMatchesTrim`,
+  `variantMatchesHardFacets`, `variantMatchesMethod`, `filterAndRankVariants`.
+  Phrase lists use the writer's canonical hyphenated spelling (`pan-fried`,
+  `bone-in`) with hyphen/space-insensitive matching, so a **drift-guard test**
+  can assert every reader keyword ⊆ its writer gazetteer without rejecting how
+  people type.
+- **UI — refine-within-group** in `VariantChoice`
+  (`components/bowl-confirmation.tsx`): a "Refine" input over the lazily
+  loaded variant list, parsed client-side into removable facet chips
+  (`raw` · `broiled` · `80% lean` · `skinless`); leftover words narrow by
+  name (`patty`, `crumbles`). A hard facet with no match shows an explicit
+  empty state rather than substituting; a requested method with no entry shows
+  "showing its other cooked options". Scope note: chips on the _flat_ search
+  inputs (meal builder, IngredientPicker) wait for Phase B — flat
+  `fuzzy_search_foods` doesn't return `variant_attrs`, so lean/trim can't be
+  filtered client-side there.
+- **Verified**: `__tests__/lib/search-query.test.ts` (40 tests) + parser
+  suite; full Jest 17/17 suites, 392/392; `tsc` clean; `next lint` clean on
+  touched files; `next build` green (the "Compiled with warnings" is the
+  pre-existing `@supabase/realtime-js` critical-dependency notice).
+  **Manual smoke test pending** — expand a ground-beef bowl item, type
+  `80% lean broiled`, expect the 80/20 cooked rows with the broiled patty
+  first.
+- Next: Phase B (facet-aware RPCs, server-side parse in `grouped-search`,
+  representative = matching variant, web meal builder + Foods page onto
+  grouped search, api-client facet param).
+
 ## Next phase (planned)
+
+- **Refined / "semantic" ingredient search** — full plan in
+  [`.Codex/reports/2026-09-13-hybrid-ingredient-search-plan.md`](../.Codex/reports/2026-09-13-hybrid-ingredient-search-plan.md).
+  Let owners search with modifiers: raw vs cooked, cooking method (broiled,
+  roasted, …), ground beef/chicken, and a second refining argument
+  ("beef, 80% lean"). **Key finding: the facet data already exists** —
+  `foods.preparation_state` + `foods.variant_attrs` (`prep[]`/`trim[]`) are
+  parsed and stored at import by `lib/food-name-parser.ts`, and `ground` is
+  already a canonical part (`beef_ground`). So this is _query understanding +
+  faceted filtering over the canonical layer_, reusing the existing
+  gazetteers — **not** an embeddings project. Recommended over pgvector for
+  this ask; Phase 5 (below) stays the home for true vector/conceptual search.
+  Also the moment to move the web meal-builder + Foods page off flat search
+  onto grouped+faceted (closes the flat-vs-grouped parity gap).
+- Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
+  consumes the `user_corrected` bowl data now being captured).
+- Barcode-scan affordance for branded items (design §5); FatSecret still
+  deferred on caching terms.
 
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
@@ -1011,6 +1121,7 @@ diffing web routes/features against mobile screens + the shared
 `packages/api-client` surface.
 
 ### Already at parity (no work)
+
 Dogs CRUD, meal logging/edit, in-meal ingredient search, nutrient gap bars
 (`GapBars`), day-by-day history (prev/today arrows on `DogDetailScreen`),
 branded-ingredient accept (in bowl flow), auth + Google SSO. Bowl-photo flow is
@@ -1019,6 +1130,7 @@ on `feat/mobile-bowl-photo-v2` (pending smoke test).
 ### Gaps, prioritized
 
 **P1 — Foods browse + Food details (biggest true gap).**
+
 - Backend: NONE needed. Routes `/api/foods/unified-search`,
   `/api/foods/nutrient-search`, `/api/foods/[foodId]` already exist and are in
   `GUEST_ALLOWED_ROUTES`, so the mobile client can call them as-is (ingredient
@@ -1035,6 +1147,7 @@ on `feat/mobile-bowl-photo-v2` (pending smoke test).
 - Effort: **M** (2 screens + api-client; no backend).
 
 **P2 — Calendar / month history (enhancement over the arrow nav).**
+
 - Backend: NEW. `getDogMealDates(dogId, from, to)` exists as a server action +
   `mealService.getDogMealDates` but has NO REST route. Add
   `/api/dogs/[dogId]/meal-dates?start=&end=` wrapping the service fn, and add it
@@ -1046,6 +1159,7 @@ on `feat/mobile-bowl-photo-v2` (pending smoke test).
 - Effort: **M** (1 REST route + api-client + calendar UI).
 
 **P3 — Optional / product decisions (not strictly parity).**
+
 - Guest mode on mobile: web allows guest browse; mobile `RequireAuth` forces
   login. Decide whether an installed app should offer guest mode at all
   (many app-store apps skip it). Effort S–M if wanted.
@@ -1055,6 +1169,7 @@ on `feat/mobile-bowl-photo-v2` (pending smoke test).
   verify it's surfaced in the mobile meal builder (web has it). Effort S.
 
 ### Sequencing & cross-cutting
+
 Do P1 → P2 → (P3 by decision). Each new screen needs a route in
 `apps/mobile/src/App.tsx` + a nav affordance in `AppShell`. Keep local-date
 handling consistent with the bowl/meal `localToday()` fix (meals log under LOCAL
@@ -1066,10 +1181,12 @@ Housekeeping deliberately deferred so it wouldn't muddy feature diffs. None of
 it blocks shipping; grouped roughly by value. Suggested branch: `chore/cleanup`.
 
 ### A. TypeScript debt (the reason this list exists)
+
 `apps/web/next.config.mjs` sets **`typescript: { ignoreBuildErrors: true }`**, so
 type errors never fail the build and have accumulated silently. `pnpm --filter
 web exec tsc --noEmit` currently reports (all pre-existing on `main`, unrelated
 to the mobile work):
+
 - `components/signup-form.tsx` (~L47/L49) — reads `state.success`, but `signUp`
   in `lib/actions.ts` only ever returns `{ error }` or redirects, so the success
   banner is **unreachable dead code**. Either add a `success` return path or
@@ -1082,6 +1199,7 @@ to the mobile work):
   gate keeps it clean. Do this LAST in the cleanup branch.
 
 ### B. Dead / stale dependencies + docs
+
 - `@supabase/auth-helpers-nextjs@0.10.0` is in `apps/web/package.json` with
   **zero imports** anywhere, and its transitive `@supabase/auth-helpers-shared`
   shows in pnpm's deprecation warnings. Remove the dependency.
@@ -1091,12 +1209,14 @@ to the mobile work):
   stops describing work that's done.
 
 ### C. Mobile bundle size
+
 `apps/mobile` builds a single ~545 KB JS chunk and Vite warns past its 500 KB
 limit. Route-level `React.lazy` + `Suspense` (BowlPhotoScreen is 558 lines and
 only used on one route; FoodDetailsScreen likewise) would cut first-load cost on
 a phone. Low risk, real UX win on cold start.
 
 ### D. Pre-store-build hardening (must happen before submission, not before merge)
+
 - `apps/mobile/capacitor.config.ts` still sets `server.cleartext: true` and
   `android.allowMixedContent: true` — dev-only affordances for the plain-http
   local API. Drop both and build against the https deployment.
@@ -1110,6 +1230,7 @@ a phone. Low risk, real UX win on cold start.
   first `.aab` upload, or production Google sign-in fails with `DEVELOPER_ERROR`.
 
 ### E. Test housekeeping
+
 - `apps/web/cypress/e2e/dashboard-meal-tracking.cy.ts:129` ("should allow
   navigation back to dashboard") was previously left failing and has since been
   softened to assert only `url().should('not.include', '/food-details')`, with a
