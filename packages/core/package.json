@@ -7,7 +7,9 @@
     ".": "./src/index.ts",
     "./canine-nutrition": "./src/canine-nutrition.ts",
     "./types": "./src/types.ts",
-    "./dog-toxic-foods": "./src/dog-toxic-foods.ts"
+    "./dog-toxic-foods": "./src/dog-toxic-foods.ts",
+    "./food-vocab": "./src/food-vocab.ts",
+    "./search-query": "./src/search-query.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"

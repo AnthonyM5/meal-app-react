@@ -993,8 +993,134 @@ canine data the curated row had and USDA lacked.
 - `foods_source_check` still permits `'fatsecret'`, contradicting the
   CC0/ODbL-only storage rule.
 
+## Post-normalization hardening (done, 2026-08-03 → 2026-09-13)
+
+Follow-up fixes on `main` after the normalization merge, shipped across
+PRs #24–#27 and the Aug migrations. All applied live.
+
+- **Variant `serving_size` in the picker** (`20260803000000`):
+  `list_canonical_variants` now returns `serving_size`. The web/mobile variant
+  pickers and the ambiguity gate in `lib/resolve-ingredient.ts` had *assumed*
+  `serving_size = 100` for every variant when displaying "kcal / 100 g" —
+  wrong for any row whose serving wasn't 100 g.
+- **Live `variant_count`** (`20260803000100`, refined by `20260814000000`):
+  `search_canonical_ingredients` computes the count live instead of reading
+  the stale build-time snapshot in `canonical_ingredients.variant_count`
+  (which drifts the moment a variant is pruned/merged, or attached on creation
+  by `ingredient-service`). `20260814000000` moved that count to run **after**
+  the `LIMIT`, not before, so it isn't computed for groups that don't survive
+  ranking.
+- **Bowl-photo bucket read scope** (`20260813000000`, security): replaced the
+  original "Anyone can view bowl photos" storage policy that allowed anonymous
+  **enumeration** of the `bowl-photos` bucket with a scoped read policy.
+- **The 0-kcal / non-caloric fix** (`20260818000000` + `scripts/029`,
+  `scripts/030`, PRs #25–#27): the USDA bulk import had pulled in ~18 truncated
+  Foundation rows that FDC publishes with **no energy and no proximates** (every
+  cooking oil, both dry spaghettis, raisins, dried cranberries, canned beans,
+  …). `isNutritionallyUsable()` used to pass any all-zero row through as a
+  "supplement", so a bowl containing peanut oil logged at **0 kcal with no
+  warning**. Re-fetching can't help — the numbers aren't upstream. Fix: the
+  predicate now **fails closed** — an all-zero row is rejected unless explicitly
+  marked `data_completeness = 'non_caloric'` (a new enum value), which asserts
+  the zeros are the food's real composition. Only one row qualifies
+  (`Eggshell powder`, a calcium supplement). `scripts/029` backfills
+  zero-calorie foods; `scripts/030` deactivates the unusable shells.
+  `#25` also tightened the bowl **prep/variant choice** gate (`VariantChoice`
+  with `variant-choice.test.ts`; `resolve-ingredient.ts` expanded).
+
+## Faceted ingredient search — Phase A (code-complete 2026-09-13, smoke test pending)
+
+First slice of the hybrid refined-search plan (see "Next phase" below for the
+plan link). Decisions locked before building: **lean % is a string match**
+over `variant_attrs.trim` (no `lean_pct` column yet — exact matches work,
+numeric ranges are deferred), and **cooking method is a soft preference**
+inside a hard cooked-state filter (a group with no broiled row still shows its
+other cooked rows; never falls back to raw).
+
+- **Shared vocabulary → `packages/core/src/food-vocab.ts`.** The gazetteers
+  (`PREP`/`TRIM`/`GRADE`/`ORIGIN`/`PARTS`/`SYNONYMS`) and normalization helpers
+  moved out of `apps/web/lib/food-name-parser.ts` verbatim. The parser (the
+  *writer* of `variant_attrs`) now imports them; the new query parser (the
+  *reader*) uses the same ones, so search can't recognize a facet the importer
+  wouldn't have stored. Parser behavior unchanged — its test suite passes
+  untouched; `slugify` is re-exported so callers didn't move.
+- **`packages/core/src/search-query.ts`** — `parseSearchQuery()` turns owner
+  text into `{ retrievalTerms, facets }`: `"beef, 80% lean"` → `beef` +
+  `leanPct 80`; `"broiled ground beef"` → `ground beef` + cooked/broiled
+  (`ground` stays a retrieval term — it's the canonical differentiator, never a
+  filter); accepts `80/20`, `80 lean`, `80%` (with "lean"); unqualified `lean`
+  is qualitative trim, never numeric; unrecognized words stay in retrieval
+  terms so a miss degrades to plain search. `QUERY_ALIASES` (`hamburger` →
+  `ground beef`) is deliberately separate from `SYNONYMS`, which would reshape
+  canonical slugs at import. Matchers: `leanMatchesTrim`,
+  `variantMatchesHardFacets`, `variantMatchesMethod`, `filterAndRankVariants`.
+  Phrase lists use the writer's canonical hyphenated spelling (`pan-fried`,
+  `bone-in`) with hyphen/space-insensitive matching, so a **drift-guard test**
+  can assert every reader keyword ⊆ its writer gazetteer without rejecting how
+  people type.
+- **UI — refine-within-group** in `VariantChoice`
+  (`components/bowl-confirmation.tsx`): a "Refine" input over the lazily
+  loaded variant list, parsed client-side into removable facet chips
+  (`raw` · `broiled` · `80% lean` · `skinless`); leftover words narrow by
+  name (`patty`, `crumbles`). A hard facet with no match shows an explicit
+  empty state rather than substituting; a requested method with no entry shows
+  "showing its other cooked options". Scope note: chips on the *flat* search
+  inputs (meal builder, IngredientPicker) wait for Phase B — flat
+  `fuzzy_search_foods` doesn't return `variant_attrs`, so lean/trim can't be
+  filtered client-side there.
+- **Verified**: `__tests__/lib/search-query.test.ts` (40 tests) + parser
+  suite; full Jest 17/17 suites, 392/392; `tsc` clean; `next lint` clean on
+  touched files; `next build` green (the "Compiled with warnings" is the
+  pre-existing `@supabase/realtime-js` critical-dependency notice).
+  **Manual smoke test pending** — expand a ground-beef bowl item, type
+  `80% lean broiled`, expect the 80/20 cooked rows with the broiled patty
+  first.
+- **Review follow-up (2026-09-19)** — three defects from the PR review, all
+  in the reader/writer seam:
+  - **State vocabulary drift (the real one).** `prepState` is a HARD filter on
+    `foods.preparation_state`, but that column was written by a *second*
+    vocabulary in `lib/usda-canine.ts` that omitted `broiled`, `pan-broiled`,
+    `simmered`, `microwaved`, `oven-heated`, `unheated` and `unprepared` —
+    every one of which the query parser recognizes. A row the importer
+    couldn't classify holds NULL and a hard filter excludes it, so
+    `93% lean broiled turkey` filtered away
+    *"Turkey, ground, 93% lean, 7% fat, patties, broiled"*: the row it named.
+    Measured live: 44 of 47 `unheated` rows, 55 of 66 `unprepared`, 6 of 204
+    `broiled`. Fix: the classifier moved to `food-vocab.inferPrepState()` as
+    the single source for both halves, `inferPreparationState()` now delegates
+    to it, and the reader derives `prepState` *through* it — so an unclassified
+    word can never become a hard filter. `scripts/031` backfills the 110
+    affected live rows (NULL → value only; never overwrites, never guesses).
+  - **`smoked` is deliberately state-neutral** (`STATE_NEUTRAL_METHODS`).
+    Every smoked row in the corpus is cold-smoked fish or lox — cured, not
+    cooked. It still ranks smoked variants first; it just doesn't narrow the
+    state around them.
+  - **Multi-word synonyms were unreachable.** `SYNONYMS` is keyed on whole
+    phrases (`rib eye` → `ribeye`, `garbanzo beans` → `chickpeas`), which the
+    writer receives as one comma-delimited segment; the reader tokenized on
+    spaces *first*, so those entries could never fire.
+    `applyPhraseSynonyms()` now runs before tokenizing.
+  - Drift guard extended past the gazetteers to the state classifier itself,
+    with live-corpus descriptions as fixtures. 56 tests in the suite.
+- Next: Phase B (facet-aware RPCs, server-side parse in `grouped-search`,
+  representative = matching variant, web meal builder + Foods page onto
+  grouped search, api-client facet param).
+
 ## Next phase (planned)
 
+- **Refined / "semantic" ingredient search** — full plan in
+  [`.Codex/reports/2026-09-13-hybrid-ingredient-search-plan.md`](../.Codex/reports/2026-09-13-hybrid-ingredient-search-plan.md).
+  Let owners search with modifiers: raw vs cooked, cooking method (broiled,
+  roasted, …), ground beef/chicken, and a second refining argument
+  ("beef, 80% lean"). **Key finding: the facet data already exists** —
+  `foods.preparation_state` + `foods.variant_attrs` (`prep[]`/`trim[]`) are
+  parsed and stored at import by `lib/food-name-parser.ts`, and `ground` is
+  already a canonical part (`beef_ground`). So this is *query understanding +
+  faceted filtering over the canonical layer*, reusing the existing
+  gazetteers — **not** an embeddings project. Recommended over pgvector for
+  this ask; Phase 5 (below) stays the home for true vector/conceptual search.
+  Also the moment to move the web meal-builder + Foods page off flat search
+  onto grouped+faceted (closes the flat-vs-grouped parity gap).
 - Phase 5 (pgvector RAG guidance) and Phase 6 (evals/monitoring — which
   consumes the `user_corrected` bowl data now being captured).
 - Barcode-scan affordance for branded items (design §5); FatSecret still
