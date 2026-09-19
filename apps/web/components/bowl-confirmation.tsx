@@ -371,9 +371,13 @@ function VariantChoice({
                     </div>
                   )}
                   {methodHits === 0 && visible.length > 0 && (
+                    // Names the state only when the method actually narrowed
+                    // to one. A state-neutral method (smoked) leaves the rest
+                    // of the group mixed, so claiming "cooked" would be wrong.
                     <p className="text-xs text-muted-foreground">
                       No {facets.cookingMethod?.join('/')} entry for this group —
-                      showing its other cooked options.
+                      showing its other {facets.prepState ? `${facets.prepState} ` : ''}
+                      options.
                     </p>
                   )}
                 </div>

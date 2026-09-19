@@ -16,16 +16,27 @@
 // ("hamburger" → ground beef) is handled by QUERY_ALIASES; genuine semantic
 // recall is the deferred Phase C (pgvector), gated behind a search eval.
 
-import { applySynonym, singularizeWord } from './food-vocab'
+import {
+  applyPhraseSynonyms,
+  applySynonym,
+  inferPrepState,
+  singularizeWord,
+} from './food-vocab'
 
 /** A facet parsed out of the query. All optional; absent = no constraint. */
 export interface SearchFacets {
   /** Hard filter. Water loss makes raw vs cooked a real per-100 g difference. */
   prepState?: 'raw' | 'cooked'
   /**
-   * Soft preference WITHIN the cooked set. Method coverage is incomplete, so
-   * a requested method never excludes — if no broiled variant exists, a
-   * plain cooked one is preferred over nothing. Implies prepState 'cooked'.
+   * Soft preference. Method coverage is incomplete, so a requested method
+   * never excludes — if no broiled variant exists, a plain cooked one is
+   * preferred over nothing.
+   *
+   * A method implies prepState 'cooked' ONLY when `inferPrepState` classifies
+   * it that way, i.e. only when the importer would have stored that state for
+   * a row described with the same word. `smoked` is the one method that does
+   * not (see STATE_NEUTRAL_METHODS) — narrowing to 'cooked' there would have
+   * hidden every cold-smoked fish row, whose stored state is NULL.
    */
   cookingMethod?: string[]
   /** Hard filter, matched as a string prefix over variant_attrs.trim (§5). */
@@ -173,7 +184,12 @@ export function parseSearchQuery(rawQuery: string): ParsedSearchQuery {
   const methods = pullPhrases(working, COOKING_METHODS)
   if (methods.hits.length) {
     facets.cookingMethod = methods.hits
-    facets.prepState = 'cooked'
+    // Only methods the WRITER classifies as cooked may narrow the state. A
+    // method the importer stores without a state (smoked) would otherwise
+    // hard-filter away the rows it was meant to surface — it still ranks.
+    if (methods.hits.some(m => inferPrepState(m) === 'cooked')) {
+      facets.prepState = 'cooked'
+    }
   }
   working = methods.rest
 
@@ -185,8 +201,8 @@ export function parseSearchQuery(rawQuery: string): ParsedSearchQuery {
   // "raw broiled" is nonsensical; preferring raw is the safer literal read).
   const raw = pullPhrases(working, RAW_STATES)
   working = raw.rest
-  if (raw.hits.length) facets.prepState = 'raw'
-  else {
+  if (raw.hits.some(r => inferPrepState(r) === 'raw')) facets.prepState = 'raw'
+  else if (!raw.hits.length) {
     const cooked = pullPhrases(working, ['cooked'])
     working = cooked.rest
     if (cooked.hits.length && !facets.prepState) facets.prepState = 'cooked'
@@ -198,7 +214,10 @@ export function parseSearchQuery(rawQuery: string): ParsedSearchQuery {
   working = bareLean.rest
   if (bareLean.hits.length) facets.trim = [...(facets.trim ?? []), 'lean']
 
-  const retrievalTerms = working
+  // Phrase synonyms BEFORE tokenizing — "rib eye" and "garbanzo beans" are
+  // single SYNONYMS keys the writer applies to a whole segment, and splitting
+  // on spaces first would put them permanently out of reach.
+  const retrievalTerms = applyPhraseSynonyms(working)
     .split(' ')
     .filter(Boolean)
     .map(normalizeToken)

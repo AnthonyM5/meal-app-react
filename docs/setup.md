@@ -40,12 +40,10 @@ yarn install
 4. **Database Setup**
 
 - Set up a new Supabase project
-- Run the database migrations:
+- Apply the database migration using the [Supabase CLI](https://supabase.com/docs/reference/cli/usage):
 
 ```bash
-npm run db:migrate
-# or
-yarn db:migrate
+supabase db push
 ```
 
 ## Development Server

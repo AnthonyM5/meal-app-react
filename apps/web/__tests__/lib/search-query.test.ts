@@ -4,7 +4,14 @@
 // writer's gazetteers in @pawplate/core/food-vocab.
 
 import { describe, expect, it } from '@jest/globals'
-import { matchesAny, PREP, TRIM } from '@pawplate/core/food-vocab'
+import {
+  inferPrepState,
+  matchesAny,
+  PREP,
+  STATE_NEUTRAL_METHODS,
+  TRIM,
+} from '@pawplate/core/food-vocab'
+import { inferPreparationState } from '@/lib/usda-canine'
 import {
   COOKING_METHODS,
   filterAndRankVariants,
@@ -137,6 +144,15 @@ describe('parseSearchQuery', () => {
       expect(parseSearchQuery('minced beef').retrievalTerms).toBe('ground beef')
     })
 
+    it('collapses MULTI-WORD synonyms, which only fire before tokenizing', () => {
+      // Tokenizing first would strand these forever: SYNONYMS is keyed on the
+      // whole phrase, the way the writer receives a comma-delimited segment.
+      expect(parseSearchQuery('rib eye steak').retrievalTerms).toBe('ribeye steak')
+      expect(parseSearchQuery('rib-eye').retrievalTerms).toBe('ribeye')
+      expect(parseSearchQuery('garbanzo beans').retrievalTerms).toBe('chickpea')
+      expect(parseSearchQuery('beef bottom round').retrievalTerms).toBe('beef round')
+    })
+
     it('singularizes retrieval tokens like the writer does', () => {
       expect(parseSearchQuery('oranges').retrievalTerms).toBe('orange')
       expect(parseSearchQuery('sweet potatoes').retrievalTerms).toBe('sweet potato')
@@ -251,6 +267,51 @@ describe('variant matching — hard vs soft facets', () => {
   })
 })
 
+describe('state facets stay inside what the writer stores', () => {
+  // The bug this guards: prepState is a HARD filter on foods.preparation_state,
+  // and a row the importer couldn't classify holds NULL. Any state word the
+  // reader recognizes but the writer never stores therefore filters away the
+  // exact rows it names. Descriptions below are live corpus rows.
+  it.each([
+    ['Turkey, ground, 93% lean, 7% fat, patties, broiled', 'broiled', 'cooked'],
+    ['Turkey, ground, 85% lean, 15% fat, pan-broiled crumbles', 'pan broiled', 'cooked'],
+    ['Beans, snap, green, frozen, all styles, microwaved', 'microwaved', 'cooked'],
+    ['Onions, frozen, whole, unprepared', 'unprepared', 'raw'],
+    ['Pork, cured, ham, whole, separable lean only, unheated', 'unheated', 'raw'],
+  ])('%s is stored as the state "%s" narrows to', (description, query, expected) => {
+    expect(inferPreparationState(description)).toBe(expected)
+    expect(parseSearchQuery(query).facets.prepState).toBe(expected)
+  })
+
+  it.each([
+    // FDC's raw words say how the row is SOLD; its method words say what was
+    // already done to it. Both appear on one row more often than it looks.
+    ['Potatoes, french fried, par fried, frozen, unprepared', 'cooked'],
+    ['Salmon nuggets, cooked as purchased, unheated', 'cooked'],
+    ['Apples, raw, without skin, cooked, boiled', 'cooked'],
+    // …but a raw word alone still wins, including the "uncooked" ⊃ "cooked"
+    // substring collision that made the original implementation test raw first.
+    ['Quinoa, uncooked', 'raw'],
+    ['Onions, frozen, whole, unprepared', 'raw'],
+  ])('%s → %s (cooked wins when a row carries both signals)', (description, expected) => {
+    expect(inferPreparationState(description)).toBe(expected)
+  })
+
+  it('"smoked" ranks but never narrows — cold-smoked fish is stored NULL', () => {
+    // Every smoked row in the live corpus is lox/smoked fish: cured, not
+    // cooked. Treating the method as cooked would hide all of them.
+    expect(inferPreparationState('Fish, salmon, chinook, smoked, (lox), regular')).toBeNull()
+
+    const f = parseSearchQuery('smoked salmon').facets
+    expect(f.cookingMethod).toEqual(['smoked'])
+    expect(f.prepState).toBeUndefined()
+
+    const lox = { preparation_state: null, variant_attrs: { prep: ['smoked'] } }
+    const plain = { preparation_state: 'raw', variant_attrs: { prep: ['raw'] } }
+    expect(filterAndRankVariants([plain, lox], f)).toEqual([lox, plain])
+  })
+})
+
 describe('drift guard — reader vocabulary ⊆ writer gazetteers', () => {
   // If the writer's gazetteers change, these fail rather than letting search
   // recognize a facet that would never have been stored.
@@ -263,6 +324,23 @@ describe('drift guard — reader vocabulary ⊆ writer gazetteers', () => {
   it('every raw state matches a PREP gazetteer entry', () => {
     for (const r of RAW_STATES) {
       expect({ r, ok: matchesAny(r, PREP) }).toEqual({ r, ok: true })
+    }
+  })
+
+  it('every cooking method is classified cooked, or declared state-neutral', () => {
+    // The PREP check above only proves the word can appear in variant_attrs.
+    // This proves the reader's HARD state filter agrees with the column the
+    // writer fills — the half that had actually drifted.
+    for (const m of COOKING_METHODS) {
+      const state = inferPrepState(m)
+      const ok = state === 'cooked' || (state === null && STATE_NEUTRAL_METHODS.includes(m))
+      expect({ m, state, ok }).toEqual({ m, state, ok: true })
+    }
+  })
+
+  it('every raw state word is classified raw by the writer', () => {
+    for (const r of RAW_STATES) {
+      expect({ r, state: inferPrepState(r) }).toEqual({ r, state: 'raw' })
     }
   })
 

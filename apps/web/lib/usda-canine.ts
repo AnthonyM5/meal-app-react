@@ -14,6 +14,8 @@
 // values come from the seed data / a future curated table (handoff §3.3);
 // imported ingredients keep taurine_mg = 0 and is_verified = false.
 
+import { inferPrepState } from '@pawplate/core/food-vocab'
+
 import { checkDogSafety } from '@/lib/dog-toxic-foods'
 
 /** Verified FDC nutrient IDs (see header). Amounts are per 100 g. */
@@ -351,27 +353,26 @@ export function countExtractedNutrients(
   ).length
 }
 
-// Cooking-method words as they appear in FDC descriptions. 'raw' is matched
-// as a whole word so e.g. "strawberries" doesn't false-positive. 'uncooked'
-// (FDC's dry-grain wording, e.g. "Quinoa, uncooked") counts as raw and must
-// be tested before COOKED_PATTERN, which would substring-match it. 'dried'
-// is deliberately excluded — dried fruit is not a raw fresh-feeding form.
-const COOKED_PATTERN =
-  /cooked|roasted|stewed|fried|boiled|grilled|baked|braised|poached|steamed|rotisserie|hard-boiled|scrambled/i
-const RAW_PATTERN = /\b(raw|uncooked)\b/i
-
 /**
  * Infer raw/cooked from a USDA description. Nutrient values always describe
  * the food as analyzed (as fed) — this label only lets both variants coexist
  * and be told apart in search; no conversion math is ever applied.
+ *
+ * The vocabulary moved to @pawplate/core/food-vocab (2026-09-19) because this
+ * function WRITES `foods.preparation_state` while search-query.ts READS it as
+ * a hard filter, and the two lists had drifted: the reader recognized
+ * "broiled", "simmered", "microwaved", "unheated" and "unprepared" as states
+ * the importer here never stored, so those queries filtered out the very rows
+ * they named. `inferPrepState` is now the single classifier for both, and a
+ * drift test asserts every reader keyword resolves through it.
+ *
+ * Existing rows imported before that widening keep their NULL state until
+ * `scripts/031_backfill_preparation_state.ts` is run.
  */
 export function inferPreparationState(
   description: string
 ): 'raw' | 'cooked' | null {
-  // Check raw first: the explicit whole-word "raw" is the stronger signal
-  if (RAW_PATTERN.test(description)) return 'raw'
-  if (COOKED_PATTERN.test(description)) return 'cooked'
-  return null
+  return inferPrepState(description)
 }
 
 /**

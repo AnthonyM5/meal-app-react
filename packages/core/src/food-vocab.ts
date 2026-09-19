@@ -214,6 +214,101 @@ export const PREP = [
   /^chunks?$/,
 ]
 
+// ---------------------------------------------------------------------------
+// Raw/cooked state classification.
+//
+// PREP above records WHAT a description says (it fills variant_attrs.prep).
+// This decides what that MEANS for the `foods.preparation_state` column — and
+// it lives here, next to PREP, because both halves of the pipeline need the
+// same answer:
+//   - the WRITER (apps/web/lib/usda-canine.ts inferPreparationState) stores
+//     the column at import time;
+//   - the READER (./search-query.ts) turns "broiled"/"unheated" in an owner's
+//     query into a HARD filter on that same column.
+// When the two disagreed, the reader filtered on a state the writer had never
+// stored and the query returned nothing. Measured against the live corpus on
+// 2026-09-19, before this was shared: 6 of 204 `broiled` rows, 4 of 12
+// `microwaved`, 44 of 47 `unheated` and 55 of 66 `unprepared` rows carried a
+// NULL state, so "93% lean broiled turkey" excluded the exact rows it named.
+// ---------------------------------------------------------------------------
+
+/**
+ * Words that assert the food is NOT cooked. Matched as whole words so
+ * "strawberries" doesn't false-positive on "raw".
+ *
+ * FDC writes "raw or unheated" as one phrase, which is why `unheated` sits
+ * here rather than in its own state: upstream treats them as the same thing.
+ * `unprepared` is FDC's frozen-vegetable wording ("Onions, frozen, whole,
+ * unprepared") — frozen but uncooked.
+ */
+export const RAW_STATE_WORDS = ['raw', 'uncooked', 'unheated', 'unprepared']
+
+/**
+ * Words that assert the food WAS cooked. Matched as substrings, not whole
+ * words, to keep FDC's compound spellings ("pan-broiled crumbles",
+ * "cooked, roasted") classifying — `RAW_STATE_WORDS` is tested first, so
+ * "uncooked" can't be captured by "cooked" here.
+ *
+ * `dried` is deliberately excluded — dried fruit is not a raw fresh-feeding
+ * form, but it isn't cooked either.
+ */
+export const COOKED_METHOD_WORDS = [
+  'cooked', 'roasted', 'stewed', 'fried', 'boiled', 'broiled', 'grilled',
+  'baked', 'braised', 'poached', 'steamed', 'simmered', 'microwaved',
+  'rotisserie', 'hard-boiled', 'scrambled', 'oven-heated',
+]
+
+/**
+ * Methods that name a process without settling raw vs cooked, so they must
+ * never imply a state in either direction.
+ *
+ * `smoked` is the whole list and it is a product decision, not an oversight:
+ * every smoked row in the live corpus is cold-smoked fish or lox ("Fish,
+ * salmon, chinook, smoked, (lox), regular"), which is cured, not cooked. The
+ * reader still treats it as a cooking method — it ranks smoked variants
+ * first — it just doesn't narrow the state around it.
+ */
+export const STATE_NEUTRAL_METHODS = ['smoked']
+
+/** `-` matches a hyphen, a space, or nothing: "pan-broiled" ≡ "pan broiled". */
+function hyphenTolerant(word: string): string {
+  return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/-/g, '[- ]?')
+}
+
+const RAW_SOURCE = `\\b(${RAW_STATE_WORDS.map(hyphenTolerant).join('|')})\\b`
+const RAW_PATTERN = new RegExp(RAW_SOURCE, 'i')
+const RAW_PATTERN_G = new RegExp(RAW_SOURCE, 'gi')
+const COOKED_PATTERN = new RegExp(COOKED_METHOD_WORDS.map(hyphenTolerant).join('|'), 'i')
+
+/**
+ * Classify a description — or a single vocabulary word — as raw, cooked, or
+ * unknown.
+ *
+ * COOKED WINS when a description carries both signals, because FDC's raw
+ * words describe how the row is SOLD while its method words describe what was
+ * already done to it: "Potatoes, french fried, par fried, frozen, unprepared"
+ * is fried food the shopper hasn't finished, not a raw potato, and "Salmon
+ * nuggets, cooked as purchased, unheated" is cooked food served cold. 11 live
+ * rows look like this. Calling them raw would be a nutrition claim, not just
+ * a label.
+ *
+ * The raw words are still cut out BEFORE the cooked test, because several
+ * cooked words are substrings of raw ones ("uncooked" ⊃ "cooked") — that
+ * lexical collision is the only reason the original implementation tested raw
+ * first, and folding it in here keeps "Quinoa, uncooked" raw.
+ *
+ * Returns null when the text says nothing about state. Callers must treat
+ * null as "unknown", never as "not cooked": a stored NULL means the importer
+ * couldn't tell, and a hard state filter that excludes NULL rows is exactly
+ * the defect this function was extracted to prevent.
+ */
+export function inferPrepState(text: string): 'raw' | 'cooked' | null {
+  const saysRaw = RAW_PATTERN.test(text)
+  const rest = saysRaw ? text.replace(RAW_PATTERN_G, ' ') : text
+  if (COOKED_PATTERN.test(rest)) return 'cooked'
+  return saysRaw ? 'raw' : null
+}
+
 /**
  * Anatomical parts and organs. Doubles as the splitter for non-USDA names:
  * hand-curated rows use "Beef liver, raw" rather than USDA's
@@ -318,6 +413,35 @@ export const SYNONYMS: Record<string, string> = {
 
 export function applySynonym(term: string): string {
   return SYNONYMS[term] ?? term
+}
+
+/**
+ * Multi-word SYNONYMS keys, longest first, as whole-phrase regexes.
+ *
+ * `applySynonym` is keyed on a whole term, which is what the WRITER hands it
+ * ("rib eye" arrives as one comma-delimited segment). A free-text query has
+ * no such boundaries, so a reader that tokenizes on spaces first can never
+ * reach these entries: "rib eye" stayed two tokens instead of collapsing to
+ * the writer's canonical `ribeye`, and the retrieval terms then missed the
+ * group they named. Same for "garbanzo beans", "bottom round", "top sirloin".
+ */
+const PHRASE_SYNONYMS: Array<[RegExp, string]> = Object.entries(SYNONYMS)
+  .filter(([key]) => /[\s-]/.test(key))
+  .sort(([a], [b]) => b.length - a.length)
+  .map(([key, value]) => [
+    new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'),
+    value,
+  ])
+
+/**
+ * Apply the multi-word half of SYNONYMS across a free-text phrase, before it
+ * is split into tokens. Single-word entries are left to `applySynonym` on the
+ * individual tokens, so callers should run both.
+ */
+export function applyPhraseSynonyms(text: string): string {
+  let out = text
+  for (const [re, value] of PHRASE_SYNONYMS) out = out.replace(re, value)
+  return out.replace(/\s+/g, ' ').trim()
 }
 
 /**
