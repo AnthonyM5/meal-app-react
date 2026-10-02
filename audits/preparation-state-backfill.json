@@ -1,0 +1,680 @@
+{
+  "ranAt": "2026-09-19T18:41:59.187Z",
+  "applied": true,
+  "changes": [
+    {
+      "id": "9db215e3-71cb-489d-914a-14b711c33ed9",
+      "name": "Apples, frozen, unsweetened, unheated (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "9f980da9-dd92-4d1d-99fb-0f952152bf18",
+      "name": "Artichokes, (globe or french), frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2ee1497a-628d-42a9-ba39-c9c32f94f798",
+      "name": "Asparagus, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "6dfc0f13-fea4-4c42-92aa-1b6ccbba458b",
+      "name": "Bacon, pre-sliced, reduced/low sodium, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "25278e4a-e30b-45aa-8c05-edd194ba532e",
+      "name": "Beans, pinto, immature seeds, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "5dff98f9-086b-4df2-a98e-023fd816f2a5",
+      "name": "Beans, snap, green, frozen, all styles, microwaved",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "65d1ab96-d45a-4920-906d-378c03b74a51",
+      "name": "Beans, snap, green, frozen, all styles, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "5ef45063-74e7-4790-a6a7-6baa22ed451d",
+      "name": "Beans, snap, green, microwaved",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "62f25414-42a7-4061-9086-11fc9e00bde1",
+      "name": "Beans, snap, yellow, frozen, all styles, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "e52acdd8-b0a4-4873-b852-39ef2b9cd67e",
+      "name": "Broccoli, frozen, chopped, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "bf6127b1-71ba-4e91-ad0f-b03e61e4b699",
+      "name": "Broccoli, frozen, spears, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "a459bcf2-0989-4d41-acb0-6d0f50a89d27",
+      "name": "Brussels sprouts, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "6be9ae19-04b2-4765-83ff-5d7eb07e4dbc",
+      "name": "Canadian bacon, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "94ca1751-2029-4ed8-b979-0378d95fdfa1",
+      "name": "Carrots, frozen, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "694f4c5e-da9c-434c-a9b2-28834f9d1e8a",
+      "name": "Cauliflower, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "66a2e6b6-fbe2-4857-82ee-d7dd785c0279",
+      "name": "Collards, frozen, chopped, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "d8c1c4a4-7d2d-42cf-b64a-ccfaca11bf2e",
+      "name": "Corn, sweet, white, frozen, kernels cut off cob, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "bdca0cad-81b7-4e7a-bc3b-7666050811a5",
+      "name": "Corn, sweet, white, frozen, kernels on cob, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "1b66dbbc-3809-4c15-afd1-c1b5f4096ca1",
+      "name": "Corn, sweet, yellow, frozen, kernels cut off cob, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2c08077d-4cc2-4002-9c27-bbe144e6de26",
+      "name": "Corn, sweet, yellow, frozen, kernels on cob, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "532eec1b-3aaa-4e3a-acd9-482f579c0daa",
+      "name": "Corn, yellow, whole kernel, frozen, microwaved",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "29ce6df2-4bb7-4ab1-9a7d-d7b6cac566be",
+      "name": "Cowpeas (blackeyes), immature seeds, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "da8d4e3b-456a-4ee2-98ba-3e0e939b8930",
+      "name": "Edamame, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "0535d1dc-d7ec-43e9-bcc9-3eac37d6cca5",
+      "name": "Fiddlehead ferns, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "d36f3b67-262b-4652-a173-460466d47940",
+      "name": "Kale, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "50d1b5a2-0cf5-4f7d-8ad0-c9142289c69e",
+      "name": "Lima beans, immature seeds, frozen, baby, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "35080aa3-34ff-4b7c-bff6-d84a9865a0d1",
+      "name": "Lima beans, immature seeds, frozen, fordhook, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "9936b039-79fd-4060-95ee-02ee10e29b57",
+      "name": "Mushrooms, white, microwaved",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "cd7d3c6d-1164-4f49-beb7-6befec7abe39",
+      "name": "Mustard greens, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c255f6a6-14b7-4b64-be52-8f2a9979cb21",
+      "name": "Okra, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "768078f1-dd3c-445a-980b-4740af1ac8ae",
+      "name": "Onions, frozen, chopped, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "f6ba1edd-ebf0-4952-a51d-1444ede0c2b0",
+      "name": "Onions, frozen, whole, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "a22adbe1-163f-4245-bb91-5a76123376c3",
+      "name": "Peas and carrots, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "88309b13-257e-4717-89cd-c9c74ffcfa21",
+      "name": "Peas and onions, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "90bfbd00-5e5b-49c0-8c99-e351955fd5d0",
+      "name": "Peas, edible-podded, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "40ff6b35-e2e5-4f28-8042-82a627a3c45e",
+      "name": "Peas, green (includes baby and lesuer types), canned, drained solids, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "343d3d6d-579b-4531-9d61-05f6dda563a1",
+      "name": "Peas, green, frozen, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "04287a04-4935-4513-a924-0c8b33919114",
+      "name": "Peppers, sweet, green, frozen, chopped, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2cc3b53f-7c1f-4449-bed7-426b18219b6d",
+      "name": "Peppers, sweet, red, frozen, chopped, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c2e0736a-6af7-47d9-b321-ea0387299fa3",
+      "name": "Pork, cured, bacon, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "f35f38fc-2c65-46a0-85fc-6c8c5a749a33",
+      "name": "Pork, cured, ham -- water added, rump, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "299bbf57-58ec-4a2e-9991-bafbcabd7a8b",
+      "name": "Pork, cured, ham -- water added, rump, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "b8f30194-25e6-4fa9-b0ea-132626a3c3bd",
+      "name": "Pork, cured, ham -- water added, shank, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "bdba39bf-4bfc-4a01-a8ad-574186243af0",
+      "name": "Pork, cured, ham -- water added, shank, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c2b5957b-ce0c-4c61-96a8-10600e9d4b2b",
+      "name": "Pork, cured, ham -- water added, slice, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "76ccb2c1-678d-49b4-bf62-adde02df4aba",
+      "name": "Pork, cured, ham -- water added, slice, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "b8c33afb-3c8d-4eab-a52a-b166e351d89a",
+      "name": "Pork, cured, ham -- water added, whole, boneless, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "8bbe83d8-c35f-45a2-a6a0-e47705d38935",
+      "name": "Pork, cured, ham -- water added, whole, boneless, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c88b41ce-530f-43fb-9a04-5e516ca8c8c3",
+      "name": "Pork, cured, ham and water product, rump, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "7bfcbe03-f33f-4d7f-970a-ca0dbd6725a4",
+      "name": "Pork, cured, ham and water product, rump, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "cf09b292-6add-4165-ac6e-a98b35cf2629",
+      "name": "Pork, cured, ham and water product, shank, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "b2345cb6-df3b-404f-a39d-d06c8c6be598",
+      "name": "Pork, cured, ham and water product, shank, bone-in, unheated, separable lean only",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "7d58abbc-275a-4c25-b25b-fbae811606cc",
+      "name": "Pork, cured, ham and water product, slice, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2cccbc3d-dea8-4207-a013-71ee4ba02173",
+      "name": "Pork, cured, ham and water product, slice, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "65e8778a-3ace-4ae2-8ce2-26c4b857a2da",
+      "name": "Pork, cured, ham and water product, whole, boneless, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "cb07fe7e-47ab-4fca-9274-8a2df391914d",
+      "name": "Pork, cured, ham and water product, whole, boneless, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2b490003-6dfe-4075-9af2-603ff1c3e1c9",
+      "name": "Pork, cured, ham with natural juices, rump, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "a6966789-26da-41b4-81e2-e6641c5ff9d5",
+      "name": "Pork, cured, ham with natural juices, rump, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "f0d545ce-0ecc-4457-849c-fc4ab088cad9",
+      "name": "Pork, cured, ham with natural juices, shank, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "0c3f1a26-7c80-409c-8d03-b8bf315fef4f",
+      "name": "Pork, cured, ham with natural juices, shank, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "fb161137-11bb-4732-98f5-13f149e17844",
+      "name": "Pork, cured, ham with natural juices, slice, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "3db93cb0-0c48-4f9b-bd1c-8057ed8517f9",
+      "name": "Pork, cured, ham with natural juices, slice, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "e25ca70b-f723-42dc-bc83-7dfa1dfdb803",
+      "name": "Pork, cured, ham with natural juices, spiral slice, boneless, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "9d590abd-bcc6-41ff-9dcf-54be2de6f337",
+      "name": "Pork, cured, ham with natural juices, spiral slice, boneless, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c01d37b7-0bf8-4ec5-b111-301b1ec81935",
+      "name": "Pork, cured, ham with natural juices, whole, boneless, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "8e2b82e8-1e11-4a7d-8b59-71458b0f5c77",
+      "name": "Pork, cured, ham with natural juices, whole, boneless, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c160d913-6994-4200-805a-2494ca748648",
+      "name": "Pork, cured, ham, boneless, extra lean and regular, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "cafc2e9b-47be-4bf0-8543-68c9ac9166e6",
+      "name": "Pork, cured, ham, center slice, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "57c053f4-d1dc-4935-b35b-f05ad54b65f9",
+      "name": "Pork, cured, ham, extra lean (approximately 4% fat), canned, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "739eada4-75d4-49cb-8693-3648fdabb6f8",
+      "name": "Pork, cured, ham, extra lean and regular, canned, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "88afb756-fcdb-41b7-8a61-af5819d2fd6b",
+      "name": "Pork, cured, ham, patties, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "7a8f3b6d-99d5-4340-b980-ff3153357273",
+      "name": "Pork, cured, ham, rump, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2fafd0bb-3217-48de-8506-63c73ab1ae43",
+      "name": "Pork, cured, ham, rump, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "9620553d-7e80-4995-88ed-190f93dfb7b4",
+      "name": "Pork, cured, ham, separable fat, boneless, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "5200d198-58b5-46c5-865d-a8d0bb6cde5d",
+      "name": "Pork, cured, ham, shank, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "89006883-ef27-4f04-b5d3-0e27d6a60978",
+      "name": "Pork, cured, ham, shank, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "1af7204b-42ca-41d4-8888-c7975a0bc807",
+      "name": "Pork, cured, ham, slice, bone-in, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "106bf9b1-4e2d-4948-9e2c-076181889817",
+      "name": "Pork, cured, ham, slice, bone-in, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "7eff55ae-9ae1-40bf-900a-e714301b88a7",
+      "name": "Pork, cured, ham, steak, boneless, extra lean, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "8f16981c-151c-4ba6-83cf-0d53a6c945da",
+      "name": "Pork, cured, ham, whole, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "afa64a7a-2015-474f-a921-dfcfa513857a",
+      "name": "Pork, cured, ham, whole, separable lean only, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "e31d13ec-bd6b-455e-8ed5-521c19becf19",
+      "name": "Pork, cured, separable fat (from ham and arm picnic), unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "9eec3515-5040-43ac-83ff-fcd30736f5ba",
+      "name": "Pork, cured, shoulder, blade roll, separable lean and fat, unheated",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "8a00b0fa-1a94-4124-a6b4-d672657de8fb",
+      "name": "Potato puffs, frozen, oven-heated",
+      "state": "cooked",
+      "is_active": false
+    },
+    {
+      "id": "840939d6-fdf2-4f52-954d-b5138cc73a08",
+      "name": "Potato puffs, frozen, unprepared",
+      "state": "raw",
+      "is_active": false
+    },
+    {
+      "id": "adc52ee8-6efa-4b68-95eb-a77d9fc5352e",
+      "name": "Potatoes, au gratin, dry mix, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "0fff3d9f-045e-4ca1-b210-30af5924b070",
+      "name": "Potatoes, hash brown, frozen, plain, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "f438f22f-cead-42e1-804e-755643f7d4e5",
+      "name": "Potatoes, hash brown, frozen, with butter sauce, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "1be0ca87-43bb-42e3-8bcc-d47b50e20889",
+      "name": "Potatoes, hash brown, refrigerated, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "b2155ad1-bd0b-4d91-8eac-d93f38dcc477",
+      "name": "Potatoes, o'brien, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "b95eca21-970a-41fa-b445-284b314eeba3",
+      "name": "Potatoes, scalloped, dry mix, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "2a8475c1-a893-4572-9a93-43dba5e793d0",
+      "name": "Potatoes, yellow fleshed, hash brown, shredded, salt added in processing, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c1e0a007-cbb3-479b-8a35-e5fe1cc3a21b",
+      "name": "Spinach, frozen, chopped or leaf, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "f8921904-804a-48f5-b2d9-c7af91f5a49d",
+      "name": "Squash, summer, crookneck and straightneck, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "9057ae89-54dd-4206-b0a2-bc471379724d",
+      "name": "Squash, summer, zucchini, includes skin, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "99a59bf3-1f4b-451c-a4f2-4f33db70af37",
+      "name": "Squash, winter, butternut, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "80b1522b-df17-4554-bf37-ab9d19031bf9",
+      "name": "Succotash, (corn and limas), frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "3d6f26bb-e3d2-4b00-b0ed-acb2e2efeddd",
+      "name": "Sweet Potato puffs, frozen, unprepared",
+      "state": "raw",
+      "is_active": false
+    },
+    {
+      "id": "2fc0af21-a93c-4d66-bb21-3738e3e640b4",
+      "name": "Sweet potato, frozen, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "c859f6b6-b2df-4a2e-98cb-0e928f6c4097",
+      "name": "Turkey, ground, 85% lean, 15% fat, pan-broiled crumbles",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "d053993f-7551-40d2-85ef-2cc0ec5fd0d5",
+      "name": "Turkey, ground, 85% lean, 15% fat, patties, broiled",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "e40b0b5d-1b82-454c-bd2a-9beaead06180",
+      "name": "Turkey, ground, 93% lean, 7% fat, pan-broiled crumbles",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "907be43e-7865-4f8c-91c0-43b353c0b01f",
+      "name": "Turkey, ground, 93% lean, 7% fat, patties, broiled",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "18ffafe0-4020-4445-b10c-fcd6b3e1580e",
+      "name": "Turkey, ground, fat free, pan-broiled crumbles",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "b9c1e255-5e85-4475-8154-1b184db6a6fd",
+      "name": "Turkey, ground, fat free, patties, broiled",
+      "state": "cooked",
+      "is_active": true
+    },
+    {
+      "id": "d206c5ef-9493-48fb-aa5b-214fd256d6c0",
+      "name": "Turnip greens and turnips, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "789c40a4-ed97-40a9-ab58-642372a61558",
+      "name": "Turnip greens, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "4b500ef1-247e-4c31-b19c-fe1c546b72bc",
+      "name": "Turnips, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "5d3c0169-63d3-439a-9d62-a2a559c2a62e",
+      "name": "Vegetables, mixed, frozen, unprepared",
+      "state": "raw",
+      "is_active": true
+    },
+    {
+      "id": "a63525e4-a995-4f24-a7bf-eaca1678c61c",
+      "name": "Veggie burgers or soyburgers, unprepared",
+      "state": "raw",
+      "is_active": true
+    }
+  ],
+  "disagreements": [
+    {
+      "id": "3ef66903-2570-4b83-a30a-3c34e904c4a4",
+      "name": "Apples, raw, without skin, cooked, boiled",
+      "stored": "raw",
+      "inferred": "cooked"
+    },
+    {
+      "id": "365f9558-1738-4bd3-b33c-57f672b7f4af",
+      "name": "Apples, raw, without skin, cooked, microwave",
+      "stored": "raw",
+      "inferred": "cooked"
+    }
+  ]
+}

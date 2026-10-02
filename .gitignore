@@ -41,6 +41,9 @@ coverage/
 # Claude Code local working state
 .claude/
 
+# Codex local working state and durable task reports
+.Codex/
+
 # OS
 .DS_Store
 Thumbs.db

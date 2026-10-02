@@ -1,3 +1,5 @@
 export * from './canine-nutrition'
 export * from './dog-toxic-foods'
 export * from './types'
+export * from './food-vocab'
+export * from './search-query'
